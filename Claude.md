@@ -491,6 +491,25 @@ others' songs
 
 ---
 
+### Cycle 22: Playlist Sharing  ✅ (post-MVP)
+**Goal:** Share a playlist (read-only) with another user
+
+**Backend Tasks:**
+- `playlist_shares` table; functional core (share/unshare/list/shared-with-me)
+- `canAccessSong` (owner OR a song in a playlist shared with the user);
+  media routes (stream/art/download) gate on it via unscoped by-id resolvers
+- Routes: `POST/GET/DELETE /api/playlists/:id/share(s)`, `GET /api/shared`,
+  `GET /api/shared/:id`
+
+**Frontend Tasks:**
+- shareService; PlaylistManager gains a Share panel (share by email, list +
+  revoke); new "Shared with me" sidebar view (read-only playback)
+
+**Done When:** Owner shares a playlist; recipient sees and plays it but can't
+edit; non-shared songs stay private
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

@@ -174,6 +174,48 @@ export function resolveSongFile(
   });
 }
 
+// Resolves a song's audio file by id WITHOUT an ownership check. The caller
+// must authorize access first (owner or an active share).
+export function resolveSongFileById(
+  db: Database,
+  id: number,
+  musicDir: string
+): Result<SongFile> {
+  const row = db
+    .prepare(`SELECT ${SONG_COLUMNS} FROM songs WHERE id = ?`)
+    .get(id) as SongRow | undefined;
+  if (!row) return err("not_found", `Song ${id} not found`);
+
+  const song = rowToSong(row);
+  const path = join(musicDir, song.filename);
+  if (!existsSync(path)) {
+    return err("not_found", `Audio file for song ${id} is missing on disk`);
+  }
+  const ext = extname(path).toLowerCase();
+  const contentType = ext === ".wav" ? "audio/wav" : "audio/mpeg";
+  const name = song.originalFilename;
+  const originalFilename = extname(name) ? name : `${name}${ext}`;
+  return ok({ path, size: statSync(path).size, contentType, originalFilename });
+}
+
+// Resolves a song's album art by id WITHOUT an ownership check.
+export function resolveSongArtById(
+  db: Database,
+  id: number,
+  artDir: string
+): Result<{ path: string; contentType: string }> {
+  const row = db
+    .prepare("SELECT art_filename FROM songs WHERE id = ?")
+    .get(id) as { art_filename: string | null } | undefined;
+  if (!row) return err("not_found", `Song ${id} not found`);
+  if (!row.art_filename) return err("not_found", "Song has no album art");
+  const path = join(artDir, row.art_filename);
+  if (!existsSync(path)) return err("not_found", "Art file missing on disk");
+  const ext = extname(path).toLowerCase();
+  const contentType = ext === ".png" ? "image/png" : "image/jpeg";
+  return ok({ path, contentType });
+}
+
 // Updates a song's editable metadata (name, artist, album). Only fields that
 // are provided are changed; the stored audio file on disk is untouched.
 export function updateSong(

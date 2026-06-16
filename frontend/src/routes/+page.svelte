@@ -9,6 +9,7 @@
   import PlaylistManager from "$lib/components/PlaylistManager.svelte";
   import QueueView from "$lib/components/QueueView.svelte";
   import RecentlyPlayedView from "$lib/components/RecentlyPlayedView.svelte";
+  import SharedView from "$lib/components/SharedView.svelte";
   import SongList from "$lib/components/SongList.svelte";
   import UploadForm from "$lib/components/UploadForm.svelte";
   import type { SongMetadata } from "$lib/services/songService";
@@ -31,7 +32,14 @@
     location.reload();
   }
 
-  type View = "songs" | "liked" | "playlists" | "albums" | "recent" | "invite";
+  type View =
+    | "songs"
+    | "liked"
+    | "playlists"
+    | "shared"
+    | "albums"
+    | "recent"
+    | "invite";
   let view = $state<View>("songs");
   let queueOpen = $state(false);
   let theme = $state<"dark" | "light">("dark");
@@ -46,6 +54,7 @@
     { id: "songs", label: "All Songs", icon: "library_music" },
     { id: "liked", label: "Liked", icon: "favorite" },
     { id: "playlists", label: "Playlists", icon: "queue_music" },
+    { id: "shared", label: "Shared with me", icon: "folder_shared" },
     { id: "albums", label: "Albums", icon: "album" },
     { id: "recent", label: "Recently Played", icon: "history" },
     { id: "invite", label: "Invite", icon: "person_add" },
@@ -197,6 +206,9 @@
       {:else if view === "playlists"}
         <h2>Playlists</h2>
         <PlaylistManager vm={playlistVm} songVm={vm} />
+      {:else if view === "shared"}
+        <h2>Shared with me</h2>
+        <SharedView songVm={vm} />
       {:else if view === "albums"}
         <h2>Albums</h2>
         <AlbumsView {vm} />

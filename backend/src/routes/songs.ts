@@ -9,12 +9,13 @@ import {
   listSongs,
   recordPlay,
   recordSong,
-  resolveSongArt,
-  resolveSongFile,
+  resolveSongArtById,
+  resolveSongFileById,
   setLiked,
   updateSong,
   validateUpload,
 } from "../functional/songs.js";
+import { canAccessSong } from "../functional/shares.js";
 import { statusForError } from "../functional/result.js";
 import { extractMetadata } from "../metadata.js";
 
@@ -164,12 +165,13 @@ songsRouter.delete("/songs/:id", (req, res) => {
 
 // GET /api/songs/:id/art — serve the song's embedded album art, if any.
 songsRouter.get("/songs/:id/art", (req, res) => {
-  const result = resolveSongArt(
-    getDb(),
-    Number(req.params.id),
-    ART_DIR,
-    req.userId!
-  );
+  const id = Number(req.params.id);
+  if (!canAccessSong(getDb(), req.userId!, id)) {
+    return res
+      .status(404)
+      .json({ error: { code: "not_found", message: `Song ${id} not found` } });
+  }
+  const result = resolveSongArtById(getDb(), id, ART_DIR);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -182,12 +184,13 @@ songsRouter.get("/songs/:id/art", (req, res) => {
 
 // GET /api/songs/:id/download — download the original audio file.
 songsRouter.get("/songs/:id/download", (req, res) => {
-  const result = resolveSongFile(
-    getDb(),
-    Number(req.params.id),
-    MUSIC_DIR,
-    req.userId!
-  );
+  const id = Number(req.params.id);
+  if (!canAccessSong(getDb(), req.userId!, id)) {
+    return res
+      .status(404)
+      .json({ error: { code: "not_found", message: `Song ${id} not found` } });
+  }
+  const result = resolveSongFileById(getDb(), id, MUSIC_DIR);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -200,7 +203,12 @@ songsRouter.get("/songs/:id/download", (req, res) => {
 // (enables seeking and progressive playback in the browser).
 songsRouter.get("/songs/:id/stream", (req, res) => {
   const id = Number(req.params.id);
-  const result = resolveSongFile(getDb(), id, MUSIC_DIR, req.userId!);
+  if (!canAccessSong(getDb(), req.userId!, id)) {
+    return res
+      .status(404)
+      .json({ error: { code: "not_found", message: `Song ${id} not found` } });
+  }
+  const result = resolveSongFileById(getDb(), id, MUSIC_DIR);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))

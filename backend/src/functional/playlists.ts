@@ -164,7 +164,24 @@ export function deletePlaylist(
   }
 }
 
-// Returns the songs in a playlist, ordered by their position.
+// Returns a playlist's songs in order, WITHOUT an ownership check. Callers must
+// have already authorized access (owner or an active share).
+export function songsInPlaylist(db: Database, playlistId: number): Song[] {
+  const rows = db
+    .prepare(
+      `SELECT s.id, s.filename, s.original_filename, s.uploaded_at,
+              s.artist, s.album, s.art_filename, s.duration,
+              s.play_count, s.last_played_at, s.liked
+       FROM playlist_songs ps
+       JOIN songs s ON s.id = ps.song_id
+       WHERE ps.playlist_id = ?
+       ORDER BY ps.position ASC`
+    )
+    .all(playlistId) as SongRow[];
+  return rows.map(rowToSong);
+}
+
+// Returns the songs in a playlist (owner-scoped), ordered by their position.
 export function getPlaylistSongs(
   db: Database,
   playlistId: number,
@@ -173,18 +190,7 @@ export function getPlaylistSongs(
   const exists = getPlaylist(db, playlistId, userId);
   if (!exists.ok) return exists;
   try {
-    const rows = db
-      .prepare(
-        `SELECT s.id, s.filename, s.original_filename, s.uploaded_at,
-                s.artist, s.album, s.art_filename, s.duration,
-                s.play_count, s.last_played_at, s.liked
-         FROM playlist_songs ps
-         JOIN songs s ON s.id = ps.song_id
-         WHERE ps.playlist_id = ?
-         ORDER BY ps.position ASC`
-      )
-      .all(playlistId) as SongRow[];
-    return ok(rows.map(rowToSong));
+    return ok(songsInPlaylist(db, playlistId));
   } catch (e) {
     return err("internal", `Failed to get playlist songs: ${(e as Error).message}`);
   }

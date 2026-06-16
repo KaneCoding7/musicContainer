@@ -1,6 +1,12 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
   import { artUrl } from "$lib/services/songService";
+  import {
+    fetchPlaylistShares,
+    sharePlaylist,
+    unsharePlaylist,
+    type ShareUser,
+  } from "$lib/services/shareService";
   import type { PlaylistViewModel } from "$lib/viewmodels/playlistViewModel.svelte";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -11,6 +17,50 @@
 
   let newName = $state("");
   let addSongId = $state<string>("");
+
+  // --- Sharing ---
+  let shareOpen = $state(false);
+  let shareEmail = $state("");
+  let shares = $state<ShareUser[]>([]);
+  let shareError = $state<string | null>(null);
+
+  // Load the share list whenever a different playlist is selected.
+  $effect(() => {
+    const id = vm.selectedId;
+    shareOpen = false;
+    shareError = null;
+    shares = [];
+    if (id !== null) {
+      fetchPlaylistShares(id)
+        .then((s) => (shares = s))
+        .catch(() => {});
+    }
+  });
+
+  async function doShare() {
+    const id = vm.selectedId;
+    const email = shareEmail.trim();
+    if (id === null || !email) return;
+    shareError = null;
+    try {
+      await sharePlaylist(id, email);
+      shares = await fetchPlaylistShares(id);
+      shareEmail = "";
+    } catch (e) {
+      shareError = e instanceof Error ? e.message : "Failed to share";
+    }
+  }
+
+  async function revoke(userId: string) {
+    const id = vm.selectedId;
+    if (id === null) return;
+    try {
+      await unsharePlaylist(id, userId);
+      shares = shares.filter((s) => s.id !== userId);
+    } catch (e) {
+      shareError = e instanceof Error ? e.message : "Failed to revoke";
+    }
+  }
 
   async function createPlaylist() {
     const name = newName.trim();
@@ -136,12 +186,52 @@
           onclick={renameSelected}><Icon name="edit" size={20} /></button
         >
         <button
+          class="head-action"
+          class:on={shareOpen}
+          title="Share playlist"
+          aria-label="Share playlist"
+          onclick={() => (shareOpen = !shareOpen)}
+          ><Icon name="share" size={20} /></button
+        >
+        <button
           class="head-action danger"
           title="Delete playlist"
           aria-label="Delete playlist"
           onclick={deleteSelected}><Icon name="delete" size={20} /></button
         >
       </div>
+
+      {#if shareOpen}
+        <div class="share-panel">
+          <div class="share-row">
+            <input
+              type="email"
+              placeholder="Share with email…"
+              bind:value={shareEmail}
+              onkeydown={(e) => e.key === "Enter" && doShare()}
+            />
+            <button onclick={doShare} disabled={!shareEmail.trim()}>Share</button>
+          </div>
+          {#if shareError}<p class="share-error">{shareError}</p>{/if}
+          {#if shares.length > 0}
+            <ul class="share-list">
+              {#each shares as u (u.id)}
+                <li>
+                  <span class="share-who">{u.name} <span class="dim">({u.email})</span></span>
+                  <button
+                    class="revoke"
+                    title="Revoke"
+                    aria-label="Revoke share"
+                    onclick={() => revoke(u.id)}><Icon name="close" size={18} /></button
+                  >
+                </li>
+              {/each}
+            </ul>
+          {:else}
+            <p class="muted small">Not shared with anyone yet.</p>
+          {/if}
+        </div>
+      {/if}
 
       {#if vm.selectedSongs.length === 0}
         <p class="muted">No songs in this playlist yet.</p>
@@ -320,6 +410,83 @@
   .head-action.danger:hover {
     background: var(--danger-bg);
     color: var(--danger-text);
+  }
+  .head-action.on {
+    background: var(--active-bg);
+    color: var(--accent-text);
+  }
+  .share-panel {
+    background: var(--surface);
+    border: 1px solid var(--surface-2);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .share-row {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .share-row input {
+    flex: 1;
+    padding: 0.45rem 0.6rem;
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.4rem;
+    color: var(--text);
+    font: inherit;
+  }
+  .share-row button {
+    padding: 0.45rem 0.9rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 0.4rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .share-row button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .share-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.6rem 0 0;
+  }
+  .share-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0;
+  }
+  .share-who {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.88rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .share-who .dim {
+    color: var(--muted);
+  }
+  .revoke {
+    display: inline-flex;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.2rem;
+    border-radius: 0.3rem;
+  }
+  .revoke:hover {
+    background: var(--danger-bg);
+    color: var(--danger-text);
+  }
+  .share-error {
+    color: var(--danger-text);
+    font-size: 0.85rem;
+    margin: 0.5rem 0 0;
   }
   h3 {
     margin: 0 0 0.5rem;
