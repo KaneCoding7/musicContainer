@@ -64,6 +64,7 @@ songsRouter.post("/upload", (req, res) => {
     const result = recordSong(getDb(), {
       filename: req.file.filename,
       originalFilename: req.file.originalname,
+      userId: req.userId!,
       artist: meta.artist,
       album: meta.album,
       artFilename: meta.artFilename,
@@ -93,8 +94,8 @@ songsRouter.post("/upload", (req, res) => {
 });
 
 // GET /api/songs — list all songs.
-songsRouter.get("/songs", (_req, res) => {
-  const result = listSongs(getDb());
+songsRouter.get("/songs", (req, res) => {
+  const result = listSongs(getDb(), req.userId!);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -112,7 +113,7 @@ songsRouter.patch("/songs/:id", (req, res) => {
   if (typeof req.body?.artist === "string") fields.artist = req.body.artist;
   if (typeof req.body?.album === "string") fields.album = req.body.album;
 
-  const result = updateSong(getDb(), Number(req.params.id), fields);
+  const result = updateSong(getDb(), Number(req.params.id), fields, req.userId!);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -124,7 +125,7 @@ songsRouter.patch("/songs/:id", (req, res) => {
 // PUT /api/songs/:id/like — set the liked flag.
 songsRouter.put("/songs/:id/like", (req, res) => {
   const liked = Boolean(req.body?.liked);
-  const result = setLiked(getDb(), Number(req.params.id), liked);
+  const result = setLiked(getDb(), Number(req.params.id), liked, req.userId!);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -135,7 +136,7 @@ songsRouter.put("/songs/:id/like", (req, res) => {
 
 // POST /api/songs/:id/play — record a play (increments count, sets timestamp).
 songsRouter.post("/songs/:id/play", (req, res) => {
-  const result = recordPlay(getDb(), Number(req.params.id));
+  const result = recordPlay(getDb(), Number(req.params.id), req.userId!);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -146,7 +147,13 @@ songsRouter.post("/songs/:id/play", (req, res) => {
 
 // DELETE /api/songs/:id — remove a song (file + art + db + playlist refs).
 songsRouter.delete("/songs/:id", (req, res) => {
-  const result = deleteSong(getDb(), Number(req.params.id), MUSIC_DIR, ART_DIR);
+  const result = deleteSong(
+    getDb(),
+    Number(req.params.id),
+    MUSIC_DIR,
+    ART_DIR,
+    req.userId!
+  );
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -157,7 +164,12 @@ songsRouter.delete("/songs/:id", (req, res) => {
 
 // GET /api/songs/:id/art — serve the song's embedded album art, if any.
 songsRouter.get("/songs/:id/art", (req, res) => {
-  const result = resolveSongArt(getDb(), Number(req.params.id), ART_DIR);
+  const result = resolveSongArt(
+    getDb(),
+    Number(req.params.id),
+    ART_DIR,
+    req.userId!
+  );
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -170,7 +182,12 @@ songsRouter.get("/songs/:id/art", (req, res) => {
 
 // GET /api/songs/:id/download — download the original audio file.
 songsRouter.get("/songs/:id/download", (req, res) => {
-  const result = resolveSongFile(getDb(), Number(req.params.id), MUSIC_DIR);
+  const result = resolveSongFile(
+    getDb(),
+    Number(req.params.id),
+    MUSIC_DIR,
+    req.userId!
+  );
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -183,7 +200,7 @@ songsRouter.get("/songs/:id/download", (req, res) => {
 // (enables seeking and progressive playback in the browser).
 songsRouter.get("/songs/:id/stream", (req, res) => {
   const id = Number(req.params.id);
-  const result = resolveSongFile(getDb(), id, MUSIC_DIR);
+  const result = resolveSongFile(getDb(), id, MUSIC_DIR, req.userId!);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))

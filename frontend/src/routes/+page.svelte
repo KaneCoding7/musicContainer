@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import AlbumsView from "$lib/components/AlbumsView.svelte";
+  import AuthScreen from "$lib/components/AuthScreen.svelte";
   import Icon from "$lib/components/Icon.svelte";
   import LikedView from "$lib/components/LikedView.svelte";
   import Player from "$lib/components/Player.svelte";
@@ -10,11 +11,24 @@
   import SongList from "$lib/components/SongList.svelte";
   import UploadForm from "$lib/components/UploadForm.svelte";
   import type { SongMetadata } from "$lib/services/songService";
+  import { AuthViewModel } from "$lib/viewmodels/authViewModel.svelte";
   import { PlaylistViewModel } from "$lib/viewmodels/playlistViewModel.svelte";
   import { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
+  const authVm = new AuthViewModel();
   const vm = new SongViewModel();
   const playlistVm = new PlaylistViewModel();
+
+  // Load the signed-in user's library.
+  function loadLibrary() {
+    vm.load();
+    playlistVm.load();
+  }
+
+  async function handleLogout() {
+    await authVm.logout();
+    location.reload();
+  }
 
   type View = "songs" | "liked" | "playlists" | "albums" | "recent";
   let view = $state<View>("songs");
@@ -35,12 +49,12 @@
     { id: "recent", label: "Recently Played", icon: "history" },
   ];
 
-  onMount(() => {
+  onMount(async () => {
     const saved = localStorage.getItem("theme");
     theme = saved === "light" ? "light" : "dark";
     document.documentElement.dataset.theme = theme;
-    vm.load();
-    playlistVm.load();
+    await authVm.init();
+    if (authVm.isAuthed) loadLibrary();
   });
 
   // Delete a song, then refresh the open playlist (its membership may change).
@@ -61,6 +75,7 @@
 
   // Global keyboard shortcuts (ignored while typing in a field).
   function handleKeydown(e: KeyboardEvent) {
+    if (!authVm.isAuthed) return;
     const target = e.target as HTMLElement;
     const typing =
       target.tagName === "INPUT" ||
@@ -101,9 +116,14 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="layout">
-  <div class="body">
-    <aside class="sidebar">
+{#if authVm.loading}
+  <div class="boot">Loading…</div>
+{:else if !authVm.isAuthed}
+  <AuthScreen vm={authVm} onAuthed={loadLibrary} />
+{:else}
+  <div class="layout">
+    <div class="body">
+      <aside class="sidebar">
       <div class="brand">
         <Icon name="library_music" fill size={26} /> Music Server
       </div>
@@ -123,6 +143,16 @@
 
       <div class="sidebar-foot">
         <UploadForm {vm} />
+
+        <div class="account">
+          <span class="who" title={authVm.user?.email}>
+            <Icon name="account_circle" size={20} />
+            {authVm.user?.name}
+          </span>
+          <button class="logout" onclick={handleLogout} title="Sign out" aria-label="Sign out">
+            <Icon name="logout" size={18} />
+          </button>
+        </div>
 
         <button class="theme-toggle" onclick={toggleTheme}>
           <Icon name={theme === "dark" ? "light_mode" : "dark_mode"} size={18} />
@@ -196,7 +226,8 @@
   {/if}
 
   <Player {vm} {queueOpen} onToggleQueue={() => (queueOpen = !queueOpen)} />
-</div>
+  </div>
+{/if}
 
 <style>
   .layout {
@@ -255,11 +286,49 @@
     background: var(--active-bg);
     color: var(--text);
   }
+  .boot {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+  }
   .sidebar-foot {
     margin-top: auto;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+  }
+  .account {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .who {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--text);
+    font-size: 0.85rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .logout {
+    display: inline-flex;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.35rem;
+    border-radius: 0.4rem;
+  }
+  .logout:hover {
+    background: var(--hover);
+    color: var(--text);
   }
   .theme-toggle {
     display: flex;

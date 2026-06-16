@@ -43,15 +43,19 @@ function rowToSong(row: SongRow): Song {
 }
 
 // Creates a new playlist with a non-empty name.
-export function createPlaylist(db: Database, name: string): Result<Playlist> {
+export function createPlaylist(
+  db: Database,
+  name: string,
+  userId: string
+): Result<Playlist> {
   const trimmed = name.trim();
   if (!trimmed) {
     return err("validation", "Playlist name is required");
   }
   try {
     const info = db
-      .prepare("INSERT INTO playlists (name) VALUES (?)")
-      .run(trimmed);
+      .prepare("INSERT INTO playlists (name, user_id) VALUES (?, ?)")
+      .run(trimmed, userId);
     const row = db
       .prepare("SELECT id, name, created_at FROM playlists WHERE id = ?")
       .get(info.lastInsertRowid as number) as PlaylistRow | undefined;
@@ -69,8 +73,8 @@ interface PlaylistListRow extends PlaylistRow {
   cover_song_id: number | null;
 }
 
-// Lists all playlists (with track count + cover art song), newest first.
-export function listPlaylists(db: Database): Result<Playlist[]> {
+// Lists a user's playlists (with track count + cover art song), newest first.
+export function listPlaylists(db: Database, userId: string): Result<Playlist[]> {
   try {
     const rows = db
       .prepare(
@@ -82,9 +86,10 @@ export function listPlaylists(db: Database): Result<Playlist[]> {
                    WHERE ps.playlist_id = p.id AND s.art_filename IS NOT NULL
                    ORDER BY ps.position ASC LIMIT 1) AS cover_song_id
          FROM playlists p
+         WHERE p.user_id = ?
          ORDER BY datetime(p.created_at) DESC, p.id DESC`
       )
-      .all() as PlaylistListRow[];
+      .all(userId) as PlaylistListRow[];
     return ok(
       rows.map((row) => ({
         ...rowToPlaylist(row),
@@ -97,15 +102,21 @@ export function listPlaylists(db: Database): Result<Playlist[]> {
   }
 }
 
-// Verifies a playlist exists, returning it.
-export function getPlaylist(db: Database, id: number): Result<Playlist> {
+// Verifies a playlist exists and belongs to the user, returning it.
+export function getPlaylist(
+  db: Database,
+  id: number,
+  userId: string
+): Result<Playlist> {
   if (!Number.isInteger(id) || id <= 0) {
     return err("validation", "Invalid playlist id");
   }
   try {
     const row = db
-      .prepare("SELECT id, name, created_at FROM playlists WHERE id = ?")
-      .get(id) as PlaylistRow | undefined;
+      .prepare(
+        "SELECT id, name, created_at FROM playlists WHERE id = ? AND user_id = ?"
+      )
+      .get(id, userId) as PlaylistRow | undefined;
     if (!row) return err("not_found", `Playlist ${id} not found`);
     return ok(rowToPlaylist(row));
   } catch (e) {
@@ -117,26 +128,36 @@ export function getPlaylist(db: Database, id: number): Result<Playlist> {
 export function renamePlaylist(
   db: Database,
   id: number,
-  name: string
+  name: string,
+  userId: string
 ): Result<Playlist> {
   const trimmed = name.trim();
   if (!trimmed) return err("validation", "Playlist name is required");
-  const existing = getPlaylist(db, id);
+  const existing = getPlaylist(db, id, userId);
   if (!existing.ok) return existing;
   try {
-    db.prepare("UPDATE playlists SET name = ? WHERE id = ?").run(trimmed, id);
-    return getPlaylist(db, id);
+    db.prepare(
+      "UPDATE playlists SET name = ? WHERE id = ? AND user_id = ?"
+    ).run(trimmed, id, userId);
+    return getPlaylist(db, id, userId);
   } catch (e) {
     return err("internal", `Failed to rename playlist: ${(e as Error).message}`);
   }
 }
 
 // Deletes a playlist (its song links drop via ON DELETE CASCADE).
-export function deletePlaylist(db: Database, id: number): Result<void> {
-  const existing = getPlaylist(db, id);
+export function deletePlaylist(
+  db: Database,
+  id: number,
+  userId: string
+): Result<void> {
+  const existing = getPlaylist(db, id, userId);
   if (!existing.ok) return existing;
   try {
-    db.prepare("DELETE FROM playlists WHERE id = ?").run(id);
+    db.prepare("DELETE FROM playlists WHERE id = ? AND user_id = ?").run(
+      id,
+      userId
+    );
     return ok(undefined);
   } catch (e) {
     return err("internal", `Failed to delete playlist: ${(e as Error).message}`);
@@ -146,9 +167,10 @@ export function deletePlaylist(db: Database, id: number): Result<void> {
 // Returns the songs in a playlist, ordered by their position.
 export function getPlaylistSongs(
   db: Database,
-  playlistId: number
+  playlistId: number,
+  userId: string
 ): Result<Song[]> {
-  const exists = getPlaylist(db, playlistId);
+  const exists = getPlaylist(db, playlistId, userId);
   if (!exists.ok) return exists;
   try {
     const rows = db
@@ -172,9 +194,10 @@ export function getPlaylistSongs(
 export function addSongToPlaylist(
   db: Database,
   playlistId: number,
-  songId: number
+  songId: number,
+  userId: string
 ): Result<void> {
-  const playlist = getPlaylist(db, playlistId);
+  const playlist = getPlaylist(db, playlistId, userId);
   if (!playlist.ok) return playlist;
   if (!Number.isInteger(songId) || songId <= 0) {
     return err("validation", "Invalid song id");
@@ -182,8 +205,8 @@ export function addSongToPlaylist(
 
   try {
     const song = db
-      .prepare("SELECT id FROM songs WHERE id = ?")
-      .get(songId) as { id: number } | undefined;
+      .prepare("SELECT id FROM songs WHERE id = ? AND user_id = ?")
+      .get(songId, userId) as { id: number } | undefined;
     if (!song) return err("not_found", `Song ${songId} not found`);
 
     const already = db
@@ -216,9 +239,10 @@ export function addSongToPlaylist(
 export function reorderPlaylist(
   db: Database,
   playlistId: number,
-  songIds: number[]
+  songIds: number[],
+  userId: string
 ): Result<void> {
-  const playlist = getPlaylist(db, playlistId);
+  const playlist = getPlaylist(db, playlistId, userId);
   if (!playlist.ok) return playlist;
   if (!Array.isArray(songIds)) {
     return err("validation", "songIds must be an array");
@@ -244,9 +268,10 @@ export function reorderPlaylist(
 export function addSongsToPlaylist(
   db: Database,
   playlistId: number,
-  songIds: number[]
+  songIds: number[],
+  userId: string
 ): Result<{ added: number }> {
-  const playlist = getPlaylist(db, playlistId);
+  const playlist = getPlaylist(db, playlistId, userId);
   if (!playlist.ok) return playlist;
   if (!Array.isArray(songIds)) {
     return err("validation", "songIds must be an array");
@@ -260,7 +285,9 @@ export function addSongsToPlaylist(
           "SELECT COALESCE(MAX(position), 0) + 1 AS next FROM playlist_songs WHERE playlist_id = ?"
         )
         .get(playlistId) as { next: number };
-      const songExists = db.prepare("SELECT id FROM songs WHERE id = ?");
+      const songExists = db.prepare(
+        "SELECT id FROM songs WHERE id = ? AND user_id = ?"
+      );
       const already = db.prepare(
         "SELECT id FROM playlist_songs WHERE playlist_id = ? AND song_id = ?"
       );
@@ -269,7 +296,7 @@ export function addSongsToPlaylist(
       );
       for (const songId of ids) {
         if (!Number.isInteger(songId)) continue;
-        if (!songExists.get(songId)) continue;
+        if (!songExists.get(songId, userId)) continue;
         if (already.get(playlistId, songId)) continue;
         insert.run(playlistId, songId, next++);
         added++;
@@ -286,9 +313,10 @@ export function addSongsToPlaylist(
 export function removeSongFromPlaylist(
   db: Database,
   playlistId: number,
-  songId: number
+  songId: number,
+  userId: string
 ): Result<void> {
-  const playlist = getPlaylist(db, playlistId);
+  const playlist = getPlaylist(db, playlistId, userId);
   if (!playlist.ok) return playlist;
 
   try {

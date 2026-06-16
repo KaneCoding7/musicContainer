@@ -18,7 +18,7 @@ export const playlistsRouter = Router();
 // POST /api/playlists — create a playlist.
 playlistsRouter.post("/playlists", (req, res) => {
   const name = typeof req.body?.name === "string" ? req.body.name : "";
-  const result = createPlaylist(getDb(), name);
+  const result = createPlaylist(getDb(), name, req.userId!);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -28,8 +28,8 @@ playlistsRouter.post("/playlists", (req, res) => {
 });
 
 // GET /api/playlists — list playlists.
-playlistsRouter.get("/playlists", (_req, res) => {
-  const result = listPlaylists(getDb());
+playlistsRouter.get("/playlists", (req, res) => {
+  const result = listPlaylists(getDb(), req.userId!);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -40,7 +40,7 @@ playlistsRouter.get("/playlists", (_req, res) => {
 
 // GET /api/playlists/:id — songs in a playlist, in order.
 playlistsRouter.get("/playlists/:id", (req, res) => {
-  const result = getPlaylistSongs(getDb(), Number(req.params.id));
+  const result = getPlaylistSongs(getDb(), Number(req.params.id), req.userId!);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -52,7 +52,7 @@ playlistsRouter.get("/playlists/:id", (req, res) => {
 // PATCH /api/playlists/:id — rename a playlist.
 playlistsRouter.patch("/playlists/:id", (req, res) => {
   const name = typeof req.body?.name === "string" ? req.body.name : "";
-  const result = renamePlaylist(getDb(), Number(req.params.id), name);
+  const result = renamePlaylist(getDb(), Number(req.params.id), name, req.userId!);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -63,7 +63,7 @@ playlistsRouter.patch("/playlists/:id", (req, res) => {
 
 // DELETE /api/playlists/:id — delete a playlist.
 playlistsRouter.delete("/playlists/:id", (req, res) => {
-  const result = deletePlaylist(getDb(), Number(req.params.id));
+  const result = deletePlaylist(getDb(), Number(req.params.id), req.userId!);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -82,7 +82,12 @@ playlistsRouter.put("/playlists/:id/order", (req, res) => {
       error: { code: "validation", message: "songIds array is required" },
     });
   }
-  const result = reorderPlaylist(getDb(), Number(req.params.id), songIds);
+  const result = reorderPlaylist(
+    getDb(),
+    Number(req.params.id),
+    songIds,
+    req.userId!
+  );
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -99,7 +104,12 @@ playlistsRouter.post("/playlists/:id/songs/bulk", (req, res) => {
       error: { code: "validation", message: "songIds array is required" },
     });
   }
-  const result = addSongsToPlaylist(getDb(), Number(req.params.id), songIds);
+  const result = addSongsToPlaylist(
+    getDb(),
+    Number(req.params.id),
+    songIds,
+    req.userId!
+  );
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -111,7 +121,12 @@ playlistsRouter.post("/playlists/:id/songs/bulk", (req, res) => {
 // POST /api/playlists/:id/songs — add a song to a playlist.
 playlistsRouter.post("/playlists/:id/songs", (req, res) => {
   const songId = Number(req.body?.songId);
-  const result = addSongToPlaylist(getDb(), Number(req.params.id), songId);
+  const result = addSongToPlaylist(
+    getDb(),
+    Number(req.params.id),
+    songId,
+    req.userId!
+  );
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -125,7 +140,8 @@ playlistsRouter.delete("/playlists/:id/songs/:songId", (req, res) => {
   const result = removeSongFromPlaylist(
     getDb(),
     Number(req.params.id),
-    Number(req.params.songId)
+    Number(req.params.songId),
+    req.userId!
   );
   if (!result.ok) {
     return res

@@ -1,5 +1,6 @@
 // Service layer: thin wrapper around the backend song API.
 import { env } from "$env/dynamic/public";
+import { authHeaders, withToken } from "$lib/services/authService";
 import type { Song } from "$lib/types";
 
 const API_BASE = env.PUBLIC_API_BASE_URL ?? "http://localhost:3001";
@@ -17,7 +18,7 @@ async function errorMessage(res: Response): Promise<string> {
 
 // Fetches all songs from the backend.
 export async function fetchSongs(): Promise<Song[]> {
-  const res = await fetch(`${API_BASE}/api/songs`);
+  const res = await fetch(`${API_BASE}/api/songs`, { headers: authHeaders() });
   if (!res.ok) throw new Error(await errorMessage(res));
   const body = await res.json();
   return body.songs as Song[];
@@ -30,6 +31,7 @@ export async function uploadSong(file: File): Promise<Song> {
 
   const res = await fetch(`${API_BASE}/api/upload`, {
     method: "POST",
+    headers: authHeaders(),
     body: formData,
   });
   if (!res.ok) throw new Error(await errorMessage(res));
@@ -51,7 +53,7 @@ export async function updateSongMeta(
 ): Promise<Song> {
   const res = await fetch(`${API_BASE}/api/songs/${songId}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(fields),
   });
   if (!res.ok) throw new Error(await errorMessage(res));
@@ -62,7 +64,7 @@ export async function updateSongMeta(
 export async function setLiked(songId: number, liked: boolean): Promise<Song> {
   const res = await fetch(`${API_BASE}/api/songs/${songId}/like`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ liked }),
   });
   if (!res.ok) throw new Error(await errorMessage(res));
@@ -73,6 +75,7 @@ export async function setLiked(songId: number, liked: boolean): Promise<Song> {
 export async function recordPlay(songId: number): Promise<Song> {
   const res = await fetch(`${API_BASE}/api/songs/${songId}/play`, {
     method: "POST",
+    headers: authHeaders(),
   });
   if (!res.ok) throw new Error(await errorMessage(res));
   return (await res.json()).song as Song;
@@ -80,23 +83,24 @@ export async function recordPlay(songId: number): Promise<Song> {
 
 // Returns the album-art URL for a song (only meaningful when song.hasArt).
 export function artUrl(songId: number): string {
-  return `${API_BASE}/api/songs/${songId}/art`;
+  return withToken(`${API_BASE}/api/songs/${songId}/art`);
 }
 
 // Deletes a song from the library.
 export async function deleteSong(songId: number): Promise<void> {
   const res = await fetch(`${API_BASE}/api/songs/${songId}`, {
     method: "DELETE",
+    headers: authHeaders(),
   });
   if (!res.ok) throw new Error(await errorMessage(res));
 }
 
 // Returns the streaming URL for a song (used in Cycle 2).
 export function streamUrl(songId: number): string {
-  return `${API_BASE}/api/songs/${songId}/stream`;
+  return withToken(`${API_BASE}/api/songs/${songId}/stream`);
 }
 
 // Returns the download URL for a song (sets Content-Disposition: attachment).
 export function downloadUrl(songId: number): string {
-  return `${API_BASE}/api/songs/${songId}/download`;
+  return withToken(`${API_BASE}/api/songs/${songId}/download`);
 }
