@@ -44,3 +44,4 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 11** — Keyboard shortcuts
 - ✅ **Cycle 12** — Queue / up-next view
 - ✅ **Cycle 13** — Track duration
+- ✅ **Cycle 14** — Sidebar layout & collapsible queue

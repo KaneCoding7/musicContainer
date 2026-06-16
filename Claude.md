@@ -358,6 +358,22 @@ backend changes needed.
 
 ---
 
+### Cycle 14: Sidebar Layout & Collapsible Queue  ✅ (post-MVP)
+**Goal:** Spotify-style app shell instead of one long page
+
+**Frontend Tasks:**
+- App shell: left sidebar (brand, nav, upload, shortcuts) + scrollable content
+- Sidebar nav switches views: All Songs / Playlists / Albums
+- AlbumsView groups songs by album (cover from embedded art) with a detail view
+- Sticky bottom player gains a queue toggle; queue is an expandable/collapsible
+  panel above the bar
+- Layout via column flex; `+layout.svelte` no longer constrains width
+
+**Done When:** Can navigate sections from the sidebar and expand/collapse the
+queue from the player
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
