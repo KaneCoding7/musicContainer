@@ -3,6 +3,10 @@
   import Icon from "$lib/components/Icon.svelte";
   import { artUrl } from "$lib/services/songService";
   import {
+    addSongToPlaylist,
+    removeSongFromPlaylist,
+  } from "$lib/services/playlistService";
+  import {
     fetchSharedPlaylistSongs,
     fetchSharedWithMe,
     type SharedPlaylist,
@@ -16,6 +20,40 @@
   let open = $state<SharedPlaylist | null>(null);
   let songs = $state<Song[]>([]);
   let error = $state<string | null>(null);
+  let addId = $state<string>("");
+
+  // Songs in my library not already in the open shared playlist (for adding).
+  const addable = $derived(
+    songVm.songs.filter((s) => !songs.some((ps) => ps.id === s.id))
+  );
+
+  async function refreshSongs() {
+    if (open) songs = await fetchSharedPlaylistSongs(open.id);
+  }
+
+  async function addSelected() {
+    const id = Number(addId);
+    if (!open || !id) return;
+    error = null;
+    try {
+      await addSongToPlaylist(open.id, id);
+      await refreshSongs();
+      addId = "";
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Failed to add song";
+    }
+  }
+
+  async function removeSong(songId: number) {
+    if (!open) return;
+    error = null;
+    try {
+      await removeSongFromPlaylist(open.id, songId);
+      await refreshSongs();
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Failed to remove song";
+    }
+  }
 
   onMount(async () => {
     try {
@@ -51,7 +89,7 @@
       {/if}
     </span>
     <div>
-      <h3>{open.name}</h3>
+      <h3>{open.name} {#if open.canEdit}<span class="edit-tag">collaborative</span>{/if}</h3>
       <p class="muted">Shared by {open.ownerName} · {songs.length} tracks</p>
       {#if songs.length > 0}
         <button class="play-all" onclick={() => songVm.playQueue(songs, 0)}>
@@ -60,6 +98,19 @@
       {/if}
     </div>
   </div>
+
+  {#if open.canEdit && addable.length > 0}
+    <div class="add-row">
+      <select bind:value={addId}>
+        <option value="" disabled selected>Add a song from your library…</option>
+        {#each addable as s (s.id)}
+          <option value={String(s.id)}>{s.originalFilename}</option>
+        {/each}
+      </select>
+      <button onclick={addSelected} disabled={!addId}>Add</button>
+    </div>
+  {/if}
+
   <ol>
     {#each songs as song, i (song.id)}
       {@const isCurrent = song.id === songVm.currentSong?.id}
@@ -71,6 +122,14 @@
             {#if song.artist}<span class="t-artist">{song.artist}</span>{/if}
           </span>
         </button>
+        {#if open.canEdit}
+          <button
+            class="remove"
+            title="Remove from playlist"
+            aria-label="Remove from playlist"
+            onclick={() => removeSong(song.id)}><Icon name="close" size={18} /></button
+          >
+        {/if}
       </li>
     {/each}
   </ol>
@@ -204,13 +263,67 @@
     margin: 0;
   }
   li {
+    display: flex;
+    align-items: center;
     border-bottom: 1px solid var(--surface-2);
   }
   li.current {
     background: var(--active-bg);
   }
+  .remove {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.35rem;
+  }
+  .remove:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  .add-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  .add-row select {
+    flex: 1;
+    padding: 0.5rem 0.7rem;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    color: var(--text);
+  }
+  .add-row button {
+    padding: 0.5rem 1rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .add-row button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .edit-tag {
+    font-size: 0.6rem;
+    vertical-align: middle;
+    padding: 0.1rem 0.4rem;
+    background: var(--active-bg);
+    color: var(--accent-text);
+    border-radius: 0.3rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
   .track {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 1rem;

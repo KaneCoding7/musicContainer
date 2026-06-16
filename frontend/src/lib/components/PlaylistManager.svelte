@@ -25,6 +25,7 @@
   // --- Sharing ---
   let shareOpen = $state(false);
   let shareEmail = $state("");
+  let shareCanEdit = $state(false);
   let shares = $state<ShareUser[]>([]);
   let shareError = $state<string | null>(null);
   let publicToken = $state<string | null>(null);
@@ -82,7 +83,7 @@
     if (id === null || !email) return;
     shareError = null;
     try {
-      await sharePlaylist(id, email);
+      await sharePlaylist(id, email, shareCanEdit);
       shares = await fetchPlaylistShares(id);
       shareEmail = "";
     } catch (e) {
@@ -251,12 +252,20 @@
             />
             <button onclick={doShare} disabled={!shareEmail.trim()}>Share</button>
           </div>
+          <label class="can-edit">
+            <input type="checkbox" bind:checked={shareCanEdit} />
+            Allow editing (add / remove tracks)
+          </label>
           {#if shareError}<p class="share-error">{shareError}</p>{/if}
           {#if shares.length > 0}
             <ul class="share-list">
               {#each shares as u (u.id)}
                 <li>
-                  <span class="share-who">{u.name} <span class="dim">({u.email})</span></span>
+                  <span class="share-who"
+                    >{u.name} <span class="dim">({u.email})</span>{#if u.canEdit}<span
+                        class="edit-tag">editor</span
+                      >{/if}</span
+                  >
                   <button
                     class="revoke"
                     title="Revoke"
@@ -505,6 +514,25 @@
   .share-row button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+  .can-edit {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .edit-tag {
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.4rem;
+    background: var(--active-bg);
+    color: var(--accent-text);
+    border-radius: 0.3rem;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
   .share-list {
     list-style: none;

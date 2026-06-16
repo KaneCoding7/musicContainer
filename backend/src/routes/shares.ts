@@ -57,11 +57,13 @@ sharesRouter.post("/playlists/:id/share", (req, res) => {
       .status(400)
       .json({ error: { code: "validation", message: "email is required" } });
   }
+  const canEdit = Boolean(req.body?.canEdit);
   const result = sharePlaylist(
     getDb(),
     req.userId!,
     Number(req.params.id),
-    email
+    email,
+    canEdit
   );
   if (!result.ok) {
     return res

@@ -7,26 +7,35 @@ export interface ShareUser {
   id: string;
   name: string;
   email: string;
+  canEdit: boolean;
 }
 
 // A playlist shared with the current user, including who shared it.
 export interface SharedPlaylist extends Playlist {
   ownerName: string;
+  canEdit: boolean;
 }
 
-function findUserByEmail(db: Database, email: string): ShareUser | null {
+function findUserByEmail(
+  db: Database,
+  email: string
+): { id: string; name: string; email: string } | null {
   const row = db
     .prepare('SELECT id, name, email FROM "user" WHERE email = ?')
-    .get(email.trim().toLowerCase()) as ShareUser | undefined;
+    .get(email.trim().toLowerCase()) as
+    | { id: string; name: string; email: string }
+    | undefined;
   return row ?? null;
 }
 
-// Shares a playlist (owned by ownerId) with the user at recipientEmail.
+// Shares a playlist (owned by ownerId) with the user at recipientEmail. Re-
+// sharing updates the edit permission.
 export function sharePlaylist(
   db: Database,
   ownerId: string,
   playlistId: number,
-  recipientEmail: string
+  recipientEmail: string,
+  canEdit: boolean
 ): Result<ShareUser> {
   const playlist = getPlaylist(db, playlistId, ownerId);
   if (!playlist.ok) return playlist;
@@ -39,9 +48,12 @@ export function sharePlaylist(
 
   try {
     db.prepare(
-      "INSERT OR IGNORE INTO playlist_shares (playlist_id, shared_with) VALUES (?, ?)"
-    ).run(playlistId, recipient.id);
-    return ok(recipient);
+      `INSERT INTO playlist_shares (playlist_id, shared_with, can_edit)
+       VALUES (?, ?, ?)
+       ON CONFLICT(playlist_id, shared_with)
+       DO UPDATE SET can_edit = excluded.can_edit`
+    ).run(playlistId, recipient.id, canEdit ? 1 : 0);
+    return ok({ ...recipient, canEdit });
   } catch (e) {
     return err("internal", `Failed to share playlist: ${(e as Error).message}`);
   }
@@ -77,14 +89,14 @@ export function listPlaylistShares(
   try {
     const rows = db
       .prepare(
-        `SELECT u.id, u.name, u.email
+        `SELECT u.id, u.name, u.email, ps.can_edit
          FROM playlist_shares ps
          JOIN "user" u ON u.id = ps.shared_with
          WHERE ps.playlist_id = ?
          ORDER BY ps.created_at ASC`
       )
-      .all(playlistId) as ShareUser[];
-    return ok(rows);
+      .all(playlistId) as (Omit<ShareUser, "canEdit"> & { can_edit: number })[];
+    return ok(rows.map((r) => ({ id: r.id, name: r.name, email: r.email, canEdit: r.can_edit === 1 })));
   } catch (e) {
     return err("internal", `Failed to list shares: ${(e as Error).message}`);
   }
@@ -98,7 +110,7 @@ export function listSharedWithMe(
   try {
     const rows = db
       .prepare(
-        `SELECT p.id, p.name, p.created_at, u.name AS owner_name,
+        `SELECT p.id, p.name, p.created_at, u.name AS owner_name, ps.can_edit,
                 (SELECT COUNT(*) FROM playlist_songs x WHERE x.playlist_id = p.id)
                   AS track_count,
                 (SELECT x.song_id FROM playlist_songs x
@@ -116,6 +128,7 @@ export function listSharedWithMe(
       name: string;
       created_at: string;
       owner_name: string;
+      can_edit: number;
       track_count: number;
       cover_song_id: number | null;
     }[];
@@ -125,6 +138,7 @@ export function listSharedWithMe(
         name: r.name,
         createdAt: r.created_at,
         ownerName: r.owner_name,
+        canEdit: r.can_edit === 1,
         trackCount: r.track_count,
         coverSongId: r.cover_song_id,
       }))
@@ -175,6 +189,18 @@ export function canAccessSong(
     .prepare("SELECT 1 AS x FROM songs WHERE id = ? AND user_id = ?")
     .get(songId, userId);
   if (owned) return true;
+  // In a playlist the user owns (covers tracks a collaborator added).
+  const inOwnPlaylist = db
+    .prepare(
+      `SELECT 1 AS x
+       FROM playlist_songs ps
+       JOIN playlists p ON p.id = ps.playlist_id
+       WHERE ps.song_id = ? AND p.user_id = ?
+       LIMIT 1`
+    )
+    .get(songId, userId);
+  if (inOwnPlaylist) return true;
+  // In a playlist shared with the user.
   const shared = db
     .prepare(
       `SELECT 1 AS x
