@@ -115,6 +115,74 @@ export class SongViewModel {
     this.playQueue(this.songs, index);
   }
 
+  // Appends a song to the queue. If nothing is playing, starts it.
+  addToQueue(song: Song): void {
+    if (this.currentIndex === null) {
+      this.queue = [song];
+      this.currentIndex = 0;
+      this.isPlaying = true;
+    } else {
+      this.queue = [...this.queue, song];
+    }
+  }
+
+  // Inserts a song to play right after the current track.
+  playNext(song: Song): void {
+    if (this.currentIndex === null) {
+      this.addToQueue(song);
+      return;
+    }
+    const at = this.currentIndex + 1;
+    this.queue = [
+      ...this.queue.slice(0, at),
+      song,
+      ...this.queue.slice(at),
+    ];
+  }
+
+  // Removes the queue entry at index, keeping the current track stable.
+  removeFromQueue(index: number): void {
+    if (index < 0 || index >= this.queue.length) return;
+    const removingCurrent = index === this.currentIndex;
+    this.queue = this.queue.filter((_, i) => i !== index);
+    if (this.currentIndex === null) return;
+    if (this.queue.length === 0) {
+      this.currentIndex = null;
+      this.isPlaying = false;
+    } else if (removingCurrent) {
+      // Stay at the same slot (now the following track) and keep playing.
+      this.currentIndex = Math.min(this.currentIndex, this.queue.length - 1);
+    } else if (index < this.currentIndex) {
+      this.currentIndex -= 1;
+    }
+  }
+
+  // Moves a queue entry, keeping the current track pointer correct.
+  moveInQueue(from: number, to: number): void {
+    if (
+      from === to ||
+      from < 0 ||
+      to < 0 ||
+      from >= this.queue.length ||
+      to >= this.queue.length
+    )
+      return;
+    const arr = [...this.queue];
+    const [moved] = arr.splice(from, 1);
+    arr.splice(to, 0, moved);
+    this.queue = arr;
+
+    let c = this.currentIndex;
+    if (c === null) return;
+    if (c === from) {
+      c = to;
+    } else {
+      if (from < c) c -= 1;
+      if (to <= c) c += 1;
+    }
+    this.currentIndex = c;
+  }
+
   // Toggles a song's liked flag (optimistic; reverts on failure).
   async toggleLike(id: number): Promise<void> {
     const target = this.songs.find((s) => s.id === id);

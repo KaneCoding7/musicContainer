@@ -4,6 +4,16 @@
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
   let { vm }: { vm: SongViewModel } = $props();
+
+  // Drag-to-reorder state (Cycle 29).
+  let dragIndex = $state<number | null>(null);
+  let overIndex = $state<number | null>(null);
+
+  function onDrop(i: number) {
+    if (dragIndex !== null && dragIndex !== i) vm.moveInQueue(dragIndex, i);
+    dragIndex = null;
+    overIndex = null;
+  }
 </script>
 
 <div class="queue">
@@ -11,7 +21,26 @@
     {#each vm.queue as song, i (`${song.id}-${i}`)}
       {@const isCurrent = i === vm.currentIndex}
       {@const isPast = vm.currentIndex !== null && i < vm.currentIndex}
-      <li class:current={isCurrent} class:past={isPast}>
+      <li
+        class:current={isCurrent}
+        class:past={isPast}
+        class:dragging={i === dragIndex}
+        class:dragover={i === overIndex && i !== dragIndex}
+        draggable="true"
+        ondragstart={() => (dragIndex = i)}
+        ondragover={(e) => {
+          e.preventDefault();
+          overIndex = i;
+        }}
+        ondrop={(e) => {
+          e.preventDefault();
+          onDrop(i);
+        }}
+        ondragend={() => {
+          dragIndex = null;
+          overIndex = null;
+        }}
+      >
         <button class="row" onclick={() => vm.playQueue(vm.queue, i)}>
           <span class="thumb">
             {#if song.hasArt}
@@ -33,6 +62,12 @@
             <span class="badge">Now playing</span>
           {/if}
         </button>
+        <button
+          class="remove"
+          title="Remove from queue"
+          aria-label="Remove from queue"
+          onclick={() => vm.removeFromQueue(i)}><Icon name="close" size={18} /></button
+        >
       </li>
     {/each}
   </ol>
@@ -45,6 +80,8 @@
     margin: 0;
   }
   li {
+    display: flex;
+    align-items: center;
     border-bottom: 1px solid var(--surface-2);
   }
   li.current {
@@ -53,8 +90,30 @@
   li.past {
     opacity: 0.55;
   }
+  li.dragging {
+    opacity: 0.4;
+  }
+  li.dragover {
+    border-top: 2px solid var(--accent);
+  }
+  .remove {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.35rem;
+  }
+  .remove:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
   .row {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 0.75rem;
