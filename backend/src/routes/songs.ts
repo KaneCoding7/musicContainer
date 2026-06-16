@@ -18,6 +18,7 @@ import {
 import { canAccessSong } from "../functional/shares.js";
 import { statusForError } from "../functional/result.js";
 import { extractMetadata } from "../metadata.js";
+import { streamSongFile } from "../stream.js";
 
 export const songsRouter = Router();
 
@@ -214,32 +215,5 @@ songsRouter.get("/songs/:id/stream", (req, res) => {
       .status(statusForError(result.error.code))
       .json({ error: result.error });
   }
-
-  const { path, size, contentType } = result.value;
-  res.setHeader("Content-Type", contentType);
-  res.setHeader("Accept-Ranges", "bytes");
-  res.setHeader("Cache-Control", "no-cache");
-
-  const range = req.headers.range;
-  if (!range) {
-    res.setHeader("Content-Length", size);
-    res.status(200);
-    return createReadStream(path).pipe(res);
-  }
-
-  // Parse "bytes=start-end" (either bound may be omitted).
-  const match = /bytes=(\d*)-(\d*)/.exec(range);
-  const start = match && match[1] ? parseInt(match[1], 10) : 0;
-  const end =
-    match && match[2] ? Math.min(parseInt(match[2], 10), size - 1) : size - 1;
-
-  if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= size) {
-    res.setHeader("Content-Range", `bytes */${size}`);
-    return res.status(416).end();
-  }
-
-  res.status(206);
-  res.setHeader("Content-Range", `bytes ${start}-${end}/${size}`);
-  res.setHeader("Content-Length", end - start + 1);
-  return createReadStream(path, { start, end }).pipe(res);
+  return streamSongFile(req, res, result.value);
 });
