@@ -6,11 +6,18 @@ See [`Claude.md`](./Claude.md) for the full project plan and architecture.
 ## Quick start (Docker)
 
 ```bash
+cp .env.example .env
+# edit .env and set BETTER_AUTH_SECRET to a strong random value (required — the
+# API refuses to start without it). Generate one with:  openssl rand -base64 48
+
 docker compose up --build
 ```
 
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:3001
+
+The **first account you register becomes the owner** (and claims any pre-existing
+library). The data (SQLite DB, audio, art) persists in `./data`.
 
 ## Local development (no Docker)
 
