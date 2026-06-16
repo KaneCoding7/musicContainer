@@ -60,7 +60,12 @@
   onplay={() => (vm.isPlaying = true)}
   onpause={() => (vm.isPlaying = false)}
   onended={() => {
-    if (!vm.next()) vm.isPlaying = false;
+    if (vm.repeat === "one" && audio) {
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+    } else if (!vm.next()) {
+      vm.isPlaying = false;
+    }
   }}
 ></audio>
 
@@ -71,6 +76,13 @@
     </div>
 
     <div class="controls">
+      <button
+        class="toggle"
+        class:active={vm.shuffle}
+        onclick={() => vm.toggleShuffle()}
+        aria-label="Shuffle"
+        title="Shuffle">🔀</button
+      >
       <button onclick={() => vm.prev()} aria-label="Previous" title="Previous"
         >⏮</button
       >
@@ -78,6 +90,17 @@
         {vm.isPlaying ? "⏸" : "▶"}
       </button>
       <button onclick={() => vm.next()} aria-label="Next" title="Next">⏭</button>
+      <button
+        class="toggle"
+        class:active={vm.repeat !== "off"}
+        onclick={() => vm.cycleRepeat()}
+        aria-label="Repeat"
+        title={vm.repeat === "one"
+          ? "Repeat one"
+          : vm.repeat === "all"
+            ? "Repeat all"
+            : "Repeat off"}>{vm.repeat === "one" ? "🔂" : "🔁"}</button
+      >
     </div>
 
     <div class="progress">
@@ -147,6 +170,14 @@
   }
   .controls .play {
     font-size: 1.3rem;
+  }
+  .controls .toggle {
+    font-size: 0.95rem;
+    opacity: 0.5;
+  }
+  .controls .toggle.active {
+    opacity: 1;
+    background: #2a1d4d;
   }
   .progress {
     display: flex;

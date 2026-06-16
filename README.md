@@ -37,3 +37,4 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 4** — Delete songs
 - ✅ **Cycle 5** — Search / filter
 - ✅ **Cycle 6** — Rename songs
+- ✅ **Cycle 7** — Player polish (shuffle, repeat, download)

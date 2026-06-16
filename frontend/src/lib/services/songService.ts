@@ -63,3 +63,8 @@ export async function deleteSong(songId: number): Promise<void> {
 export function streamUrl(songId: number): string {
   return `${API_BASE}/api/songs/${songId}/stream`;
 }
+
+// Returns the download URL for a song (sets Content-Disposition: attachment).
+export function downloadUrl(songId: number): string {
+  return `${API_BASE}/api/songs/${songId}/download`;
+}
