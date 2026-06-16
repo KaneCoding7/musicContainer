@@ -7,6 +7,12 @@
     uploadArt,
     type SongMetadata,
   } from "$lib/services/songService";
+  import {
+    disableSongPublicLink,
+    enableSongPublicLink,
+    getSongPublicToken,
+    publicLink,
+  } from "$lib/services/shareService";
   import type { Song } from "$lib/types";
 
   let {
@@ -63,6 +69,41 @@
       artError = e instanceof Error ? e.message : "Failed to remove art";
     } finally {
       artBusy = false;
+    }
+  }
+
+  // Public link (Cycle 39).
+  let publicToken = $state<string | null>(null);
+  let publicCopied = $state(false);
+  let publicBusy = $state(false);
+  $effect(() => {
+    getSongPublicToken(song.id)
+      .then((t) => (publicToken = t))
+      .catch(() => {});
+  });
+  async function togglePublic() {
+    publicBusy = true;
+    try {
+      if (publicToken) {
+        await disableSongPublicLink(song.id);
+        publicToken = null;
+      } else {
+        publicToken = await enableSongPublicLink(song.id);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      publicBusy = false;
+    }
+  }
+  async function copyPublic() {
+    if (!publicToken) return;
+    try {
+      await navigator.clipboard.writeText(publicLink(publicToken));
+      publicCopied = true;
+      setTimeout(() => (publicCopied = false), 1500);
+    } catch {
+      /* ignore */
     }
   }
 
@@ -127,6 +168,26 @@
       Album
       <input bind:value={album} placeholder="No album" />
     </label>
+
+    <div class="public-block">
+      <div class="public-head">
+        <span><Icon name="public" size={18} /> Public link</span>
+        <button type="button" class="link-toggle" onclick={togglePublic} disabled={publicBusy}>
+          {publicToken ? "Turn off" : "Create"}
+        </button>
+      </div>
+      {#if publicToken}
+        <div class="public-url">
+          <span class="url">{publicLink(publicToken)}</span>
+          <button type="button" class="copy" onclick={copyPublic}>
+            <Icon name={publicCopied ? "check" : "content_copy"} size={16} />
+            {publicCopied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <p class="hint">Anyone with this link can listen — no account needed.</p>
+      {/if}
+    </div>
+
     <div class="actions">
       <button class="secondary" onclick={onClose}>Cancel</button>
       <button onclick={save} disabled={!name.trim()}>Save</button>
@@ -228,6 +289,66 @@
     border-radius: 0.5rem;
     color: var(--text);
     font: inherit;
+  }
+  .public-block {
+    margin-bottom: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--surface-2);
+  }
+  .public-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .public-head span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .link-toggle {
+    padding: 0.3rem 0.7rem;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+  .link-toggle:hover:not(:disabled) {
+    background: var(--border-strong);
+  }
+  .public-url {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+  .public-url .url {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: ui-monospace, monospace;
+    font-size: 0.78rem;
+    color: var(--accent-text);
+  }
+  .public-url .copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.6rem;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 0.8rem;
+  }
+  .public-url .copy:hover {
+    background: var(--border-strong);
+  }
+  .hint {
+    margin: 0.4rem 0 0;
+    color: var(--dim);
+    font-size: 0.78rem;
   }
   .actions {
     display: flex;

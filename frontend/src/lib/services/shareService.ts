@@ -110,6 +110,34 @@ export function publicLink(token: string): string {
   return `${origin}/share/${token}`;
 }
 
+// --- Single-song public links ---
+export async function getSongPublicToken(
+  songId: number
+): Promise<string | null> {
+  const res = await fetch(`${API_BASE}/api/songs/${songId}/public`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).token as string | null;
+}
+
+export async function enableSongPublicLink(songId: number): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/songs/${songId}/public`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).token as string;
+}
+
+export async function disableSongPublicLink(songId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/songs/${songId}/public`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
 // Songs of a playlist shared with me.
 export async function fetchSharedPlaylistSongs(
   playlistId: number
