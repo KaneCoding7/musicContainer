@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/Icon.svelte";
   import { streamUrl } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -81,15 +82,17 @@
         class:active={vm.shuffle}
         onclick={() => vm.toggleShuffle()}
         aria-label="Shuffle"
-        title="Shuffle">🔀</button
+        title="Shuffle"><Icon name="shuffle" size={22} /></button
       >
       <button onclick={() => vm.prev()} aria-label="Previous" title="Previous"
-        >⏮</button
+        ><Icon name="skip_previous" fill size={26} /></button
       >
       <button class="play" onclick={togglePlay} aria-label="Play/Pause">
-        {vm.isPlaying ? "⏸" : "▶"}
+        <Icon name={vm.isPlaying ? "pause" : "play_arrow"} fill size={32} />
       </button>
-      <button onclick={() => vm.next()} aria-label="Next" title="Next">⏭</button>
+      <button onclick={() => vm.next()} aria-label="Next" title="Next"
+        ><Icon name="skip_next" fill size={26} /></button
+      >
       <button
         class="toggle"
         class:active={vm.repeat !== "off"}
@@ -99,7 +102,11 @@
           ? "Repeat one"
           : vm.repeat === "all"
             ? "Repeat all"
-            : "Repeat off"}>{vm.repeat === "one" ? "🔂" : "🔁"}</button
+            : "Repeat off"}
+        ><Icon
+          name={vm.repeat === "one" ? "repeat_one" : "repeat"}
+          size={22}
+        /></button
       >
     </div>
 
@@ -118,7 +125,7 @@
     </div>
 
     <div class="volume">
-      <span aria-hidden="true">🔊</span>
+      <Icon name="volume_up" size={20} />
       <input
         type="range"
         min="0"
@@ -157,27 +164,33 @@
     gap: 0.4rem;
   }
   .controls button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: transparent;
     border: none;
     color: #e5e7eb;
-    font-size: 1.1rem;
     cursor: pointer;
-    padding: 0.25rem 0.4rem;
+    padding: 0.3rem;
     border-radius: 0.4rem;
   }
   .controls button:hover {
     background: #27272a;
   }
   .controls .play {
-    font-size: 1.3rem;
+    color: #a78bfa;
   }
   .controls .toggle {
-    font-size: 0.95rem;
-    opacity: 0.5;
+    color: #9ca3af;
+    opacity: 0.65;
   }
   .controls .toggle.active {
     opacity: 1;
+    color: #a78bfa;
     background: #2a1d4d;
+  }
+  .volume :global(.material-symbols-rounded) {
+    color: #9ca3af;
   }
   .progress {
     display: flex;

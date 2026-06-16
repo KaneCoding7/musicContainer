@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import Icon from "$lib/components/Icon.svelte";
   import Player from "$lib/components/Player.svelte";
   import PlaylistManager from "$lib/components/PlaylistManager.svelte";
   import SongList from "$lib/components/SongList.svelte";
@@ -33,7 +34,7 @@
 </script>
 
 <header>
-  <h1>🎵 Music Server</h1>
+  <h1><Icon name="library_music" fill size={28} /> Music Server</h1>
   <UploadForm {vm} />
 </header>
 
@@ -65,6 +66,10 @@
   h1 {
     margin: 0;
     font-size: 1.6rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #a78bfa;
   }
   h2 {
     font-size: 1rem;

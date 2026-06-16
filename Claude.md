@@ -300,3 +300,6 @@ The frontend reads the API base URL from `PUBLIC_API_BASE_URL`
 - **File Types:** Support MP3 and WAV initially.
 - **No Authentication:** MVP is single-user (you), accessed via Cloudflare Tunnel.
 - **Streaming:** Use HTTP Range requests for audio streaming (allows seeking).
+- **Icons:** Google Material Symbols, self-hosted as a variable woff2 in
+  `frontend/static/fonts/` and rendered via `Icon.svelte` (no runtime CDN
+  calls — works offline / behind the tunnel).
