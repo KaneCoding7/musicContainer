@@ -211,14 +211,14 @@
   select {
     flex: 1;
     padding: 0.5rem 0.7rem;
-    background: #18181b;
-    border: 1px solid #3f3f46;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
     border-radius: 0.5rem;
-    color: #e5e7eb;
+    color: var(--text);
   }
   button {
     padding: 0.5rem 0.9rem;
-    background: #6d28d9;
+    background: var(--accent);
     color: white;
     border: none;
     border-radius: 0.5rem;
@@ -226,7 +226,7 @@
     font-weight: 600;
   }
   button:hover:not(:disabled) {
-    background: #5b21b6;
+    background: var(--accent-hover);
   }
   button:disabled {
     opacity: 0.5;
@@ -243,27 +243,27 @@
     flex-direction: column;
     gap: 0.5rem;
     padding: 0.75rem;
-    background: #18181b;
-    border: 1px solid #27272a;
+    background: var(--surface);
+    border: 1px solid var(--surface-2);
     border-radius: 0.6rem;
     cursor: pointer;
     text-align: left;
   }
   .cards .card:hover {
-    background: #1f1f23;
+    background: var(--hover);
   }
   .card.active {
-    border-color: #6d28d9;
-    background: #2a1d4d;
+    border-color: var(--accent);
+    background: var(--active-bg);
   }
   .cover {
     aspect-ratio: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #27272a;
+    background: var(--surface-2);
     border-radius: 0.4rem;
-    color: #6b7280;
+    color: var(--dim);
     overflow: hidden;
   }
   .cover img {
@@ -283,11 +283,11 @@
     white-space: nowrap;
   }
   .card-sub {
-    color: #9ca3af;
+    color: var(--muted);
     font-size: 0.8rem;
   }
   .detail {
-    border-top: 1px solid #27272a;
+    border-top: 1px solid var(--surface-2);
     padding-top: 1rem;
   }
   .detail-head {
@@ -309,17 +309,17 @@
     align-items: center;
     border: none;
     background: transparent;
-    color: #9ca3af;
+    color: var(--muted);
     cursor: pointer;
     padding: 0.35rem 0.5rem;
     border-radius: 0.4rem;
   }
   .head-action:hover {
-    background: #27272a;
+    background: var(--surface-2);
   }
   .head-action.danger:hover {
-    background: #7f1d1d;
-    color: #fecaca;
+    background: var(--danger-bg);
+    color: var(--danger-text);
   }
   h3 {
     margin: 0 0 0.5rem;
@@ -335,10 +335,10 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    border-bottom: 1px solid #27272a;
+    border-bottom: 1px solid var(--surface-2);
   }
   li.current {
-    background: #2a1d4d;
+    background: var(--active-bg);
   }
   .play-btn {
     flex: 1;
@@ -351,18 +351,18 @@
     padding: 0.6rem 0.5rem;
   }
   .play-btn:hover {
-    background: #1c1c20;
+    background: var(--hover);
   }
   li.dragging {
     opacity: 0.4;
   }
   li.dragover {
-    border-top: 2px solid #a78bfa;
+    border-top: 2px solid var(--accent-text);
   }
   .handle {
     display: inline-flex;
     align-items: center;
-    color: #6b7280;
+    color: var(--dim);
     cursor: grab;
     padding-left: 0.25rem;
   }
@@ -371,7 +371,7 @@
   }
   .icon {
     display: inline-flex;
-    color: #a78bfa;
+    color: var(--accent-text);
   }
   .name {
     overflow: hidden;
@@ -383,28 +383,28 @@
     align-items: center;
     border: none;
     background: transparent;
-    color: #9ca3af;
+    color: var(--muted);
     cursor: pointer;
     padding: 0.4rem 0.6rem;
   }
   .remove:hover {
-    background: #7f1d1d;
-    color: #fecaca;
+    background: var(--danger-bg);
+    color: var(--danger-text);
   }
   .add-row {
     display: flex;
     gap: 0.5rem;
   }
   .muted {
-    color: #9ca3af;
+    color: var(--muted);
     padding: 0.5rem 0;
   }
   .muted.small {
     font-size: 0.85rem;
   }
   .error {
-    background: #7f1d1d;
-    color: #fecaca;
+    background: var(--danger-bg);
+    color: var(--danger-text);
     padding: 0.5rem 0.75rem;
     border-radius: 0.5rem;
   }

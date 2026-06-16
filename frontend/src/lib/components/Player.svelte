@@ -174,8 +174,8 @@
     align-items: center;
     gap: 1rem;
     padding: 0.75rem 1.25rem;
-    background: #18181b;
-    border-top: 1px solid #27272a;
+    background: var(--surface);
+    border-top: 1px solid var(--surface-2);
   }
   .now-playing {
     display: flex;
@@ -190,9 +190,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #27272a;
+    background: var(--surface-2);
     border-radius: 0.35rem;
-    color: #6b7280;
+    color: var(--dim);
     overflow: hidden;
   }
   .np-art img {
@@ -212,7 +212,7 @@
     white-space: nowrap;
   }
   .np-artist {
-    color: #9ca3af;
+    color: var(--muted);
     font-size: 0.8rem;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -229,28 +229,28 @@
     justify-content: center;
     background: transparent;
     border: none;
-    color: #e5e7eb;
+    color: var(--text);
     cursor: pointer;
     padding: 0.3rem;
     border-radius: 0.4rem;
   }
   .controls button:hover {
-    background: #27272a;
+    background: var(--surface-2);
   }
   .controls .play {
-    color: #a78bfa;
+    color: var(--accent-text);
   }
   .controls .toggle {
-    color: #9ca3af;
+    color: var(--muted);
     opacity: 0.65;
   }
   .controls .toggle.active {
     opacity: 1;
-    color: #a78bfa;
-    background: #2a1d4d;
+    color: var(--accent-text);
+    background: var(--active-bg);
   }
   .volume :global(.material-symbols-rounded) {
-    color: #9ca3af;
+    color: var(--muted);
   }
   .progress {
     display: flex;
@@ -261,7 +261,7 @@
     flex: 1;
   }
   .time {
-    color: #9ca3af;
+    color: var(--muted);
     font-size: 0.75rem;
     min-width: 2.5rem;
     text-align: center;
@@ -280,22 +280,22 @@
     justify-content: center;
     background: transparent;
     border: none;
-    color: #9ca3af;
+    color: var(--muted);
     cursor: pointer;
     padding: 0.3rem;
     border-radius: 0.4rem;
     margin-right: 0.25rem;
   }
   .queue-toggle:hover {
-    background: #27272a;
-    color: #e5e7eb;
+    background: var(--surface-2);
+    color: var(--text);
   }
   .queue-toggle.active {
-    color: #a78bfa;
-    background: #2a1d4d;
+    color: var(--accent-text);
+    background: var(--active-bg);
   }
   input[type="range"] {
-    accent-color: #6d28d9;
+    accent-color: var(--accent);
   }
   @media (max-width: 600px) {
     .player {

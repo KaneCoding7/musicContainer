@@ -37,7 +37,7 @@
     width: 100%;
     box-sizing: border-box;
     padding: 0.6rem 1rem;
-    background: #6d28d9;
+    background: var(--accent);
     color: white;
     border-radius: 0.5rem;
     cursor: pointer;
@@ -45,6 +45,6 @@
     user-select: none;
   }
   .btn:hover {
-    background: #5b21b6;
+    background: var(--accent-hover);
   }
 </style>
