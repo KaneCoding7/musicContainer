@@ -216,6 +216,21 @@ music-server/
 
 ---
 
+### Cycle 5: Search / Filter  ✅ (post-MVP)
+**Goal:** Quickly find songs in a growing library
+
+**Frontend Tasks:**
+- Add `query` state + `filteredSongs` getter to SongViewModel
+  (case-insensitive match on the song name)
+- Add a search input to SongList; play within the filtered results
+
+**Notes:** Instant client-side filtering over the already-loaded list — no
+backend changes needed.
+
+**Done When:** Typing in the search box narrows the list as you type
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

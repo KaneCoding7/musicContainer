@@ -35,3 +35,4 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 2** — Player & streaming
 - ✅ **Cycle 3** — Playlists
 - ✅ **Cycle 4** — Delete songs
+- ✅ **Cycle 5** — Search / filter
