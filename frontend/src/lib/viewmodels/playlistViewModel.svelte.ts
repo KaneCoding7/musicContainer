@@ -40,12 +40,23 @@ export class PlaylistViewModel {
     }
   }
 
-  // Renames a playlist.
+  // Re-fetches the playlist list so track counts / covers stay accurate.
+  private async refreshList(): Promise<void> {
+    try {
+      this.playlists = await api.fetchPlaylists();
+    } catch {
+      /* keep current list on failure */
+    }
+  }
+
+  // Renames a playlist (preserving its track count / cover).
   async rename(id: number, name: string): Promise<void> {
     this.error = null;
     try {
       const updated = await api.renamePlaylist(id, name);
-      this.playlists = this.playlists.map((p) => (p.id === id ? updated : p));
+      this.playlists = this.playlists.map((p) =>
+        p.id === id ? { ...p, name: updated.name } : p
+      );
     } catch (e) {
       this.error = e instanceof Error ? e.message : "Failed to rename playlist";
     }
@@ -85,6 +96,7 @@ export class PlaylistViewModel {
     try {
       await api.addSongToPlaylist(this.selectedId, songId);
       this.selectedSongs = await api.fetchPlaylistSongs(this.selectedId);
+      await this.refreshList();
     } catch (e) {
       this.error = e instanceof Error ? e.message : "Failed to add song";
     }
@@ -114,6 +126,7 @@ export class PlaylistViewModel {
     try {
       await api.removeSongFromPlaylist(this.selectedId, songId);
       this.selectedSongs = await api.fetchPlaylistSongs(this.selectedId);
+      await this.refreshList();
     } catch (e) {
       this.error = e instanceof Error ? e.message : "Failed to remove song";
     }

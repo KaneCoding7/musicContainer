@@ -15,33 +15,28 @@
   }
 </script>
 
-<div class="upload">
-  <label class="btn">
-    <Icon name={vm.uploading ? "progress_activity" : "upload"} size={20} />
-    {vm.uploading ? "Uploading…" : "Upload song"}
-    <input
-      bind:this={fileInput}
-      type="file"
-      accept=".mp3,.wav,audio/mpeg,audio/wav"
-      onchange={onChange}
-      disabled={vm.uploading}
-      hidden
-    />
-  </label>
-  <span class="hint">MP3 or WAV</span>
-</div>
+<label class="btn" title="MP3 or WAV">
+  <Icon name={vm.uploading ? "progress_activity" : "upload"} size={20} />
+  {vm.uploading ? "Uploading…" : "Upload"}
+  <input
+    bind:this={fileInput}
+    type="file"
+    accept=".mp3,.wav,audio/mpeg,audio/wav"
+    onchange={onChange}
+    disabled={vm.uploading}
+    hidden
+  />
+</label>
 
 <style>
-  .upload {
+  .btn {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-  }
-  .btn {
-    display: inline-flex;
-    align-items: center;
+    justify-content: center;
     gap: 0.5rem;
-    padding: 0.55rem 1.1rem;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.6rem 1rem;
     background: #6d28d9;
     color: white;
     border-radius: 0.5rem;
@@ -51,9 +46,5 @@
   }
   .btn:hover {
     background: #5b21b6;
-  }
-  .hint {
-    color: #9ca3af;
-    font-size: 0.85rem;
   }
 </style>

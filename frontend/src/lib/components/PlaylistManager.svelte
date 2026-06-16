@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
+  import { artUrl } from "$lib/services/songService";
   import type { PlaylistViewModel } from "$lib/viewmodels/playlistViewModel.svelte";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -98,14 +99,27 @@
   {#if vm.playlists.length === 0}
     <p class="muted">No playlists yet. Create one above.</p>
   {:else}
-    <div class="chips">
+    <div class="cards">
       {#each vm.playlists as playlist (playlist.id)}
         <button
-          class="chip"
+          class="card"
           class:active={playlist.id === vm.selectedId}
           onclick={() => vm.select(playlist.id)}
         >
-          {playlist.name}
+          <span class="cover">
+            {#if playlist.coverSongId != null}
+              <img src={artUrl(playlist.coverSongId)} alt="" />
+            {:else}
+              <Icon name="queue_music" size={26} />
+            {/if}
+          </span>
+          <span class="card-text">
+            <span class="card-name">{playlist.name}</span>
+            <span class="card-sub">
+              {playlist.trackCount ?? 0}
+              {(playlist.trackCount ?? 0) === 1 ? "track" : "tracks"}
+            </span>
+          </span>
         </button>
       {/each}
     </div>
@@ -218,22 +232,59 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
-  .chips {
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .card {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 0.5rem;
-    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 0.6rem;
+    cursor: pointer;
+    text-align: left;
   }
-  .chip {
+  .cards .card:hover {
+    background: #1f1f23;
+  }
+  .card.active {
+    border-color: #6d28d9;
+    background: #2a1d4d;
+  }
+  .cover {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: #27272a;
-    color: #e5e7eb;
-    font-weight: 500;
+    border-radius: 0.4rem;
+    color: #6b7280;
+    overflow: hidden;
   }
-  .chip:hover {
-    background: #3f3f46;
+  .cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
-  .chip.active {
-    background: #6d28d9;
+  .card-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .card-name {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .card-sub {
+    color: #9ca3af;
+    font-size: 0.8rem;
   }
   .detail {
     border-top: 1px solid #27272a;

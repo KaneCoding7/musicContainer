@@ -107,14 +107,21 @@
         {/each}
       </nav>
 
-      <div class="upload-area">
+      <div class="sidebar-foot">
         <UploadForm {vm} />
-      </div>
 
-      <p class="shortcuts">
-        <kbd>Space</kbd> play · <kbd>←</kbd>/<kbd>→</kbd> skip ·
-        <kbd>↑</kbd>/<kbd>↓</kbd> vol · <kbd>/</kbd> search
-      </p>
+        <details class="shortcuts">
+          <summary>
+            <Icon name="keyboard" size={18} /> Shortcuts
+          </summary>
+          <dl>
+            <div><dt><kbd>Space</kbd></dt><dd>Play / pause</dd></div>
+            <div><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Previous / next</dd></div>
+            <div><dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Volume</dd></div>
+            <div><dt><kbd>/</kbd></dt><dd>Search</dd></div>
+          </dl>
+        </details>
+      </div>
     </aside>
 
     <main class="content">
@@ -215,22 +222,63 @@
     background: #2a1d4d;
     color: #fff;
   }
-  .upload-area {
+  .sidebar-foot {
     margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
   }
   .shortcuts {
+    font-size: 0.78rem;
+    color: #9ca3af;
+  }
+  .shortcuts summary {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 0.4rem;
+    cursor: pointer;
+    list-style: none;
+    color: #9ca3af;
+    user-select: none;
+  }
+  .shortcuts summary::-webkit-details-marker {
+    display: none;
+  }
+  .shortcuts summary:hover {
+    background: #1c1c20;
+    color: #e5e7eb;
+  }
+  .shortcuts dl {
+    margin: 0.25rem 0 0;
+    padding: 0 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .shortcuts dl div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .shortcuts dt {
+    display: flex;
+    gap: 0.2rem;
+  }
+  .shortcuts dd {
     margin: 0;
     color: #6b7280;
-    font-size: 0.72rem;
-    line-height: 1.6;
   }
   .shortcuts kbd {
     background: #27272a;
     border: 1px solid #3f3f46;
     border-radius: 0.25rem;
-    padding: 0.02rem 0.3rem;
+    padding: 0.02rem 0.32rem;
     font-family: inherit;
-    font-size: 0.68rem;
+    font-size: 0.7rem;
+    color: #cbd5e1;
   }
   .content {
     flex: 1;
