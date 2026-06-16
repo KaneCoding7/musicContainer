@@ -223,6 +223,12 @@ export class SongViewModel {
     }
   }
 
+  // Replaces a song everywhere it appears (library + queue) with an updated copy.
+  replaceSong(updated: Song): void {
+    this.songs = this.songs.map((s) => (s.id === updated.id ? updated : s));
+    this.queue = this.queue.map((s) => (s.id === updated.id ? updated : s));
+  }
+
   // Updates a song's metadata, reflecting it in the library list and queue.
   async updateMeta(id: number, fields: SongMetadata): Promise<void> {
     this.error = null;

@@ -640,6 +640,22 @@ progress
 
 ---
 
+### Cycle 32: Custom Album Art  ✅ (post-MVP)
+**Goal:** Upload / replace / remove a song's cover
+
+**Backend Tasks:**
+- `setSongArt(id, userId, filename|null)` (returns updated song + old art for
+  cleanup); routes `PUT`/`DELETE /api/songs/:id/art` (JPEG/PNG, owner-scoped,
+  deletes the replaced file)
+
+**Frontend Tasks:**
+- songService `uploadArt`/`removeArt`; VM `replaceSong`; EditSongDialog gains an
+  art thumbnail with Upload/Change/Remove (cache-busted preview)
+
+**Done When:** A song's art can be set/changed/removed from the edit dialog
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

@@ -62,6 +62,7 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 29** — Queue management (play next / add to queue / reorder / remove)
 - ✅ **Cycle 30** — Account settings (display name + password)
 - ✅ **Cycle 31** — Home view (smart sections) + theme toggle in Settings
+- ✅ **Cycle 32** — Custom album art (upload / replace / remove)
 
 ## Tests
 

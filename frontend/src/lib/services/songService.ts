@@ -81,6 +81,29 @@ export async function recordPlay(songId: number): Promise<Song> {
   return (await res.json()).song as Song;
 }
 
+// Uploads/replaces a song's album art; returns the updated song.
+export async function uploadArt(songId: number, file: File): Promise<Song> {
+  const formData = new FormData();
+  formData.append("art", file);
+  const res = await fetch(`${API_BASE}/api/songs/${songId}/art`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: formData,
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).song as Song;
+}
+
+// Removes a song's album art; returns the updated song.
+export async function removeArt(songId: number): Promise<Song> {
+  const res = await fetch(`${API_BASE}/api/songs/${songId}/art`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).song as Song;
+}
+
 // Returns the album-art URL for a song (only meaningful when song.hasArt).
 export function artUrl(songId: number): string {
   return withToken(`${API_BASE}/api/songs/${songId}/art`);

@@ -298,6 +298,31 @@ export function recordPlay(
   }
 }
 
+// Sets (or clears) a song's album art filename (owner-scoped). Returns the
+// updated song plus the previous art filename, so the caller can delete it.
+export function setSongArt(
+  db: Database,
+  id: number,
+  userId: string,
+  artFilename: string | null
+): Result<{ song: Song; oldArt: string | null }> {
+  const existing = getSong(db, id, userId);
+  if (!existing.ok) return existing;
+  try {
+    const row = db
+      .prepare("SELECT art_filename FROM songs WHERE id = ? AND user_id = ?")
+      .get(id, userId) as { art_filename: string | null } | undefined;
+    db.prepare(
+      "UPDATE songs SET art_filename = ? WHERE id = ? AND user_id = ?"
+    ).run(artFilename, id, userId);
+    const updated = getSong(db, id, userId);
+    if (!updated.ok) return updated;
+    return ok({ song: updated.value, oldArt: row?.art_filename ?? null });
+  } catch (e) {
+    return err("internal", `Failed to set art: ${(e as Error).message}`);
+  }
+}
+
 // Resolves a song's album art file for serving, if present.
 export function resolveSongArt(
   db: Database,
