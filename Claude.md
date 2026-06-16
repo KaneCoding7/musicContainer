@@ -231,6 +231,23 @@ backend changes needed.
 
 ---
 
+### Cycle 6: Rename Songs  ✅ (post-MVP)
+**Goal:** Give beats friendlier display names (the upload filename is locked)
+
+**Backend Tasks:**
+- Implement functional core: `renameSong(id, name) -> Song` (updates
+  `original_filename`; the file on disk is untouched)
+- Create route: `PATCH /api/songs/:id`
+
+**Frontend Tasks:**
+- Add `renameSong` to SongService
+- Add `rename(id, name)` to SongViewModel (updates library list + play queue)
+- Add a rename button to SongList; refresh open playlist
+
+**Done When:** Can rename a song and the new name shows everywhere
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

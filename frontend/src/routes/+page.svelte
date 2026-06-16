@@ -22,6 +22,14 @@
       await playlistVm.select(playlistVm.selectedId);
     }
   }
+
+  // Rename a song, then refresh the open playlist so its name updates there too.
+  async function handleRename(id: number, name: string) {
+    await vm.rename(id, name);
+    if (playlistVm.selectedId !== null) {
+      await playlistVm.select(playlistVm.selectedId);
+    }
+  }
 </script>
 
 <header>
@@ -35,7 +43,7 @@
 
 <section>
   <h2>Songs</h2>
-  <SongList {vm} onDelete={handleDelete} />
+  <SongList {vm} onDelete={handleDelete} onRename={handleRename} />
 </section>
 
 <section>

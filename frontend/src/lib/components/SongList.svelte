@@ -5,7 +5,12 @@
   let {
     vm,
     onDelete,
-  }: { vm: SongViewModel; onDelete?: (id: number) => void } = $props();
+    onRename,
+  }: {
+    vm: SongViewModel;
+    onDelete?: (id: number) => void;
+    onRename?: (id: number, name: string) => void;
+  } = $props();
 
   function formatDate(iso: string): string {
     const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T") + "Z");
@@ -15,6 +20,13 @@
   function confirmDelete(song: Song) {
     if (confirm(`Delete "${song.originalFilename}"? This cannot be undone.`)) {
       onDelete?.(song.id);
+    }
+  }
+
+  function promptRename(song: Song) {
+    const name = prompt("Rename song", song.originalFilename);
+    if (name && name.trim() && name.trim() !== song.originalFilename) {
+      onRename?.(song.id, name.trim());
     }
   }
 </script>
@@ -47,6 +59,14 @@
             <span class="name">{song.originalFilename}</span>
             <span class="date">{formatDate(song.uploadedAt)}</span>
           </button>
+          {#if onRename}
+            <button
+              class="action"
+              title="Rename song"
+              aria-label="Rename song"
+              onclick={() => promptRename(song)}>✏️</button
+            >
+          {/if}
           {#if onDelete}
             <button
               class="delete"
@@ -103,13 +123,17 @@
     text-align: left;
     cursor: pointer;
   }
+  .action,
   .delete {
     background: transparent;
     border: none;
     color: #9ca3af;
     cursor: pointer;
-    padding: 0.5rem 0.9rem;
+    padding: 0.5rem 0.7rem;
     font-size: 0.95rem;
+  }
+  .action:hover {
+    background: #27272a;
   }
   .delete:hover {
     background: #7f1d1d;

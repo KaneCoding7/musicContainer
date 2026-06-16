@@ -8,6 +8,7 @@ import {
   deleteSong,
   listSongs,
   recordSong,
+  renameSong,
   resolveSongFile,
   validateUpload,
 } from "../functional/songs.js";
@@ -86,6 +87,21 @@ songsRouter.get("/songs", (_req, res) => {
       .json({ error: result.error });
   }
   return res.json({ songs: result.value });
+});
+
+// PATCH /api/songs/:id — rename a song's user-facing name.
+songsRouter.patch("/songs/:id", (req, res) => {
+  const name =
+    typeof req.body?.originalFilename === "string"
+      ? req.body.originalFilename
+      : "";
+  const result = renameSong(getDb(), Number(req.params.id), name);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ song: result.value });
 });
 
 // DELETE /api/songs/:id — remove a song (file + db + playlist references).

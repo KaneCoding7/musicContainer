@@ -37,6 +37,20 @@ export async function uploadSong(file: File): Promise<Song> {
   return body.song as Song;
 }
 
+// Renames a song's user-facing name; returns the updated song.
+export async function renameSong(
+  songId: number,
+  originalFilename: string
+): Promise<Song> {
+  const res = await fetch(`${API_BASE}/api/songs/${songId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ originalFilename }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).song as Song;
+}
+
 // Deletes a song from the library.
 export async function deleteSong(songId: number): Promise<void> {
   const res = await fetch(`${API_BASE}/api/songs/${songId}`, {
