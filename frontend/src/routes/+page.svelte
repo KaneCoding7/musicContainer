@@ -3,6 +3,7 @@
   import AlbumsView from "$lib/components/AlbumsView.svelte";
   import AuthScreen from "$lib/components/AuthScreen.svelte";
   import Icon from "$lib/components/Icon.svelte";
+  import InviteView from "$lib/components/InviteView.svelte";
   import LikedView from "$lib/components/LikedView.svelte";
   import Player from "$lib/components/Player.svelte";
   import PlaylistManager from "$lib/components/PlaylistManager.svelte";
@@ -30,7 +31,7 @@
     location.reload();
   }
 
-  type View = "songs" | "liked" | "playlists" | "albums" | "recent";
+  type View = "songs" | "liked" | "playlists" | "albums" | "recent" | "invite";
   let view = $state<View>("songs");
   let queueOpen = $state(false);
   let theme = $state<"dark" | "light">("dark");
@@ -47,6 +48,7 @@
     { id: "playlists", label: "Playlists", icon: "queue_music" },
     { id: "albums", label: "Albums", icon: "album" },
     { id: "recent", label: "Recently Played", icon: "history" },
+    { id: "invite", label: "Invite", icon: "person_add" },
   ];
 
   onMount(async () => {
@@ -198,9 +200,12 @@
       {:else if view === "albums"}
         <h2>Albums</h2>
         <AlbumsView {vm} />
-      {:else}
+      {:else if view === "recent"}
         <h2>Recently Played</h2>
         <RecentlyPlayedView {vm} />
+      {:else}
+        <h2>Invite a friend</h2>
+        <InviteView />
       {/if}
     </main>
   </div>

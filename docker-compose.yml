@@ -13,6 +13,8 @@ services:
       - BETTER_AUTH_URL=http://localhost:3001
       # Origin the browser loads the frontend from (CORS + auth CSRF).
       - FRONTEND_ORIGIN=http://localhost:3000
+      # Set to "true" to require an invite code to register (owner exempt).
+      - INVITE_ONLY=${INVITE_ONLY:-false}
     volumes:
       - ./data:/data
 

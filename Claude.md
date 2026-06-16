@@ -471,8 +471,23 @@ queue from the player
 **Done When:** Users sign up/in, see only their own library, and can't reach
 others' songs
 
-### Cycle 21: Invites (Phase 2)  ⬜ (planned)
-- Invite codes so users can invite friends to the server.
+### Cycle 21: Invites (Phase 2)  ✅ (post-MVP)
+**Goal:** Users invite friends to the server
+
+**Backend Tasks:**
+- `invites` table; functional core (create/list/validate/consume)
+- Routes: `POST/GET /api/invites` (auth); public `POST /api/register` wrapper
+  that validates+consumes an invite then calls Better Auth sign-up
+- `INVITE_ONLY` env: when set, blocks direct sign-up and requires a valid
+  invite (owner/first user exempt)
+
+**Frontend Tasks:**
+- `authService.signUp` → `/api/register` (optional invite); AuthScreen reads
+  `?invite=` and shows an invite field
+- `inviteService` + `InviteView` (sidebar "Invite"): generate + copy invite
+  links, see used status
+
+**Done When:** A user generates an invite link and a friend registers with it
 
 ---
 

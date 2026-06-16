@@ -49,12 +49,14 @@ async function authError(res: Response): Promise<string> {
 export async function signUp(
   email: string,
   password: string,
-  name: string
+  name: string,
+  invite?: string
 ): Promise<User> {
-  const res = await fetch(`${API_BASE}/api/auth/sign-up/email`, {
+  // Goes through our gated wrapper so invite codes are enforced/consumed.
+  const res = await fetch(`${API_BASE}/api/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, name }),
+    body: JSON.stringify({ email, password, name, invite }),
   });
   if (!res.ok) throw new Error(await authError(res));
   const body = await res.json();
