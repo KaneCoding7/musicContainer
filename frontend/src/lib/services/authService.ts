@@ -87,6 +87,29 @@ export async function signOut(): Promise<void> {
   }
 }
 
+// Updates the current user's display name.
+export async function updateName(name: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/auth/update-user`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(await authError(res));
+}
+
+// Changes the current user's password.
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/auth/change-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  if (!res.ok) throw new Error(await authError(res));
+}
+
 // Returns the current user if the stored token is valid, else null.
 export async function fetchSession(): Promise<User | null> {
   if (!getToken()) return null;
