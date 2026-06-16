@@ -724,6 +724,21 @@ shares cannot
 
 ---
 
+### Cycle 38: Download Playlist as ZIP  ✅ (post-MVP)
+**Goal:** Export a playlist's tracks
+
+**Backend Tasks:**
+- `GET /api/playlists/:id/download` streams a zip (archiver `ZipArchive`) of the
+  playlist's audio files (owner or shared viewer), named by original filename
+  with de-duplication
+
+**Frontend Tasks:**
+- `playlistZipUrl(id)` (token in query); a download button in the playlist header
+
+**Done When:** Downloading a playlist yields a zip of its tracks
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
