@@ -162,7 +162,7 @@ music-server/
 
 ---
 
-### Cycle 2: Player & Streaming
+### Cycle 2: Player & Streaming  ✅
 **Goal:** Play songs with basic controls
 
 **Backend Tasks:**

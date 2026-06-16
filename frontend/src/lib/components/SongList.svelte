@@ -16,10 +16,16 @@
     <p class="muted">No songs yet. Upload one to get started.</p>
   {:else}
     <ul>
-      {#each vm.songs as song (song.id)}
-        <li>
-          <span class="name">{song.originalFilename}</span>
-          <span class="date">{formatDate(song.uploadedAt)}</span>
+      {#each vm.songs as song, i (song.id)}
+        {@const isCurrent = i === vm.currentIndex}
+        <li class:current={isCurrent}>
+          <button class="row" onclick={() => vm.play(i)}>
+            <span class="icon">
+              {#if isCurrent && vm.isPlaying}⏸{:else}▶{/if}
+            </span>
+            <span class="name">{song.originalFilename}</span>
+            <span class="date">{formatDate(song.uploadedAt)}</span>
+          </button>
         </li>
       {/each}
     </ul>
@@ -33,17 +39,37 @@
     margin: 0;
   }
   li {
+    border-bottom: 1px solid #27272a;
+  }
+  li.current {
+    background: #2a1d4d;
+  }
+  .row {
+    width: 100%;
     display: flex;
-    justify-content: space-between;
     align-items: center;
     gap: 1rem;
     padding: 0.75rem 1rem;
-    border-bottom: 1px solid #27272a;
+    background: transparent;
+    border: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
   }
-  li:hover {
+  .row:hover {
     background: #1c1c20;
   }
+  li.current .row:hover {
+    background: #34245e;
+  }
+  .icon {
+    width: 1.2rem;
+    color: #a78bfa;
+    flex-shrink: 0;
+  }
   .name {
+    flex: 1;
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;

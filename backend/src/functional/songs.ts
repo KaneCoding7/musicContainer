@@ -1,5 +1,6 @@
 import type { Database } from "better-sqlite3";
-import { extname } from "node:path";
+import { existsSync, statSync } from "node:fs";
+import { extname, join } from "node:path";
 import type { Song } from "../types.js";
 import { err, ok, type Result } from "./result.js";
 
@@ -100,6 +101,33 @@ export function listSongs(db: Database): Result<Song[]> {
   } catch (e) {
     return err("internal", `Failed to list songs: ${(e as Error).message}`);
   }
+}
+
+// Information needed by the HTTP layer to stream a song's audio file.
+export interface SongFile {
+  path: string;
+  size: number;
+  contentType: string;
+}
+
+// Resolves a song's on-disk audio file for streaming. The storage directory is
+// passed in so the core stays independent of environment configuration.
+export function resolveSongFile(
+  db: Database,
+  id: number,
+  musicDir: string
+): Result<SongFile> {
+  const songResult = getSong(db, id);
+  if (!songResult.ok) return songResult;
+
+  const path = join(musicDir, songResult.value.filename);
+  if (!existsSync(path)) {
+    return err("not_found", `Audio file for song ${id} is missing on disk`);
+  }
+
+  const ext = extname(path).toLowerCase();
+  const contentType = ext === ".wav" ? "audio/wav" : "audio/mpeg";
+  return ok({ path, size: statSync(path).size, contentType });
 }
 
 // Looks up a single song by id.

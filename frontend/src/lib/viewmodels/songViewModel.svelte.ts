@@ -9,6 +9,45 @@ export class SongViewModel {
   uploading = $state(false);
   error = $state<string | null>(null);
 
+  // --- Player state (Cycle 2) ---
+  currentIndex = $state<number | null>(null);
+  isPlaying = $state(false);
+
+  // The song currently loaded in the player, if any.
+  get currentSong(): Song | null {
+    if (this.currentIndex === null) return null;
+    return this.songs[this.currentIndex] ?? null;
+  }
+
+  // Selects a song to play by its list index.
+  play(index: number): void {
+    if (index < 0 || index >= this.songs.length) return;
+    this.currentIndex = index;
+    this.isPlaying = true;
+  }
+
+  // Advances to the next song; returns false if already at the end.
+  next(): boolean {
+    if (this.currentIndex === null) return false;
+    if (this.currentIndex < this.songs.length - 1) {
+      this.currentIndex += 1;
+      this.isPlaying = true;
+      return true;
+    }
+    return false;
+  }
+
+  // Goes back to the previous song; returns false if already at the start.
+  prev(): boolean {
+    if (this.currentIndex === null) return false;
+    if (this.currentIndex > 0) {
+      this.currentIndex -= 1;
+      this.isPlaying = true;
+      return true;
+    }
+    return false;
+  }
+
   // Loads the song list from the backend.
   async load(): Promise<void> {
     this.loading = true;
@@ -29,6 +68,8 @@ export class SongViewModel {
     try {
       const song = await uploadSong(file);
       this.songs = [song, ...this.songs];
+      // Keep the player pointed at the same song now that indices shifted.
+      if (this.currentIndex !== null) this.currentIndex += 1;
       return true;
     } catch (e) {
       this.error = e instanceof Error ? e.message : "Upload failed";

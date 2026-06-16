@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import Player from "$lib/components/Player.svelte";
   import SongList from "$lib/components/SongList.svelte";
   import UploadForm from "$lib/components/UploadForm.svelte";
   import { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -24,6 +25,8 @@
   <h2>Songs</h2>
   <SongList {vm} />
 </section>
+
+<Player {vm} />
 
 <style>
   header {
