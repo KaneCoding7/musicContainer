@@ -578,6 +578,17 @@ show the current track
 
 ---
 
+### Cycle 27: Search & Artists View  ✅ (post-MVP)
+**Goal:** Make a large library navigable
+
+**Frontend Tasks:**
+- Broaden `filteredSongs` to match song name, artist, and album
+- New `ArtistsView` (grouped like Albums, round avatars) + sidebar "Artists"
+
+**Done When:** Search matches artist/album and an Artists view browses by artist
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
