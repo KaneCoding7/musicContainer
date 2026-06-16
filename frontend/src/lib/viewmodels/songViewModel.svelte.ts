@@ -106,6 +106,50 @@ export class SongViewModel {
     this.volume = Math.min(1, Math.max(0, this.volume + delta));
   }
 
+  // --- Sleep timer (Cycle 35) ---
+  // Epoch ms when playback should pause (null = no timed sleep).
+  sleepUntil = $state<number | null>(null);
+  // If true, pause when the current track ends.
+  sleepAtTrackEnd = $state(false);
+  private sleepHandle: ReturnType<typeof setTimeout> | null = null;
+
+  get sleepActive(): boolean {
+    return this.sleepUntil !== null || this.sleepAtTrackEnd;
+  }
+
+  private clearSleepHandle(): void {
+    if (this.sleepHandle !== null) {
+      clearTimeout(this.sleepHandle);
+      this.sleepHandle = null;
+    }
+  }
+
+  // Sets a countdown sleep timer in minutes (pauses playback when it elapses).
+  setSleepTimer(minutes: number): void {
+    this.clearSleepHandle();
+    this.sleepAtTrackEnd = false;
+    this.sleepUntil = Date.now() + minutes * 60_000;
+    this.sleepHandle = setTimeout(() => {
+      this.isPlaying = false;
+      this.sleepUntil = null;
+      this.sleepHandle = null;
+    }, minutes * 60_000);
+  }
+
+  // Sleeps when the current track finishes (handled by the player on "ended").
+  setSleepAtTrackEnd(): void {
+    this.clearSleepHandle();
+    this.sleepUntil = null;
+    this.sleepAtTrackEnd = true;
+  }
+
+  // Cancels any pending sleep timer.
+  cancelSleep(): void {
+    this.clearSleepHandle();
+    this.sleepUntil = null;
+    this.sleepAtTrackEnd = false;
+  }
+
   toggleShuffle(): void {
     this.shuffle = !this.shuffle;
   }

@@ -687,6 +687,18 @@ shares cannot
 
 ---
 
+### Cycle 35: Sleep Timer  ✅ (post-MVP)
+**Goal:** Auto-pause playback after a while
+
+**Frontend Tasks:**
+- VM sleep state: `setSleepTimer(min)` / `setSleepAtTrackEnd` / `cancelSleep`
+  (pauses on elapse; end-of-track handled in the player's `onended`)
+- Player timer menu (15/30/60 min, End of track, Turn off) with a live countdown
+
+**Done When:** Playback pauses after the chosen timer
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
