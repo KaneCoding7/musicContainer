@@ -69,6 +69,44 @@ export async function fetchSharedWithMe(): Promise<SharedPlaylist[]> {
   return (await res.json()).playlists as SharedPlaylist[];
 }
 
+// --- Public links ---
+
+// Current public token for a playlist (null if disabled).
+export async function getPublicToken(
+  playlistId: number
+): Promise<string | null> {
+  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}/public`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).token as string | null;
+}
+
+// Enables a public link and returns its token.
+export async function enablePublicLink(playlistId: number): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}/public`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).token as string;
+}
+
+// Disables the public link.
+export async function disablePublicLink(playlistId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}/public`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
+// Builds the public listen URL for a token.
+export function publicLink(token: string): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/share/${token}`;
+}
+
 // Songs of a playlist shared with me.
 export async function fetchSharedPlaylistSongs(
   playlistId: number

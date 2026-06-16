@@ -510,6 +510,27 @@ edit; non-shared songs stay private
 
 ---
 
+### Cycle 23: Public Share Links  ✅ (post-MVP)
+**Goal:** Share a playlist via a link anyone can open (no account)
+
+**Backend Tasks:**
+- `public_shares` table (one token per playlist); functional core
+  (enable/disable/get + resolve token → playlist+songs, token→song check)
+- Public, unauthenticated routes `GET /api/public/:token`,
+  `/public/:token/songs/:id/stream` + `/art` (mounted before requireAuth);
+  shared Range-stream helper (`src/stream.ts`)
+- Owner routes `GET/POST/DELETE /api/playlists/:id/public`
+
+**Frontend Tasks:**
+- publicService + standalone `/share/[token]` listen page (own simple player,
+  no login)
+- Share panel "Public link" toggle with copyable URL
+
+**Done When:** Owner enables a public link; anyone opens it and listens without
+an account; disabling revokes access
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

@@ -2,7 +2,11 @@
   import Icon from "$lib/components/Icon.svelte";
   import { artUrl } from "$lib/services/songService";
   import {
+    disablePublicLink,
+    enablePublicLink,
     fetchPlaylistShares,
+    getPublicToken,
+    publicLink,
     sharePlaylist,
     unsharePlaylist,
     type ShareUser,
@@ -23,19 +27,54 @@
   let shareEmail = $state("");
   let shares = $state<ShareUser[]>([]);
   let shareError = $state<string | null>(null);
+  let publicToken = $state<string | null>(null);
+  let publicCopied = $state(false);
 
-  // Load the share list whenever a different playlist is selected.
+  // Load the share list + public-link state whenever a different playlist is
+  // selected.
   $effect(() => {
     const id = vm.selectedId;
     shareOpen = false;
     shareError = null;
     shares = [];
+    publicToken = null;
+    publicCopied = false;
     if (id !== null) {
       fetchPlaylistShares(id)
         .then((s) => (shares = s))
         .catch(() => {});
+      getPublicToken(id)
+        .then((t) => (publicToken = t))
+        .catch(() => {});
     }
   });
+
+  async function togglePublic() {
+    const id = vm.selectedId;
+    if (id === null) return;
+    shareError = null;
+    try {
+      if (publicToken) {
+        await disablePublicLink(id);
+        publicToken = null;
+      } else {
+        publicToken = await enablePublicLink(id);
+      }
+    } catch (e) {
+      shareError = e instanceof Error ? e.message : "Failed to update link";
+    }
+  }
+
+  async function copyPublic() {
+    if (!publicToken) return;
+    try {
+      await navigator.clipboard.writeText(publicLink(publicToken));
+      publicCopied = true;
+      setTimeout(() => (publicCopied = false), 1500);
+    } catch {
+      shareError = "Couldn't copy to clipboard";
+    }
+  }
 
   async function doShare() {
     const id = vm.selectedId;
@@ -230,6 +269,25 @@
           {:else}
             <p class="muted small">Not shared with anyone yet.</p>
           {/if}
+
+          <div class="public-block">
+            <div class="public-head">
+              <span><Icon name="public" size={18} /> Public link</span>
+              <button class="link-toggle" onclick={togglePublic}>
+                {publicToken ? "Turn off" : "Create"}
+              </button>
+            </div>
+            {#if publicToken}
+              <div class="public-url">
+                <span class="url">{publicLink(publicToken)}</span>
+                <button class="copy" onclick={copyPublic}>
+                  <Icon name={publicCopied ? "check" : "content_copy"} size={16} />
+                  {publicCopied ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <p class="muted small">Anyone with this link can listen — no account needed.</p>
+            {/if}
+          </div>
         </div>
       {/if}
 
@@ -487,6 +545,69 @@
     color: var(--danger-text);
     font-size: 0.85rem;
     margin: 0.5rem 0 0;
+  }
+  .public-block {
+    margin-top: 0.85rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--surface-2);
+  }
+  .public-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .public-head span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+  }
+  .link-toggle {
+    padding: 0.3rem 0.7rem;
+    background: var(--surface-2);
+    border: none;
+    border-radius: 0.4rem;
+    color: var(--text);
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .link-toggle:hover {
+    background: var(--border-strong);
+  }
+  .public-url {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+  .public-url .url {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: ui-monospace, monospace;
+    font-size: 0.82rem;
+    color: var(--accent-text);
+  }
+  .public-url .copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex-shrink: 0;
+    padding: 0.3rem 0.6rem;
+    background: var(--surface-2);
+    border: none;
+    border-radius: 0.4rem;
+    color: var(--text);
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .public-url .copy:hover {
+    background: var(--border-strong);
   }
   h3 {
     margin: 0 0 0.5rem;

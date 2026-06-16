@@ -119,6 +119,14 @@ function migrate(database: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_playlist_shares_user
       ON playlist_shares(shared_with);
+
+    -- Public share links (Cycle 23): one token per playlist, no auth to listen.
+    CREATE TABLE IF NOT EXISTS public_shares (
+      token       TEXT PRIMARY KEY,
+      playlist_id INTEGER NOT NULL UNIQUE REFERENCES playlists(id) ON DELETE CASCADE,
+      created_by  TEXT NOT NULL,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Metadata columns added post-MVP (Cycle 9). Added conditionally so existing

@@ -6,6 +6,7 @@ import { requireAuth } from "./auth-middleware.js";
 import { getDb } from "./db/init.js";
 import { invitesRouter } from "./routes/invites.js";
 import { playlistsRouter } from "./routes/playlists.js";
+import { publicRouter } from "./routes/public.js";
 import { registerRouter } from "./routes/register.js";
 import { sharesRouter } from "./routes/shares.js";
 import { songsRouter } from "./routes/songs.js";
@@ -47,6 +48,9 @@ app.get("/api/health", (_req, res) => {
 
 // Registration wrapper (public; enforces invites when enabled).
 app.use("/api", registerRouter);
+
+// Public share-link routes (no auth; gated by the opaque token).
+app.use("/api", publicRouter);
 
 // Feature routes (require authentication; data is scoped per user).
 app.use("/api", requireAuth, songsRouter);

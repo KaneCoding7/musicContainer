@@ -53,3 +53,4 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 20** — Auth & multi-user (Better Auth; isolated libraries)
 - ✅ **Cycle 21** — Friend invites
 - ✅ **Cycle 22** — Playlist sharing (read-only)
+- ✅ **Cycle 23** — Public share links (listen without an account)
