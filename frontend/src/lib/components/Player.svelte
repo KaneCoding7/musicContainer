@@ -8,7 +8,6 @@
   let audio = $state<HTMLAudioElement | null>(null);
   let currentTime = $state(0);
   let duration = $state(0);
-  let volume = $state(1);
 
   const song = $derived(vm.currentSong);
 
@@ -34,11 +33,11 @@
 
   // Keep element volume in sync.
   $effect(() => {
-    if (audio) audio.volume = volume;
+    if (audio) audio.volume = vm.volume;
   });
 
   function togglePlay() {
-    vm.isPlaying = !vm.isPlaying;
+    vm.togglePlay();
   }
 
   function onSeek(event: Event) {
@@ -145,7 +144,7 @@
         min="0"
         max="1"
         step="0.01"
-        bind:value={volume}
+        bind:value={vm.volume}
         aria-label="Volume"
       />
     </div>

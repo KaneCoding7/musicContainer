@@ -38,6 +38,18 @@ export class SongViewModel {
   shuffle = $state(false);
   repeat = $state<"off" | "all" | "one">("off");
 
+  // Volume 0..1 (Cycle 11; lives here so keyboard shortcuts can adjust it).
+  volume = $state(1);
+
+  togglePlay(): void {
+    if (this.currentSong) this.isPlaying = !this.isPlaying;
+  }
+
+  // Adjusts volume by delta, clamped to [0, 1].
+  adjustVolume(delta: number): void {
+    this.volume = Math.min(1, Math.max(0, this.volume + delta));
+  }
+
   toggleShuffle(): void {
     this.shuffle = !this.shuffle;
   }
