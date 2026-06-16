@@ -67,4 +67,7 @@ function migrate(database: Database.Database): void {
   if (!columns.includes("art_filename")) {
     database.exec("ALTER TABLE songs ADD COLUMN art_filename TEXT");
   }
+  if (!columns.includes("duration")) {
+    database.exec("ALTER TABLE songs ADD COLUMN duration REAL");
+  }
 }

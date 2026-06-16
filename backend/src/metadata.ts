@@ -7,6 +7,7 @@ export interface ExtractedMetadata {
   artist: string | null;
   album: string | null;
   artFilename: string | null;
+  duration: number | null;
 }
 
 // Reads ID3/Vorbis tags from an audio file. Any embedded cover art is written
@@ -17,7 +18,7 @@ export async function extractMetadata(
   artDir: string
 ): Promise<ExtractedMetadata> {
   try {
-    const { common } = await parseFile(audioPath);
+    const { common, format } = await parseFile(audioPath);
 
     let artFilename: string | null = null;
     const picture = common.picture?.[0];
@@ -31,8 +32,9 @@ export async function extractMetadata(
       artist: common.artist ?? null,
       album: common.album ?? null,
       artFilename,
+      duration: format.duration ?? null,
     };
   } catch {
-    return { artist: null, album: null, artFilename: null };
+    return { artist: null, album: null, artFilename: null, duration: null };
   }
 }

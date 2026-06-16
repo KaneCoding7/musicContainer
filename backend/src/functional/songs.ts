@@ -48,10 +48,11 @@ interface SongRow {
   artist: string | null;
   album: string | null;
   art_filename: string | null;
+  duration: number | null;
 }
 
 const SONG_COLUMNS =
-  "id, filename, original_filename, uploaded_at, artist, album, art_filename";
+  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration";
 
 function rowToSong(row: SongRow): Song {
   return {
@@ -62,6 +63,7 @@ function rowToSong(row: SongRow): Song {
     artist: row.artist,
     album: row.album,
     hasArt: row.art_filename !== null,
+    duration: row.duration,
   };
 }
 
@@ -75,6 +77,7 @@ export function recordSong(
     artist?: string | null;
     album?: string | null;
     artFilename?: string | null;
+    duration?: number | null;
   }
 ): Result<Song> {
   const filename = params.filename.trim();
@@ -86,14 +89,15 @@ export function recordSong(
   try {
     const info = db
       .prepare(
-        "INSERT INTO songs (filename, original_filename, artist, album, art_filename) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO songs (filename, original_filename, artist, album, art_filename, duration) VALUES (?, ?, ?, ?, ?, ?)"
       )
       .run(
         filename,
         originalFilename,
         params.artist ?? null,
         params.album ?? null,
-        params.artFilename ?? null
+        params.artFilename ?? null,
+        params.duration ?? null
       );
 
     const row = db

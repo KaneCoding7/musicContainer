@@ -22,6 +22,12 @@
     return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
   }
 
+  function formatDuration(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  }
+
   function confirmDelete(song: Song) {
     if (confirm(`Delete "${song.originalFilename}"? This cannot be undone.`)) {
       onDelete?.(song.id);
@@ -74,7 +80,13 @@
                 <span class="artist">{song.artist}</span>
               {/if}
             </span>
-            <span class="date">{formatDate(song.uploadedAt)}</span>
+            {#if song.duration}
+              <span class="date" title={formatDate(song.uploadedAt)}
+                >{formatDuration(song.duration)}</span
+              >
+            {:else}
+              <span class="date">{formatDate(song.uploadedAt)}</span>
+            {/if}
           </button>
           <a
             class="action"

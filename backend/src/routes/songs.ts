@@ -65,6 +65,7 @@ songsRouter.post("/upload", (req, res) => {
       artist: meta.artist,
       album: meta.album,
       artFilename: meta.artFilename,
+      duration: meta.duration,
     });
 
     if (!result.ok) {
