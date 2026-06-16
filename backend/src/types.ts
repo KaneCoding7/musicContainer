@@ -9,6 +9,8 @@ export interface Song {
   album: string | null;
   hasArt: boolean; // whether embedded album art was extracted
   duration: number | null; // seconds, if known
+  playCount: number;
+  lastPlayedAt: string | null; // ISO timestamp of last play
 }
 
 export interface Playlist {

@@ -19,7 +19,8 @@
 
   const song = $derived(vm.currentSong);
 
-  // Load (and autoplay) a new source whenever the selected song changes.
+  // Load (and autoplay) a new source whenever the selected song changes,
+  // recording a play for each newly loaded track.
   $effect(() => {
     const el = audio;
     const id = song?.id;
@@ -29,6 +30,7 @@
       el.src = url;
       el.load();
       el.play().catch(() => {});
+      vm.recordPlay(id);
     }
   });
 

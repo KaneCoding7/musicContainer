@@ -58,6 +58,15 @@ export async function updateSongMeta(
   return (await res.json()).song as Song;
 }
 
+// Records a play for a song; returns the updated song.
+export async function recordPlay(songId: number): Promise<Song> {
+  const res = await fetch(`${API_BASE}/api/songs/${songId}/play`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).song as Song;
+}
+
 // Returns the album-art URL for a song (only meaningful when song.hasArt).
 export function artUrl(songId: number): string {
   return `${API_BASE}/api/songs/${songId}/art`;

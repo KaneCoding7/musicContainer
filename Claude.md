@@ -418,6 +418,22 @@ queue from the player
 
 ---
 
+### Cycle 18: Play Counts & Recently Played  ✅ (post-MVP)
+**Goal:** Track plays and surface recently played songs
+
+**Backend Tasks:**
+- Add `play_count` + `last_played_at` columns (in-place migration)
+- `recordPlay(id)` (increment + timestamp); route `POST /api/songs/:id/play`
+
+**Frontend Tasks:**
+- Song type gains `playCount`/`lastPlayedAt`; service/VM `recordPlay`
+- Player records a play when a new track loads
+- New "Recently Played" sidebar view (sorted by last played, with play counts)
+
+**Done When:** Playing songs updates counts and they appear under Recently Played
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

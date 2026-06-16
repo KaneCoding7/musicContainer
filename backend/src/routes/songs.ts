@@ -7,6 +7,7 @@ import { ART_DIR, getDb, MUSIC_DIR } from "../db/init.js";
 import {
   deleteSong,
   listSongs,
+  recordPlay,
   recordSong,
   resolveSongArt,
   resolveSongFile,
@@ -111,6 +112,17 @@ songsRouter.patch("/songs/:id", (req, res) => {
   if (typeof req.body?.album === "string") fields.album = req.body.album;
 
   const result = updateSong(getDb(), Number(req.params.id), fields);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ song: result.value });
+});
+
+// POST /api/songs/:id/play — record a play (increments count, sets timestamp).
+songsRouter.post("/songs/:id/play", (req, res) => {
+  const result = recordPlay(getDb(), Number(req.params.id));
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))

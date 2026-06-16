@@ -5,6 +5,7 @@
   import Player from "$lib/components/Player.svelte";
   import PlaylistManager from "$lib/components/PlaylistManager.svelte";
   import QueueView from "$lib/components/QueueView.svelte";
+  import RecentlyPlayedView from "$lib/components/RecentlyPlayedView.svelte";
   import SongList from "$lib/components/SongList.svelte";
   import UploadForm from "$lib/components/UploadForm.svelte";
   import type { SongMetadata } from "$lib/services/songService";
@@ -14,7 +15,7 @@
   const vm = new SongViewModel();
   const playlistVm = new PlaylistViewModel();
 
-  type View = "songs" | "playlists" | "albums";
+  type View = "songs" | "playlists" | "albums" | "recent";
   let view = $state<View>("songs");
   let queueOpen = $state(false);
   let theme = $state<"dark" | "light">("dark");
@@ -29,6 +30,7 @@
     { id: "songs", label: "All Songs", icon: "library_music" },
     { id: "playlists", label: "Playlists", icon: "queue_music" },
     { id: "albums", label: "Albums", icon: "album" },
+    { id: "recent", label: "Recently Played", icon: "history" },
   ];
 
   onMount(() => {
@@ -158,9 +160,12 @@
       {:else if view === "playlists"}
         <h2>Playlists</h2>
         <PlaylistManager vm={playlistVm} songVm={vm} />
-      {:else}
+      {:else if view === "albums"}
         <h2>Albums</h2>
         <AlbumsView {vm} />
+      {:else}
+        <h2>Recently Played</h2>
+        <RecentlyPlayedView {vm} />
       {/if}
     </main>
   </div>
