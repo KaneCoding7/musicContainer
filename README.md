@@ -61,6 +61,7 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 28** — Multi-file / drag-and-drop upload
 - ✅ **Cycle 29** — Queue management (play next / add to queue / reorder / remove)
 - ✅ **Cycle 30** — Account settings (display name + password)
+- ✅ **Cycle 31** — Home view (smart sections) + theme toggle in Settings
 
 ## Tests
 

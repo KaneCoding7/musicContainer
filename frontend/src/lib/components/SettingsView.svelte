@@ -1,7 +1,16 @@
 <script lang="ts">
+  import Icon from "$lib/components/Icon.svelte";
   import type { AuthViewModel } from "$lib/viewmodels/authViewModel.svelte";
 
-  let { vm }: { vm: AuthViewModel } = $props();
+  let {
+    vm,
+    theme,
+    onToggleTheme,
+  }: {
+    vm: AuthViewModel;
+    theme: "dark" | "light";
+    onToggleTheme: () => void;
+  } = $props();
 
   let name = $state("");
   let nameInited = false;
@@ -46,6 +55,17 @@
 </script>
 
 <div class="settings">
+  <div class="card">
+    <h3>Appearance</h3>
+    <div class="row">
+      <span class="row-label">Theme</span>
+      <button class="theme-btn" onclick={onToggleTheme}>
+        <Icon name={theme === "dark" ? "light_mode" : "dark_mode"} size={18} />
+        {theme === "dark" ? "Switch to light" : "Switch to dark"}
+      </button>
+    </div>
+  </div>
+
   <form class="card" onsubmit={saveName}>
     <h3>Profile</h3>
     <label>
@@ -109,6 +129,33 @@
   }
   h3 {
     margin: 0;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .row-label {
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .theme-btn {
+    align-self: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.9rem;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .theme-btn:hover {
+    background: var(--hover);
   }
   label {
     display: flex;
