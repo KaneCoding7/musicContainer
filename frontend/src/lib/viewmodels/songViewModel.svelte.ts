@@ -3,6 +3,7 @@
 import {
   deleteSong,
   fetchSongs,
+  recordPlay,
   updateSongMeta,
   uploadSong,
   type SongMetadata,
@@ -25,6 +26,13 @@ export class SongViewModel {
     return this.songs.filter((s) =>
       s.originalFilename.toLowerCase().includes(q)
     );
+  }
+
+  // Songs that have been played, most-recently-played first.
+  get recentlyPlayed(): Song[] {
+    return this.songs
+      .filter((s) => s.lastPlayedAt !== null)
+      .sort((a, b) => (a.lastPlayedAt! < b.lastPlayedAt! ? 1 : -1));
   }
 
   // --- Player state (Cycles 2 & 3) ---
@@ -92,6 +100,17 @@ export class SongViewModel {
   // Plays from the full library list (used by the song list).
   play(index: number): void {
     this.playQueue(this.songs, index);
+  }
+
+  // Records a play (fire-and-forget); updates counts/last-played locally.
+  async recordPlay(id: number): Promise<void> {
+    try {
+      const updated = await recordPlay(id);
+      this.songs = this.songs.map((s) => (s.id === id ? updated : s));
+      this.queue = this.queue.map((s) => (s.id === id ? updated : s));
+    } catch {
+      /* play tracking is best-effort */
+    }
   }
 
   // Updates a song's metadata, reflecting it in the library list and queue.

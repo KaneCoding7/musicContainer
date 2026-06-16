@@ -9,6 +9,8 @@ export interface Song {
   album: string | null;
   hasArt: boolean;
   duration: number | null;
+  playCount: number;
+  lastPlayedAt: string | null;
 }
 
 export interface Playlist {

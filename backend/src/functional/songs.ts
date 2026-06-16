@@ -49,10 +49,12 @@ interface SongRow {
   album: string | null;
   art_filename: string | null;
   duration: number | null;
+  play_count: number;
+  last_played_at: string | null;
 }
 
 const SONG_COLUMNS =
-  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration";
+  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at";
 
 function rowToSong(row: SongRow): Song {
   return {
@@ -64,6 +66,8 @@ function rowToSong(row: SongRow): Song {
     album: row.album,
     hasArt: row.art_filename !== null,
     duration: row.duration,
+    playCount: row.play_count,
+    lastPlayedAt: row.last_played_at,
   };
 }
 
@@ -205,6 +209,20 @@ export function updateSong(
     return getSong(db, id);
   } catch (e) {
     return err("internal", `Failed to update song: ${(e as Error).message}`);
+  }
+}
+
+// Records a play: increments play_count and sets last_played_at to now.
+export function recordPlay(db: Database, id: number): Result<Song> {
+  const existing = getSong(db, id);
+  if (!existing.ok) return existing;
+  try {
+    db.prepare(
+      "UPDATE songs SET play_count = play_count + 1, last_played_at = datetime('now') WHERE id = ?"
+    ).run(id);
+    return getSong(db, id);
+  } catch (e) {
+    return err("internal", `Failed to record play: ${(e as Error).message}`);
   }
 }
 

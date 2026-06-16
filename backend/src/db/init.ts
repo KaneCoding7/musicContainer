@@ -70,4 +70,12 @@ function migrate(database: Database.Database): void {
   if (!columns.includes("duration")) {
     database.exec("ALTER TABLE songs ADD COLUMN duration REAL");
   }
+  if (!columns.includes("play_count")) {
+    database.exec(
+      "ALTER TABLE songs ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0"
+    );
+  }
+  if (!columns.includes("last_played_at")) {
+    database.exec("ALTER TABLE songs ADD COLUMN last_played_at TEXT");
+  }
 }
