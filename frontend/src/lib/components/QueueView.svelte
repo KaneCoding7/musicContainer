@@ -45,10 +45,10 @@
     margin: 0;
   }
   li {
-    border-bottom: 1px solid #27272a;
+    border-bottom: 1px solid var(--surface-2);
   }
   li.current {
-    background: #2a1d4d;
+    background: var(--active-bg);
   }
   li.past {
     opacity: 0.55;
@@ -67,10 +67,10 @@
     cursor: pointer;
   }
   .row:hover {
-    background: #1c1c20;
+    background: var(--hover);
   }
   li.current .row:hover {
-    background: #34245e;
+    background: var(--active-bg);
   }
   .thumb {
     position: relative;
@@ -80,9 +80,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #27272a;
+    background: var(--surface-2);
     border-radius: 0.3rem;
-    color: #6b7280;
+    color: var(--dim);
     overflow: hidden;
   }
   .thumb img {
@@ -111,7 +111,7 @@
     white-space: nowrap;
   }
   .artist {
-    color: #9ca3af;
+    color: var(--muted);
     font-size: 0.78rem;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -119,7 +119,7 @@
   }
   .badge {
     flex-shrink: 0;
-    color: #a78bfa;
+    color: var(--accent-text);
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;

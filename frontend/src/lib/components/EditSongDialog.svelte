@@ -65,8 +65,8 @@
   }
   .dialog {
     width: min(420px, 92vw);
-    background: #18181b;
-    border: 1px solid #3f3f46;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
     border-radius: 0.75rem;
     padding: 1.25rem;
   }
@@ -76,7 +76,7 @@
   label {
     display: block;
     margin-bottom: 0.75rem;
-    color: #9ca3af;
+    color: var(--muted);
     font-size: 0.85rem;
   }
   input {
@@ -85,10 +85,10 @@
     box-sizing: border-box;
     margin-top: 0.25rem;
     padding: 0.5rem 0.7rem;
-    background: #0f0f12;
-    border: 1px solid #3f3f46;
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
     border-radius: 0.5rem;
-    color: #e5e7eb;
+    color: var(--text);
     font: inherit;
   }
   .actions {
@@ -101,22 +101,22 @@
     padding: 0.5rem 1rem;
     border: none;
     border-radius: 0.5rem;
-    background: #6d28d9;
+    background: var(--accent);
     color: white;
     font-weight: 600;
     cursor: pointer;
   }
   button:hover:not(:disabled) {
-    background: #5b21b6;
+    background: var(--accent-hover);
   }
   button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
   .secondary {
-    background: #3f3f46;
+    background: var(--border-strong);
   }
   .secondary:hover {
-    background: #52525b;
+    background: var(--border-strong);
   }
 </style>

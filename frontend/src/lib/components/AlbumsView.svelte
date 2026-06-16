@@ -104,8 +104,8 @@
     flex-direction: column;
     gap: 0.5rem;
     padding: 0.75rem;
-    background: #18181b;
-    border: 1px solid #27272a;
+    background: var(--surface);
+    border: 1px solid var(--surface-2);
     border-radius: 0.6rem;
     cursor: pointer;
     text-align: left;
@@ -113,16 +113,16 @@
     font: inherit;
   }
   .card:hover {
-    background: #1f1f23;
+    background: var(--hover);
   }
   .cover {
     aspect-ratio: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #27272a;
+    background: var(--surface-2);
     border-radius: 0.4rem;
-    color: #6b7280;
+    color: var(--dim);
     overflow: hidden;
   }
   .cover img {
@@ -137,7 +137,7 @@
     white-space: nowrap;
   }
   .card-sub {
-    color: #9ca3af;
+    color: var(--muted);
     font-size: 0.8rem;
   }
   .back {
@@ -146,14 +146,14 @@
     gap: 0.35rem;
     background: transparent;
     border: none;
-    color: #9ca3af;
+    color: var(--muted);
     cursor: pointer;
     padding: 0.25rem 0;
     margin-bottom: 1rem;
     font: inherit;
   }
   .back:hover {
-    color: #e5e7eb;
+    color: var(--text);
   }
   .album-head {
     display: flex;
@@ -168,9 +168,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #27272a;
+    background: var(--surface-2);
     border-radius: 0.6rem;
-    color: #6b7280;
+    color: var(--dim);
     overflow: hidden;
   }
   .big-art img {
@@ -188,7 +188,7 @@
     gap: 0.35rem;
     margin-top: 0.75rem;
     padding: 0.5rem 1rem;
-    background: #6d28d9;
+    background: var(--accent);
     color: #fff;
     border: none;
     border-radius: 2rem;
@@ -196,7 +196,7 @@
     cursor: pointer;
   }
   .play-all:hover {
-    background: #5b21b6;
+    background: var(--accent-hover);
   }
   ol {
     list-style: none;
@@ -204,10 +204,10 @@
     margin: 0;
   }
   li {
-    border-bottom: 1px solid #27272a;
+    border-bottom: 1px solid var(--surface-2);
   }
   li.current {
-    background: #2a1d4d;
+    background: var(--active-bg);
   }
   .track {
     width: 100%;
@@ -223,11 +223,11 @@
     cursor: pointer;
   }
   .track:hover {
-    background: #1c1c20;
+    background: var(--hover);
   }
   .num {
     width: 1.5rem;
-    color: #6b7280;
+    color: var(--dim);
     text-align: right;
   }
   .t-meta {
@@ -241,10 +241,10 @@
     white-space: nowrap;
   }
   .t-artist {
-    color: #9ca3af;
+    color: var(--muted);
     font-size: 0.8rem;
   }
   .muted {
-    color: #9ca3af;
+    color: var(--muted);
   }
 </style>

@@ -406,6 +406,18 @@ queue from the player
 
 ---
 
+### Cycle 17: Light/Dark Theme Toggle  ✅ (post-MVP)
+**Goal:** Switch between dark and light themes
+
+**Frontend Tasks:**
+- Convert the palette to CSS variables in `+layout.svelte` with a
+  `[data-theme="light"]` override; components reference the variables
+- Theme toggle in the sidebar; persisted to localStorage and applied on load
+
+**Done When:** Toggling switches the whole UI and the choice persists
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

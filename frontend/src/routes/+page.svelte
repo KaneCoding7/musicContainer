@@ -17,6 +17,13 @@
   type View = "songs" | "playlists" | "albums";
   let view = $state<View>("songs");
   let queueOpen = $state(false);
+  let theme = $state<"dark" | "light">("dark");
+
+  function toggleTheme() {
+    theme = theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("theme", theme);
+  }
 
   const nav: { id: View; label: string; icon: string }[] = [
     { id: "songs", label: "All Songs", icon: "library_music" },
@@ -25,6 +32,9 @@
   ];
 
   onMount(() => {
+    const saved = localStorage.getItem("theme");
+    theme = saved === "light" ? "light" : "dark";
+    document.documentElement.dataset.theme = theme;
     vm.load();
     playlistVm.load();
   });
@@ -110,6 +120,11 @@
       <div class="sidebar-foot">
         <UploadForm {vm} />
 
+        <button class="theme-toggle" onclick={toggleTheme}>
+          <Icon name={theme === "dark" ? "light_mode" : "dark_mode"} size={18} />
+          {theme === "dark" ? "Light mode" : "Dark mode"}
+        </button>
+
         <details class="shortcuts">
           <summary>
             <Icon name="keyboard" size={18} />
@@ -187,8 +202,8 @@
   .sidebar {
     width: 230px;
     flex-shrink: 0;
-    background: #0b0b0e;
-    border-right: 1px solid #27272a;
+    background: var(--sidebar);
+    border-right: 1px solid var(--surface-2);
     padding: 1.25rem 1rem;
     overflow-y: auto;
     display: flex;
@@ -201,7 +216,7 @@
     gap: 0.5rem;
     font-size: 1.15rem;
     font-weight: 700;
-    color: #a78bfa;
+    color: var(--accent-text);
   }
   nav {
     display: flex;
@@ -216,19 +231,19 @@
     background: transparent;
     border: none;
     border-radius: 0.5rem;
-    color: #cbd5e1;
+    color: var(--text);
     font: inherit;
     font-weight: 500;
     text-align: left;
     cursor: pointer;
   }
   .nav-item:hover {
-    background: #1c1c20;
-    color: #fff;
+    background: var(--hover);
+    color: var(--text);
   }
   .nav-item.active {
-    background: #2a1d4d;
-    color: #fff;
+    background: var(--active-bg);
+    color: var(--text);
   }
   .sidebar-foot {
     margin-top: auto;
@@ -236,9 +251,27 @@
     flex-direction: column;
     gap: 0.75rem;
   }
+  .theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.8rem;
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    color: var(--text);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .theme-toggle:hover {
+    background: var(--hover);
+  }
   .shortcuts {
     font-size: 0.78rem;
-    color: #9ca3af;
+    color: var(--muted);
   }
   .shortcuts summary {
     display: flex;
@@ -248,15 +281,15 @@
     border-radius: 0.4rem;
     cursor: pointer;
     list-style: none;
-    color: #9ca3af;
+    color: var(--muted);
     user-select: none;
   }
   .shortcuts summary::-webkit-details-marker {
     display: none;
   }
   .shortcuts summary:hover {
-    background: #1c1c20;
-    color: #e5e7eb;
+    background: var(--hover);
+    color: var(--text);
   }
   .sc-label {
     flex: 1;
@@ -287,16 +320,16 @@
   }
   .shortcuts dd {
     margin: 0;
-    color: #6b7280;
+    color: var(--dim);
   }
   .shortcuts kbd {
-    background: #27272a;
-    border: 1px solid #3f3f46;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
     border-radius: 0.25rem;
     padding: 0.02rem 0.32rem;
     font-family: inherit;
     font-size: 0.7rem;
-    color: #cbd5e1;
+    color: var(--text);
   }
   .content {
     flex: 1;
@@ -308,15 +341,15 @@
     font-size: 1.4rem;
   }
   .error {
-    background: #7f1d1d;
-    color: #fecaca;
+    background: var(--danger-bg);
+    color: var(--danger-text);
     padding: 0.75rem 1rem;
     border-radius: 0.5rem;
     margin: 0 0 1rem;
   }
   .queue-panel {
-    border-top: 1px solid #27272a;
-    background: #141417;
+    border-top: 1px solid var(--surface-2);
+    background: var(--panel);
     max-height: 38vh;
     overflow-y: auto;
     padding: 0.5rem 1rem 1rem;
@@ -327,7 +360,7 @@
     justify-content: space-between;
     position: sticky;
     top: 0;
-    background: #141417;
+    background: var(--panel);
     padding: 0.5rem 0;
   }
   .queue-head h3 {
@@ -335,20 +368,20 @@
     font-size: 0.95rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #9ca3af;
+    color: var(--muted);
   }
   .collapse {
     display: inline-flex;
     background: transparent;
     border: none;
-    color: #9ca3af;
+    color: var(--muted);
     cursor: pointer;
   }
   .collapse:hover {
     color: #fff;
   }
   .muted {
-    color: #9ca3af;
+    color: var(--muted);
     padding: 0.5rem 0;
   }
 </style>

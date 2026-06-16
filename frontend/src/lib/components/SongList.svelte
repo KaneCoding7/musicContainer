@@ -221,16 +221,16 @@
     gap: 0.4rem;
     flex-shrink: 0;
     padding: 0.5rem 0.8rem;
-    background: #27272a;
-    border: 1px solid #3f3f46;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
     border-radius: 0.5rem;
-    color: #e5e7eb;
+    color: var(--text);
     font: inherit;
     font-weight: 500;
     cursor: pointer;
   }
   .ghost:hover {
-    background: #3f3f46;
+    background: var(--border-strong);
   }
   .selbar {
     display: flex;
@@ -239,7 +239,7 @@
     flex-wrap: wrap;
     padding: 0.6rem 0.8rem;
     margin-bottom: 0.75rem;
-    background: #2a1d4d;
+    background: var(--active-bg);
     border-radius: 0.5rem;
   }
   .selbar .count {
@@ -247,14 +247,14 @@
   }
   .selbar select {
     padding: 0.4rem 0.6rem;
-    background: #18181b;
-    border: 1px solid #3f3f46;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
     border-radius: 0.4rem;
-    color: #e5e7eb;
+    color: var(--text);
   }
   .selbar button {
     padding: 0.4rem 0.9rem;
-    background: #6d28d9;
+    background: var(--accent);
     color: #fff;
     border: none;
     border-radius: 0.4rem;
@@ -266,7 +266,7 @@
     cursor: not-allowed;
   }
   .selbar .status {
-    color: #a78bfa;
+    color: var(--accent-text);
     font-size: 0.85rem;
   }
   .check {
@@ -274,12 +274,12 @@
     align-items: center;
     background: transparent;
     border: none;
-    color: #a78bfa;
+    color: var(--accent-text);
     cursor: pointer;
     padding: 0 0.25rem 0 0.75rem;
   }
   li.selected {
-    background: #241a3d;
+    background: var(--active-bg);
   }
   .search {
     flex: 1;
@@ -289,21 +289,21 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 0.8rem;
-    background: #18181b;
-    border: 1px solid #3f3f46;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
     border-radius: 0.5rem;
-    color: #6b7280;
+    color: var(--dim);
   }
   .search input {
     flex: 1;
     background: transparent;
     border: none;
     outline: none;
-    color: #e5e7eb;
+    color: var(--text);
     font: inherit;
   }
   .search input::placeholder {
-    color: #6b7280;
+    color: var(--dim);
   }
   .song-list ul {
     list-style: none;
@@ -313,10 +313,10 @@
   li {
     display: flex;
     align-items: center;
-    border-bottom: 1px solid #27272a;
+    border-bottom: 1px solid var(--surface-2);
   }
   li.current {
-    background: #2a1d4d;
+    background: var(--active-bg);
   }
   .row {
     flex: 1;
@@ -338,24 +338,24 @@
     align-items: center;
     background: transparent;
     border: none;
-    color: #9ca3af;
+    color: var(--muted);
     cursor: pointer;
     padding: 0.5rem 0.7rem;
     font-size: 0.95rem;
     text-decoration: none;
   }
   .action:hover {
-    background: #27272a;
+    background: var(--surface-2);
   }
   .delete:hover {
-    background: #7f1d1d;
-    color: #fecaca;
+    background: var(--danger-bg);
+    color: var(--danger-text);
   }
   .row:hover {
-    background: #1c1c20;
+    background: var(--hover);
   }
   li.current .row:hover {
-    background: #34245e;
+    background: var(--active-bg);
   }
   .thumb {
     position: relative;
@@ -365,9 +365,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #27272a;
+    background: var(--surface-2);
     border-radius: 0.35rem;
-    color: #6b7280;
+    color: var(--dim);
     overflow: hidden;
   }
   .thumb img {
@@ -403,19 +403,19 @@
     white-space: nowrap;
   }
   .artist {
-    color: #9ca3af;
+    color: var(--muted);
     font-size: 0.8rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .date {
-    color: #9ca3af;
+    color: var(--muted);
     font-size: 0.8rem;
     flex-shrink: 0;
   }
   .muted {
-    color: #9ca3af;
+    color: var(--muted);
     padding: 1rem;
   }
 </style>
