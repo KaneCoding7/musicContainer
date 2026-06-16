@@ -170,6 +170,14 @@
               <span class="date">{formatDate(song.uploadedAt)}</span>
             {/if}
           </button>
+          <button
+            class="action like"
+            class:liked={song.liked}
+            title={song.liked ? "Unlike" : "Like"}
+            aria-label={song.liked ? "Unlike song" : "Like song"}
+            onclick={() => vm.toggleLike(song.id)}
+            ><Icon name="favorite" fill={song.liked} size={20} /></button
+          >
           <a
             class="action"
             href={downloadUrl(song.id)}
@@ -346,6 +354,9 @@
   }
   .action:hover {
     background: var(--surface-2);
+  }
+  .like.liked {
+    color: #ef4444;
   }
   .delete:hover {
     background: var(--danger-bg);

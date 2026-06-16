@@ -11,6 +11,7 @@ export interface Song {
   duration: number | null;
   playCount: number;
   lastPlayedAt: string | null;
+  liked: boolean;
 }
 
 export interface Playlist {

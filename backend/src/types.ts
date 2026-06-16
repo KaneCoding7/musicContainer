@@ -11,6 +11,7 @@ export interface Song {
   duration: number | null; // seconds, if known
   playCount: number;
   lastPlayedAt: string | null; // ISO timestamp of last play
+  liked: boolean;
 }
 
 export interface Playlist {

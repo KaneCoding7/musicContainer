@@ -78,4 +78,7 @@ function migrate(database: Database.Database): void {
   if (!columns.includes("last_played_at")) {
     database.exec("ALTER TABLE songs ADD COLUMN last_played_at TEXT");
   }
+  if (!columns.includes("liked")) {
+    database.exec("ALTER TABLE songs ADD COLUMN liked INTEGER NOT NULL DEFAULT 0");
+  }
 }

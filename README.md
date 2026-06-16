@@ -49,3 +49,4 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 16** — Bulk add to playlist
 - ✅ **Cycle 17** — Light/dark theme toggle
 - ✅ **Cycle 18** — Play counts & recently played
+- ✅ **Cycle 19** — Favorites / liked songs
