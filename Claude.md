@@ -318,6 +318,19 @@ backend changes needed.
 
 ---
 
+### Cycle 11: Keyboard Shortcuts  ✅ (post-MVP)
+**Goal:** Control playback from the keyboard
+
+**Frontend Tasks:**
+- Move volume into SongViewModel; add `togglePlay`/`adjustVolume`
+- Global keydown handler: Space (play/pause), ←/→ (prev/next),
+  ↑/↓ (volume), `/` (focus search); ignored while typing in a field
+- Subtle shortcuts hint at the bottom of the page
+
+**Done When:** Shortcuts control playback without touching the mouse
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

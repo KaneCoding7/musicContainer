@@ -34,6 +34,7 @@
     <div class="search">
       <Icon name="search" size={20} />
       <input
+        id="song-search"
         type="search"
         placeholder="Search songs…"
         bind:value={vm.query}
