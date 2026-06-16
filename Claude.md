@@ -199,6 +199,23 @@ music-server/
 
 ---
 
+### Cycle 4: Delete Songs  ✅ (post-MVP)
+**Goal:** Remove songs from the library
+
+**Backend Tasks:**
+- Implement functional core: `deleteSong(id) -> void` (db row + file on disk;
+  playlist references removed via `ON DELETE CASCADE`)
+- Create route: `DELETE /api/songs/:id`
+
+**Frontend Tasks:**
+- Add `deleteSong` to SongService
+- Add `remove(id)` to SongViewModel (reconciles the play queue / current track)
+- Add a delete button (with confirm) to SongList; refresh open playlist
+
+**Done When:** Can delete a song and it disappears from the library and any playlists
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

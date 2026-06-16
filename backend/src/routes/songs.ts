@@ -5,6 +5,7 @@ import { Router } from "express";
 import multer from "multer";
 import { getDb, MUSIC_DIR } from "../db/init.js";
 import {
+  deleteSong,
   listSongs,
   recordSong,
   resolveSongFile,
@@ -85,6 +86,17 @@ songsRouter.get("/songs", (_req, res) => {
       .json({ error: result.error });
   }
   return res.json({ songs: result.value });
+});
+
+// DELETE /api/songs/:id — remove a song (file + db + playlist references).
+songsRouter.delete("/songs/:id", (req, res) => {
+  const result = deleteSong(getDb(), Number(req.params.id), MUSIC_DIR);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.status(204).end();
 });
 
 // GET /api/songs/:id/stream — stream an audio file with HTTP Range support

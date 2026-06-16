@@ -1,6 +1,6 @@
 // ViewModel: owns song-list state and the operations the UI triggers.
 // Uses Svelte 5 runes ($state) for reactive state in a plain class.
-import { fetchSongs, uploadSong } from "$lib/services/songService";
+import { deleteSong, fetchSongs, uploadSong } from "$lib/services/songService";
 import type { Song } from "$lib/types";
 
 export class SongViewModel {
@@ -33,6 +33,33 @@ export class SongViewModel {
   // Plays from the full library list (used by the song list).
   play(index: number): void {
     this.playQueue(this.songs, index);
+  }
+
+  // Deletes a song from the library and reconciles the play queue.
+  async remove(id: number): Promise<void> {
+    this.error = null;
+    try {
+      await deleteSong(id);
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Failed to delete song";
+      return;
+    }
+
+    const wasCurrent = this.currentSong?.id === id;
+    this.songs = this.songs.filter((s) => s.id !== id);
+
+    const queueIdx = this.queue.findIndex((s) => s.id === id);
+    if (queueIdx !== -1) {
+      this.queue = this.queue.filter((s) => s.id !== id);
+      if (wasCurrent) {
+        // Stop playback; the loaded track no longer exists.
+        this.currentIndex = null;
+        this.isPlaying = false;
+      } else if (this.currentIndex !== null && queueIdx < this.currentIndex) {
+        // Keep pointing at the same song now that earlier entries shifted.
+        this.currentIndex -= 1;
+      }
+    }
   }
 
   // Advances to the next song in the queue; false if already at the end.
