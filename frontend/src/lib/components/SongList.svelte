@@ -5,17 +5,52 @@
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
+  import type { Playlist } from "$lib/types";
+
   let {
     vm,
     onDelete,
     onUpdate,
+    playlists = [],
+    onBulkAdd,
   }: {
     vm: SongViewModel;
     onDelete?: (id: number) => void;
     onUpdate?: (id: number, fields: SongMetadata) => void;
+    playlists?: Playlist[];
+    onBulkAdd?: (playlistId: number, songIds: number[]) => Promise<number>;
   } = $props();
 
   let editing = $state<Song | null>(null);
+
+  // --- Multi-select (Cycle 16) ---
+  let selecting = $state(false);
+  let selected = $state<Set<number>>(new Set());
+  let addTarget = $state<string>("");
+  let addStatus = $state<string | null>(null);
+
+  function toggleSelect(id: number) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    selected = next;
+  }
+
+  function exitSelect() {
+    selecting = false;
+    selected = new Set();
+    addTarget = "";
+    addStatus = null;
+  }
+
+  async function addSelected() {
+    const id = Number(addTarget);
+    if (!id || selected.size === 0 || !onBulkAdd) return;
+    const added = await onBulkAdd(id, [...selected]);
+    addStatus = `Added ${added} ${added === 1 ? "song" : "songs"}`;
+    selected = new Set();
+    addTarget = "";
+  }
 
   function formatDate(iso: string): string {
     const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T") + "Z");
@@ -37,15 +72,42 @@
 
 <div class="song-list">
   {#if vm.songs.length > 0}
-    <div class="search">
-      <Icon name="search" size={20} />
-      <input
-        id="song-search"
-        type="search"
-        placeholder="Search songs…"
-        bind:value={vm.query}
-      />
+    <div class="toolbar">
+      <div class="search">
+        <Icon name="search" size={20} />
+        <input
+          id="song-search"
+          type="search"
+          placeholder="Search songs…"
+          bind:value={vm.query}
+        />
+      </div>
+      {#if onBulkAdd && playlists.length > 0}
+        {#if selecting}
+          <button class="ghost" onclick={exitSelect}>Done</button>
+        {:else}
+          <button class="ghost" onclick={() => (selecting = true)}>
+            <Icon name="playlist_add" size={20} /> Select
+          </button>
+        {/if}
+      {/if}
     </div>
+
+    {#if selecting}
+      <div class="selbar">
+        <span class="count">{selected.size} selected</span>
+        <select bind:value={addTarget}>
+          <option value="" disabled selected>Add to playlist…</option>
+          {#each playlists as p (p.id)}
+            <option value={String(p.id)}>{p.name}</option>
+          {/each}
+        </select>
+        <button onclick={addSelected} disabled={!addTarget || selected.size === 0}>
+          Add
+        </button>
+        {#if addStatus}<span class="status">{addStatus}</span>{/if}
+      </div>
+    {/if}
   {/if}
 
   {#if vm.loading}
@@ -58,8 +120,28 @@
     <ul>
       {#each vm.filteredSongs as song, i (song.id)}
         {@const isCurrent = song.id === vm.currentSong?.id}
-        <li class:current={isCurrent}>
-          <button class="row" onclick={() => vm.playQueue(vm.filteredSongs, i)}>
+        <li class:current={isCurrent} class:selected={selected.has(song.id)}>
+          {#if selecting}
+            <button
+              class="check"
+              role="checkbox"
+              aria-checked={selected.has(song.id)}
+              aria-label="Select song"
+              onclick={() => toggleSelect(song.id)}
+            >
+              <Icon
+                name={selected.has(song.id) ? "check_box" : "check_box_outline_blank"}
+                size={22}
+              />
+            </button>
+          {/if}
+          <button
+            class="row"
+            onclick={() =>
+              selecting
+                ? toggleSelect(song.id)
+                : vm.playQueue(vm.filteredSongs, i)}
+          >
             <span class="thumb">
               {#if song.hasArt}
                 <img src={artUrl(song.id)} alt="" />
@@ -127,14 +209,86 @@
 {/if}
 
 <style>
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+    padding: 0.5rem 0.8rem;
+    background: #27272a;
+    border: 1px solid #3f3f46;
+    border-radius: 0.5rem;
+    color: #e5e7eb;
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .ghost:hover {
+    background: #3f3f46;
+  }
+  .selbar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    padding: 0.6rem 0.8rem;
+    margin-bottom: 0.75rem;
+    background: #2a1d4d;
+    border-radius: 0.5rem;
+  }
+  .selbar .count {
+    font-weight: 600;
+  }
+  .selbar select {
+    padding: 0.4rem 0.6rem;
+    background: #18181b;
+    border: 1px solid #3f3f46;
+    border-radius: 0.4rem;
+    color: #e5e7eb;
+  }
+  .selbar button {
+    padding: 0.4rem 0.9rem;
+    background: #6d28d9;
+    color: #fff;
+    border: none;
+    border-radius: 0.4rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .selbar button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .selbar .status {
+    color: #a78bfa;
+    font-size: 0.85rem;
+  }
+  .check {
+    display: inline-flex;
+    align-items: center;
+    background: transparent;
+    border: none;
+    color: #a78bfa;
+    cursor: pointer;
+    padding: 0 0.25rem 0 0.75rem;
+  }
+  li.selected {
+    background: #241a3d;
+  }
   .search {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     box-sizing: border-box;
     display: flex;
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 0.8rem;
-    margin-bottom: 0.75rem;
     background: #18181b;
     border: 1px solid #3f3f46;
     border-radius: 0.5rem;
