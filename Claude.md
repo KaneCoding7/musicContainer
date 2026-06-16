@@ -711,6 +711,19 @@ shares cannot
 
 ---
 
+### Cycle 37: PWA (Installable)  ✅ (post-MVP)
+**Goal:** Install to home screen + faster loads
+
+**Frontend Tasks:**
+- `manifest.webmanifest` + generated icons (192/512); manifest/theme-color/
+  apple-touch-icon in app.html
+- `src/service-worker.ts` precaches the built app shell (cache-first for build
+  assets); never caches the cross-origin API/auth
+
+**Done When:** The app is installable and the shell loads from cache
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
