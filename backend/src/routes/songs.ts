@@ -3,16 +3,18 @@ import { createReadStream, existsSync, unlinkSync } from "node:fs";
 import { extname, join } from "node:path";
 import { Router } from "express";
 import multer from "multer";
-import { getDb, MUSIC_DIR } from "../db/init.js";
+import { ART_DIR, getDb, MUSIC_DIR } from "../db/init.js";
 import {
   deleteSong,
   listSongs,
   recordSong,
-  renameSong,
+  resolveSongArt,
   resolveSongFile,
+  updateSong,
   validateUpload,
 } from "../functional/songs.js";
 import { statusForError } from "../functional/result.js";
+import { extractMetadata } from "../metadata.js";
 
 export const songsRouter = Router();
 
@@ -40,9 +42,9 @@ const upload = multer({
   },
 });
 
-// POST /api/upload — upload a single audio file.
+// POST /api/upload — upload a single audio file (extracts embedded metadata).
 songsRouter.post("/upload", (req, res) => {
-  upload.single("file")(req, res, (uploadErr: unknown) => {
+  upload.single("file")(req, res, async (uploadErr: unknown) => {
     if (uploadErr) {
       const message =
         uploadErr instanceof Error ? uploadErr.message : "Upload failed";
@@ -54,21 +56,30 @@ songsRouter.post("/upload", (req, res) => {
       });
     }
 
+    const audioPath = join(MUSIC_DIR, req.file.filename);
+    const meta = await extractMetadata(audioPath, ART_DIR);
+
     const result = recordSong(getDb(), {
       filename: req.file.filename,
       originalFilename: req.file.originalname,
+      artist: meta.artist,
+      album: meta.album,
+      artFilename: meta.artFilename,
     });
 
     if (!result.ok) {
-      // Roll back the stored file if we couldn't persist its metadata.
-      const path = join(MUSIC_DIR, req.file.filename);
-      if (existsSync(path)) {
-        try {
-          unlinkSync(path);
-        } catch {
-          /* best-effort cleanup */
+      // Roll back stored files if we couldn't persist the metadata.
+      const cleanup = (p: string) => {
+        if (existsSync(p)) {
+          try {
+            unlinkSync(p);
+          } catch {
+            /* best-effort cleanup */
+          }
         }
-      }
+      };
+      cleanup(audioPath);
+      if (meta.artFilename) cleanup(join(ART_DIR, meta.artFilename));
       return res
         .status(statusForError(result.error.code))
         .json({ error: result.error });
@@ -89,13 +100,16 @@ songsRouter.get("/songs", (_req, res) => {
   return res.json({ songs: result.value });
 });
 
-// PATCH /api/songs/:id — rename a song's user-facing name.
+// PATCH /api/songs/:id — edit a song's metadata (name, artist, album).
 songsRouter.patch("/songs/:id", (req, res) => {
-  const name =
-    typeof req.body?.originalFilename === "string"
-      ? req.body.originalFilename
-      : "";
-  const result = renameSong(getDb(), Number(req.params.id), name);
+  const fields: { originalFilename?: string; artist?: string; album?: string } =
+    {};
+  if (typeof req.body?.originalFilename === "string")
+    fields.originalFilename = req.body.originalFilename;
+  if (typeof req.body?.artist === "string") fields.artist = req.body.artist;
+  if (typeof req.body?.album === "string") fields.album = req.body.album;
+
+  const result = updateSong(getDb(), Number(req.params.id), fields);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
@@ -104,15 +118,28 @@ songsRouter.patch("/songs/:id", (req, res) => {
   return res.json({ song: result.value });
 });
 
-// DELETE /api/songs/:id — remove a song (file + db + playlist references).
+// DELETE /api/songs/:id — remove a song (file + art + db + playlist refs).
 songsRouter.delete("/songs/:id", (req, res) => {
-  const result = deleteSong(getDb(), Number(req.params.id), MUSIC_DIR);
+  const result = deleteSong(getDb(), Number(req.params.id), MUSIC_DIR, ART_DIR);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
       .json({ error: result.error });
   }
   return res.status(204).end();
+});
+
+// GET /api/songs/:id/art — serve the song's embedded album art, if any.
+songsRouter.get("/songs/:id/art", (req, res) => {
+  const result = resolveSongArt(getDb(), Number(req.params.id), ART_DIR);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  res.setHeader("Content-Type", result.value.contentType);
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  return createReadStream(result.value.path).pipe(res);
 });
 
 // GET /api/songs/:id/download — download the original audio file.

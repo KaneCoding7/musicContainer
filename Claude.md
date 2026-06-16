@@ -282,6 +282,26 @@ backend changes needed.
 
 ---
 
+### Cycle 9: Metadata & Album Art  ✅ (post-MVP)
+**Goal:** Show artist/album + embedded album art; edit metadata
+
+**Backend Tasks:**
+- Add `artist`, `album`, `art_filename` columns (in-place migration)
+- Extract tags + cover art on upload (`music-metadata`); art stored in
+  `/data/art/`
+- `updateSong(id, {name?, artist?, album?})`; generalize `PATCH /api/songs/:id`
+- `GET /api/songs/:id/art` serves album art; delete also removes the art file
+
+**Frontend Tasks:**
+- Song type gains `artist`/`album`/`hasArt`; `artUrl`, `updateSongMeta`
+- SongList: album-art thumbnails + artist subtitle; edit opens a dialog
+- EditSongDialog: name/artist/album modal
+- Player shows album art + artist
+
+**Done When:** Uploaded songs show their art/artist and metadata is editable
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

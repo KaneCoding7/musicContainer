@@ -1,18 +1,21 @@
 <script lang="ts">
+  import EditSongDialog from "$lib/components/EditSongDialog.svelte";
   import Icon from "$lib/components/Icon.svelte";
-  import { downloadUrl } from "$lib/services/songService";
+  import { artUrl, downloadUrl, type SongMetadata } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
   let {
     vm,
     onDelete,
-    onRename,
+    onUpdate,
   }: {
     vm: SongViewModel;
     onDelete?: (id: number) => void;
-    onRename?: (id: number, name: string) => void;
+    onUpdate?: (id: number, fields: SongMetadata) => void;
   } = $props();
+
+  let editing = $state<Song | null>(null);
 
   function formatDate(iso: string): string {
     const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T") + "Z");
@@ -22,13 +25,6 @@
   function confirmDelete(song: Song) {
     if (confirm(`Delete "${song.originalFilename}"? This cannot be undone.`)) {
       onDelete?.(song.id);
-    }
-  }
-
-  function promptRename(song: Song) {
-    const name = prompt("Rename song", song.originalFilename);
-    if (name && name.trim() && name.trim() !== song.originalFilename) {
-      onRename?.(song.id, name.trim());
     }
   }
 </script>
@@ -57,14 +53,26 @@
         {@const isCurrent = song.id === vm.currentSong?.id}
         <li class:current={isCurrent}>
           <button class="row" onclick={() => vm.playQueue(vm.filteredSongs, i)}>
-            <span class="icon">
-              <Icon
-                name={isCurrent && vm.isPlaying ? "pause" : "play_arrow"}
-                fill
-                size={22}
-              />
+            <span class="thumb">
+              {#if song.hasArt}
+                <img src={artUrl(song.id)} alt="" />
+              {:else}
+                <Icon name="music_note" size={20} />
+              {/if}
+              <span class="thumb-play">
+                <Icon
+                  name={isCurrent && vm.isPlaying ? "pause" : "play_arrow"}
+                  fill
+                  size={22}
+                />
+              </span>
             </span>
-            <span class="name">{song.originalFilename}</span>
+            <span class="meta">
+              <span class="name">{song.originalFilename}</span>
+              {#if song.artist}
+                <span class="artist">{song.artist}</span>
+              {/if}
+            </span>
             <span class="date">{formatDate(song.uploadedAt)}</span>
           </button>
           <a
@@ -73,12 +81,12 @@
             title="Download song"
             aria-label="Download song"><Icon name="download" size={20} /></a
           >
-          {#if onRename}
+          {#if onUpdate}
             <button
               class="action"
-              title="Rename song"
-              aria-label="Rename song"
-              onclick={() => promptRename(song)}
+              title="Edit song"
+              aria-label="Edit song"
+              onclick={() => (editing = song)}
               ><Icon name="edit" size={20} /></button
             >
           {/if}
@@ -96,6 +104,14 @@
     </ul>
   {/if}
 </div>
+
+{#if editing}
+  <EditSongDialog
+    song={editing}
+    onSave={(id, fields) => onUpdate?.(id, fields)}
+    onClose={() => (editing = null)}
+  />
+{/if}
 
 <style>
   .search {
@@ -174,14 +190,54 @@
   li.current .row:hover {
     background: #34245e;
   }
-  .icon {
-    display: inline-flex;
-    color: #a78bfa;
+  .thumb {
+    position: relative;
+    width: 40px;
+    height: 40px;
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #27272a;
+    border-radius: 0.35rem;
+    color: #6b7280;
+    overflow: hidden;
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .thumb-play {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  .row:hover .thumb-play,
+  li.current .thumb-play {
+    opacity: 1;
+  }
+  .meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
   }
   .name {
-    flex: 1;
     font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .artist {
+    color: #9ca3af;
+    font-size: 0.8rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

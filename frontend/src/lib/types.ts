@@ -5,6 +5,9 @@ export interface Song {
   filename: string;
   originalFilename: string;
   uploadedAt: string;
+  artist: string | null;
+  album: string | null;
+  hasArt: boolean;
 }
 
 export interface Playlist {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
-  import { streamUrl } from "$lib/services/songService";
+  import { artUrl, streamUrl } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
   let { vm }: { vm: SongViewModel } = $props();
@@ -72,8 +72,22 @@
 
 {#if song}
   <div class="player">
-    <div class="now-playing" title={song.originalFilename}>
-      {song.originalFilename}
+    <div class="now-playing">
+      <span class="np-art">
+        {#if song.hasArt}
+          <img src={artUrl(song.id)} alt="" />
+        {:else}
+          <Icon name="music_note" size={20} />
+        {/if}
+      </span>
+      <span class="np-meta">
+        <span class="np-title" title={song.originalFilename}
+          >{song.originalFilename}</span
+        >
+        {#if song.artist}
+          <span class="np-artist" title={song.artist}>{song.artist}</span>
+        {/if}
+      </span>
     </div>
 
     <div class="controls">
@@ -153,7 +167,42 @@
     border-radius: 0.75rem;
   }
   .now-playing {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+  }
+  .np-art {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #27272a;
+    border-radius: 0.35rem;
+    color: #6b7280;
+    overflow: hidden;
+  }
+  .np-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .np-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .np-title {
     font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .np-artist {
+    color: #9ca3af;
+    font-size: 0.8rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

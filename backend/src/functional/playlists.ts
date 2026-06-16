@@ -13,6 +13,9 @@ interface SongRow {
   filename: string;
   original_filename: string;
   uploaded_at: string;
+  artist: string | null;
+  album: string | null;
+  art_filename: string | null;
 }
 
 function rowToPlaylist(row: PlaylistRow): Playlist {
@@ -25,6 +28,9 @@ function rowToSong(row: SongRow): Song {
     filename: row.filename,
     originalFilename: row.original_filename,
     uploadedAt: row.uploaded_at,
+    artist: row.artist,
+    album: row.album,
+    hasArt: row.art_filename !== null,
   };
 }
 
@@ -90,7 +96,8 @@ export function getPlaylistSongs(
   try {
     const rows = db
       .prepare(
-        `SELECT s.id, s.filename, s.original_filename, s.uploaded_at
+        `SELECT s.id, s.filename, s.original_filename, s.uploaded_at,
+                s.artist, s.album, s.art_filename
          FROM playlist_songs ps
          JOIN songs s ON s.id = ps.song_id
          WHERE ps.playlist_id = ?

@@ -3,8 +3,9 @@
 import {
   deleteSong,
   fetchSongs,
-  renameSong,
+  updateSongMeta,
   uploadSong,
+  type SongMetadata,
 } from "$lib/services/songService";
 import type { Song } from "$lib/types";
 
@@ -81,15 +82,15 @@ export class SongViewModel {
     this.playQueue(this.songs, index);
   }
 
-  // Renames a song, updating it in both the library list and the play queue.
-  async rename(id: number, name: string): Promise<void> {
+  // Updates a song's metadata, reflecting it in the library list and queue.
+  async updateMeta(id: number, fields: SongMetadata): Promise<void> {
     this.error = null;
     try {
-      const updated = await renameSong(id, name);
+      const updated = await updateSongMeta(id, fields);
       this.songs = this.songs.map((s) => (s.id === id ? updated : s));
       this.queue = this.queue.map((s) => (s.id === id ? updated : s));
     } catch (e) {
-      this.error = e instanceof Error ? e.message : "Failed to rename song";
+      this.error = e instanceof Error ? e.message : "Failed to update song";
     }
   }
 
