@@ -48,6 +48,18 @@ export class SongViewModel {
     return this.songs.filter((s) => s.liked);
   }
 
+  // Most-played songs (play count desc), for the Home view.
+  get mostPlayed(): Song[] {
+    return this.songs
+      .filter((s) => s.playCount > 0)
+      .sort((a, b) => b.playCount - a.playCount);
+  }
+
+  // Most-recently-added songs first (the library already loads newest-first).
+  get recentlyAdded(): Song[] {
+    return this.songs;
+  }
+
   // --- Player state (Cycles 2 & 3) ---
   // The player plays from a queue, which may be the whole library or a
   // playlist's songs (in order).

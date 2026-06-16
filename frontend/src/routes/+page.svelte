@@ -3,6 +3,7 @@
   import AlbumsView from "$lib/components/AlbumsView.svelte";
   import ArtistsView from "$lib/components/ArtistsView.svelte";
   import AuthScreen from "$lib/components/AuthScreen.svelte";
+  import HomeView from "$lib/components/HomeView.svelte";
   import Icon from "$lib/components/Icon.svelte";
   import InviteView from "$lib/components/InviteView.svelte";
   import LikedView from "$lib/components/LikedView.svelte";
@@ -35,6 +36,7 @@
   }
 
   type View =
+    | "home"
     | "songs"
     | "liked"
     | "playlists"
@@ -44,7 +46,7 @@
     | "recent"
     | "invite"
     | "settings";
-  let view = $state<View>("songs");
+  let view = $state<View>("home");
   let queueOpen = $state(false);
   let theme = $state<"dark" | "light">("dark");
 
@@ -55,6 +57,7 @@
   }
 
   const nav: { id: View; label: string; icon: string }[] = [
+    { id: "home", label: "Home", icon: "home" },
     { id: "songs", label: "All Songs", icon: "library_music" },
     { id: "liked", label: "Liked", icon: "favorite" },
     { id: "playlists", label: "Playlists", icon: "queue_music" },
@@ -171,11 +174,6 @@
           </button>
         </div>
 
-        <button class="theme-toggle" onclick={toggleTheme}>
-          <Icon name={theme === "dark" ? "light_mode" : "dark_mode"} size={18} />
-          {theme === "dark" ? "Light mode" : "Dark mode"}
-        </button>
-
         <details class="shortcuts">
           <summary>
             <Icon name="keyboard" size={18} />
@@ -197,7 +195,10 @@
         <p class="error">{vm.error}</p>
       {/if}
 
-      {#if view === "songs"}
+      {#if view === "home"}
+        <h2>Home</h2>
+        <HomeView {vm} />
+      {:else if view === "songs"}
         <h2>All Songs</h2>
         <SongList
           {vm}
@@ -229,7 +230,7 @@
         <InviteView />
       {:else}
         <h2>Settings</h2>
-        <SettingsView vm={authVm} />
+        <SettingsView vm={authVm} {theme} onToggleTheme={toggleTheme} />
       {/if}
     </main>
   </div>
@@ -358,24 +359,6 @@
   .logout:hover {
     background: var(--hover);
     color: var(--text);
-  }
-  .theme-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    width: 100%;
-    padding: 0.5rem 0.8rem;
-    background: transparent;
-    border: 1px solid var(--border-strong);
-    border-radius: 0.5rem;
-    color: var(--text);
-    font: inherit;
-    font-weight: 500;
-    cursor: pointer;
-  }
-  .theme-toggle:hover {
-    background: var(--hover);
   }
   .shortcuts {
     font-size: 0.78rem;

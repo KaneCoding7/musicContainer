@@ -627,6 +627,19 @@ progress
 
 ---
 
+### Cycle 31: Home / Smart Playlists (+ theme in Settings)  ✅ (post-MVP)
+**Goal:** A landing page that surfaces music automatically
+
+**Frontend Tasks:**
+- VM getters `mostPlayed` + `recentlyAdded`; new `HomeView` with auto sections
+  (Recently Added / Most Played / Recently Played), each with Play-all
+- Make Home the default view + sidebar entry
+- Move the light/dark toggle into Settings (Appearance); remove it from sidebar
+
+**Done When:** Home shows smart sections and the theme toggle lives in Settings
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
