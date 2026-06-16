@@ -27,7 +27,7 @@ export function getDb(): Database.Database {
   return db;
 }
 
-function migrate(database: Database.Database): void {
+export function migrate(database: Database.Database): void {
   database.exec(`
     CREATE TABLE IF NOT EXISTS songs (
       id                INTEGER PRIMARY KEY AUTOINCREMENT,
