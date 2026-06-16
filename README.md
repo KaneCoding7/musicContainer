@@ -70,6 +70,7 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 37** — PWA (installable + app-shell cache)
 - ✅ **Cycle 38** — Download playlist as ZIP
 - ✅ **Cycle 39** — Individual-song public links
+- ✅ **Cycle 40** — Hardening (prod secret guard + rate limiting)
 
 ## Tests
 

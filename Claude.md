@@ -756,6 +756,20 @@ shares cannot
 
 ---
 
+### Cycle 40: Hardening  ✅ (post-MVP)
+**Goal:** Production safety
+
+**Backend Tasks:**
+- Refuse to boot in production without a strong (>=32 char), non-default
+  `BETTER_AUTH_SECRET`
+- Better Auth rate limiting (stricter custom rules on sign-in/sign-up)
+- In-memory per-IP rate limiter on `/api/register` (5/min); `trust proxy` so
+  client IPs are correct behind Cloudflare Tunnel; +3 unit tests (36 total)
+
+**Done When:** Prod refuses a weak secret and auth/register endpoints throttle
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

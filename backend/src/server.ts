@@ -1,9 +1,10 @@
 import { toNodeHandler } from "better-auth/node";
 import cors from "cors";
 import express from "express";
-import { auth } from "./auth.js";
+import { auth, DEV_AUTH_SECRET } from "./auth.js";
 import { requireAuth } from "./auth-middleware.js";
 import { getDb } from "./db/init.js";
+import { rateLimit } from "./rate-limit.js";
 import { invitesRouter } from "./routes/invites.js";
 import { playlistsRouter } from "./routes/playlists.js";
 import { publicRouter } from "./routes/public.js";
@@ -15,7 +16,22 @@ const INVITE_ONLY = process.env.INVITE_ONLY === "true";
 
 const PORT = Number(process.env.PORT ?? 3001);
 
+// Refuse to start in production without a strong, non-default auth secret.
+if (process.env.NODE_ENV === "production") {
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (!secret || secret === DEV_AUTH_SECRET || secret.length < 32) {
+    console.error(
+      "FATAL: BETTER_AUTH_SECRET must be set to a strong (>=32 char) value in production."
+    );
+    process.exit(1);
+  }
+}
+
 const app = express();
+
+// Behind Cloudflare Tunnel / a reverse proxy, trust forwarded headers so
+// req.ip reflects the real client (used by rate limiting).
+app.set("trust proxy", true);
 
 app.use(
   cors({
@@ -46,7 +62,9 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-// Registration wrapper (public; enforces invites when enabled).
+// Registration wrapper (public; enforces invites when enabled). Rate-limited
+// since it isn't behind Better Auth's own throttling.
+app.use("/api/register", rateLimit({ windowMs: 60_000, max: 5 }));
 app.use("/api", registerRouter);
 
 // Public share-link routes (no auth; gated by the opaque token).
