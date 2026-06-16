@@ -531,6 +531,24 @@ an account; disabling revokes access
 
 ---
 
+### Cycle 24: Automated Tests  ✅ (post-MVP)
+**Goal:** Lock in the functional-core behavior with a test suite
+
+**Tasks:**
+- Add Vitest (`npm test` in `backend/`); export `migrate()` so tests build a
+  fresh in-memory SQLite DB per case (`test/helpers.ts`)
+- Cover the functional core: result, songs (scoping/isolation), playlists
+  (ordering/dupes/cascade), invites, shares (canAccessSong, isolation),
+  public shares (token gating/revoke)
+
+**Done When:** `npm test` passes; core behavior + access control are covered
+
+**Testing note:** functional-core functions take a `db` handle, so they unit-
+test cleanly against `new Database(":memory:")` + `migrate()` — no server or
+network needed.
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
