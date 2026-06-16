@@ -19,6 +19,7 @@ interface SongRow {
   duration: number | null;
   play_count: number;
   last_played_at: string | null;
+  liked: number;
 }
 
 function rowToPlaylist(row: PlaylistRow): Playlist {
@@ -37,6 +38,7 @@ function rowToSong(row: SongRow): Song {
     duration: row.duration,
     playCount: row.play_count,
     lastPlayedAt: row.last_played_at,
+    liked: row.liked === 1,
   };
 }
 
@@ -153,7 +155,7 @@ export function getPlaylistSongs(
       .prepare(
         `SELECT s.id, s.filename, s.original_filename, s.uploaded_at,
                 s.artist, s.album, s.art_filename, s.duration,
-                s.play_count, s.last_played_at
+                s.play_count, s.last_played_at, s.liked
          FROM playlist_songs ps
          JOIN songs s ON s.id = ps.song_id
          WHERE ps.playlist_id = ?

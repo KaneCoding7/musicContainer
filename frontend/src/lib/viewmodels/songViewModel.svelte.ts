@@ -4,6 +4,7 @@ import {
   deleteSong,
   fetchSongs,
   recordPlay,
+  setLiked,
   updateSongMeta,
   uploadSong,
   type SongMetadata,
@@ -33,6 +34,11 @@ export class SongViewModel {
     return this.songs
       .filter((s) => s.lastPlayedAt !== null)
       .sort((a, b) => (a.lastPlayedAt! < b.lastPlayedAt! ? 1 : -1));
+  }
+
+  // Liked songs.
+  get likedSongs(): Song[] {
+    return this.songs.filter((s) => s.liked);
   }
 
   // --- Player state (Cycles 2 & 3) ---
@@ -100,6 +106,23 @@ export class SongViewModel {
   // Plays from the full library list (used by the song list).
   play(index: number): void {
     this.playQueue(this.songs, index);
+  }
+
+  // Toggles a song's liked flag (optimistic; reverts on failure).
+  async toggleLike(id: number): Promise<void> {
+    const target = this.songs.find((s) => s.id === id);
+    if (!target) return;
+    const next = !target.liked;
+    const apply = (liked: boolean) => {
+      this.songs = this.songs.map((s) => (s.id === id ? { ...s, liked } : s));
+      this.queue = this.queue.map((s) => (s.id === id ? { ...s, liked } : s));
+    };
+    apply(next); // optimistic
+    try {
+      await setLiked(id, next);
+    } catch {
+      apply(!next); // revert
+    }
   }
 
   // Records a play (fire-and-forget); updates counts/last-played locally.

@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import AlbumsView from "$lib/components/AlbumsView.svelte";
   import Icon from "$lib/components/Icon.svelte";
+  import LikedView from "$lib/components/LikedView.svelte";
   import Player from "$lib/components/Player.svelte";
   import PlaylistManager from "$lib/components/PlaylistManager.svelte";
   import QueueView from "$lib/components/QueueView.svelte";
@@ -15,7 +16,7 @@
   const vm = new SongViewModel();
   const playlistVm = new PlaylistViewModel();
 
-  type View = "songs" | "playlists" | "albums" | "recent";
+  type View = "songs" | "liked" | "playlists" | "albums" | "recent";
   let view = $state<View>("songs");
   let queueOpen = $state(false);
   let theme = $state<"dark" | "light">("dark");
@@ -28,6 +29,7 @@
 
   const nav: { id: View; label: string; icon: string }[] = [
     { id: "songs", label: "All Songs", icon: "library_music" },
+    { id: "liked", label: "Liked", icon: "favorite" },
     { id: "playlists", label: "Playlists", icon: "queue_music" },
     { id: "albums", label: "Albums", icon: "album" },
     { id: "recent", label: "Recently Played", icon: "history" },
@@ -157,6 +159,9 @@
           playlists={playlistVm.playlists}
           onBulkAdd={(id, songIds) => playlistVm.addSongs(id, songIds)}
         />
+      {:else if view === "liked"}
+        <h2>Liked</h2>
+        <LikedView {vm} />
       {:else if view === "playlists"}
         <h2>Playlists</h2>
         <PlaylistManager vm={playlistVm} songVm={vm} />

@@ -51,10 +51,11 @@ interface SongRow {
   duration: number | null;
   play_count: number;
   last_played_at: string | null;
+  liked: number;
 }
 
 const SONG_COLUMNS =
-  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at";
+  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked";
 
 function rowToSong(row: SongRow): Song {
   return {
@@ -68,6 +69,7 @@ function rowToSong(row: SongRow): Song {
     duration: row.duration,
     playCount: row.play_count,
     lastPlayedAt: row.last_played_at,
+    liked: row.liked === 1,
   };
 }
 
@@ -209,6 +211,22 @@ export function updateSong(
     return getSong(db, id);
   } catch (e) {
     return err("internal", `Failed to update song: ${(e as Error).message}`);
+  }
+}
+
+// Sets a song's liked flag.
+export function setLiked(
+  db: Database,
+  id: number,
+  liked: boolean
+): Result<Song> {
+  const existing = getSong(db, id);
+  if (!existing.ok) return existing;
+  try {
+    db.prepare("UPDATE songs SET liked = ? WHERE id = ?").run(liked ? 1 : 0, id);
+    return getSong(db, id);
+  } catch (e) {
+    return err("internal", `Failed to set liked: ${(e as Error).message}`);
   }
 }
 

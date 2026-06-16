@@ -11,6 +11,7 @@ import {
   recordSong,
   resolveSongArt,
   resolveSongFile,
+  setLiked,
   updateSong,
   validateUpload,
 } from "../functional/songs.js";
@@ -112,6 +113,18 @@ songsRouter.patch("/songs/:id", (req, res) => {
   if (typeof req.body?.album === "string") fields.album = req.body.album;
 
   const result = updateSong(getDb(), Number(req.params.id), fields);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ song: result.value });
+});
+
+// PUT /api/songs/:id/like — set the liked flag.
+songsRouter.put("/songs/:id/like", (req, res) => {
+  const liked = Boolean(req.body?.liked);
+  const result = setLiked(getDb(), Number(req.params.id), liked);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))

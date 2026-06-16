@@ -434,6 +434,21 @@ queue from the player
 
 ---
 
+### Cycle 19: Favorites / Liked Songs  ✅ (post-MVP)
+**Goal:** Like songs and browse the liked set
+
+**Backend Tasks:**
+- Add `liked` column (in-place migration); `setLiked(id, liked)`;
+  route `PUT /api/songs/:id/like`
+
+**Frontend Tasks:**
+- Song type gains `liked`; service/VM `toggleLike` (optimistic) + `likedSongs`
+- Heart toggle on each song row; new "Liked" sidebar view
+
+**Done When:** Can like/unlike songs and see them under Liked
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

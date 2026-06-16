@@ -58,6 +58,17 @@ export async function updateSongMeta(
   return (await res.json()).song as Song;
 }
 
+// Sets a song's liked flag; returns the updated song.
+export async function setLiked(songId: number, liked: boolean): Promise<Song> {
+  const res = await fetch(`${API_BASE}/api/songs/${songId}/like`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ liked }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).song as Song;
+}
+
 // Records a play for a song; returns the updated song.
 export async function recordPlay(songId: number): Promise<Song> {
   const res = await fetch(`${API_BASE}/api/songs/${songId}/play`, {
