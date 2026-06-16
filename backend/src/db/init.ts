@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 // and inside Docker (where DATA_DIR=/data).
 const DATA_DIR = process.env.DATA_DIR ?? join(process.cwd(), "..", "data");
 export const MUSIC_DIR = join(DATA_DIR, "music");
+export const ART_DIR = join(DATA_DIR, "art");
 const DB_PATH = join(DATA_DIR, "app.db");
 
 let db: Database.Database | null = null;
@@ -16,6 +17,7 @@ export function getDb(): Database.Database {
   if (db) return db;
 
   mkdirSync(MUSIC_DIR, { recursive: true });
+  mkdirSync(ART_DIR, { recursive: true });
   mkdirSync(dirname(DB_PATH), { recursive: true });
 
   db = new Database(DB_PATH);
@@ -50,4 +52,19 @@ function migrate(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_playlist_songs_playlist
       ON playlist_songs(playlist_id, position);
   `);
+
+  // Metadata columns added post-MVP (Cycle 9). Added conditionally so existing
+  // databases upgrade in place.
+  const columns = (
+    database.prepare("PRAGMA table_info(songs)").all() as { name: string }[]
+  ).map((c) => c.name);
+  if (!columns.includes("artist")) {
+    database.exec("ALTER TABLE songs ADD COLUMN artist TEXT");
+  }
+  if (!columns.includes("album")) {
+    database.exec("ALTER TABLE songs ADD COLUMN album TEXT");
+  }
+  if (!columns.includes("art_filename")) {
+    database.exec("ALTER TABLE songs ADD COLUMN art_filename TEXT");
+  }
 }

@@ -45,7 +45,13 @@ interface SongRow {
   filename: string;
   original_filename: string;
   uploaded_at: string;
+  artist: string | null;
+  album: string | null;
+  art_filename: string | null;
 }
+
+const SONG_COLUMNS =
+  "id, filename, original_filename, uploaded_at, artist, album, art_filename";
 
 function rowToSong(row: SongRow): Song {
   return {
@@ -53,13 +59,23 @@ function rowToSong(row: SongRow): Song {
     filename: row.filename,
     originalFilename: row.original_filename,
     uploadedAt: row.uploaded_at,
+    artist: row.artist,
+    album: row.album,
+    hasArt: row.art_filename !== null,
   };
 }
 
-// Records an already-stored audio file in the database and returns the song.
+// Records an already-stored audio file (plus any extracted metadata) in the
+// database and returns the song.
 export function recordSong(
   db: Database,
-  params: { filename: string; originalFilename: string }
+  params: {
+    filename: string;
+    originalFilename: string;
+    artist?: string | null;
+    album?: string | null;
+    artFilename?: string | null;
+  }
 ): Result<Song> {
   const filename = params.filename.trim();
   const originalFilename = params.originalFilename.trim();
@@ -70,14 +86,18 @@ export function recordSong(
   try {
     const info = db
       .prepare(
-        "INSERT INTO songs (filename, original_filename) VALUES (?, ?)"
+        "INSERT INTO songs (filename, original_filename, artist, album, art_filename) VALUES (?, ?, ?, ?, ?)"
       )
-      .run(filename, originalFilename);
+      .run(
+        filename,
+        originalFilename,
+        params.artist ?? null,
+        params.album ?? null,
+        params.artFilename ?? null
+      );
 
     const row = db
-      .prepare(
-        "SELECT id, filename, original_filename, uploaded_at FROM songs WHERE id = ?"
-      )
+      .prepare(`SELECT ${SONG_COLUMNS} FROM songs WHERE id = ?`)
       .get(info.lastInsertRowid as number) as SongRow | undefined;
 
     if (!row) {
@@ -94,7 +114,7 @@ export function listSongs(db: Database): Result<Song[]> {
   try {
     const rows = db
       .prepare(
-        "SELECT id, filename, original_filename, uploaded_at FROM songs ORDER BY datetime(uploaded_at) DESC, id DESC"
+        `SELECT ${SONG_COLUMNS} FROM songs ORDER BY datetime(uploaded_at) DESC, id DESC`
       )
       .all() as SongRow[];
     return ok(rows.map(rowToSong));
@@ -141,30 +161,70 @@ export function resolveSongFile(
   });
 }
 
-// Renames a song's user-facing name (its original_filename). The stored file
-// on disk is untouched.
-export function renameSong(
+// Updates a song's editable metadata (name, artist, album). Only fields that
+// are provided are changed; the stored audio file on disk is untouched.
+export function updateSong(
   db: Database,
   id: number,
-  newName: string
+  fields: { originalFilename?: string; artist?: string; album?: string }
 ): Result<Song> {
-  const trimmed = newName.trim();
-  if (!trimmed) {
-    return err("validation", "Song name is required");
-  }
-
   const existing = getSong(db, id);
   if (!existing.ok) return existing;
 
+  const sets: string[] = [];
+  const values: (string | null)[] = [];
+
+  if (fields.originalFilename !== undefined) {
+    const name = fields.originalFilename.trim();
+    if (!name) return err("validation", "Song name cannot be empty");
+    sets.push("original_filename = ?");
+    values.push(name);
+  }
+  if (fields.artist !== undefined) {
+    const artist = fields.artist.trim();
+    sets.push("artist = ?");
+    values.push(artist || null);
+  }
+  if (fields.album !== undefined) {
+    const album = fields.album.trim();
+    sets.push("album = ?");
+    values.push(album || null);
+  }
+
+  if (sets.length === 0) return existing; // nothing to change
+
   try {
-    db.prepare("UPDATE songs SET original_filename = ? WHERE id = ?").run(
-      trimmed,
+    db.prepare(`UPDATE songs SET ${sets.join(", ")} WHERE id = ?`).run(
+      ...values,
       id
     );
     return getSong(db, id);
   } catch (e) {
-    return err("internal", `Failed to rename song: ${(e as Error).message}`);
+    return err("internal", `Failed to update song: ${(e as Error).message}`);
   }
+}
+
+// Resolves a song's album art file for serving, if present.
+export function resolveSongArt(
+  db: Database,
+  id: number,
+  artDir: string
+): Result<{ path: string; contentType: string }> {
+  if (!Number.isInteger(id) || id <= 0) {
+    return err("validation", "Invalid song id");
+  }
+  const row = db
+    .prepare("SELECT art_filename FROM songs WHERE id = ?")
+    .get(id) as { art_filename: string | null } | undefined;
+  if (!row) return err("not_found", `Song ${id} not found`);
+  if (!row.art_filename) return err("not_found", "Song has no album art");
+
+  const path = join(artDir, row.art_filename);
+  if (!existsSync(path)) return err("not_found", "Art file missing on disk");
+
+  const ext = extname(path).toLowerCase();
+  const contentType = ext === ".png" ? "image/png" : "image/jpeg";
+  return ok({ path, contentType });
 }
 
 // Deletes a song: removes its database row (cascading playlist references via
@@ -172,21 +232,30 @@ export function renameSong(
 export function deleteSong(
   db: Database,
   id: number,
-  musicDir: string
+  musicDir: string,
+  artDir: string
 ): Result<void> {
   const songResult = getSong(db, id);
   if (!songResult.ok) return songResult;
 
+  // Capture the art filename before deleting the row.
+  const artRow = db
+    .prepare("SELECT art_filename FROM songs WHERE id = ?")
+    .get(id) as { art_filename: string | null } | undefined;
+
   try {
     db.prepare("DELETE FROM songs WHERE id = ?").run(id);
-    const path = join(musicDir, songResult.value.filename);
-    if (existsSync(path)) {
-      try {
-        unlinkSync(path);
-      } catch {
-        /* row already gone; orphaned file is harmless */
+    const removeFile = (p: string) => {
+      if (existsSync(p)) {
+        try {
+          unlinkSync(p);
+        } catch {
+          /* best-effort cleanup */
+        }
       }
-    }
+    };
+    removeFile(join(musicDir, songResult.value.filename));
+    if (artRow?.art_filename) removeFile(join(artDir, artRow.art_filename));
     return ok(undefined);
   } catch (e) {
     return err("internal", `Failed to delete song: ${(e as Error).message}`);
@@ -200,9 +269,7 @@ export function getSong(db: Database, id: number): Result<Song> {
   }
   try {
     const row = db
-      .prepare(
-        "SELECT id, filename, original_filename, uploaded_at FROM songs WHERE id = ?"
-      )
+      .prepare(`SELECT ${SONG_COLUMNS} FROM songs WHERE id = ?`)
       .get(id) as SongRow | undefined;
     if (!row) {
       return err("not_found", `Song ${id} not found`);

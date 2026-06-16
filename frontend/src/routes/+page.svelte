@@ -5,6 +5,7 @@
   import PlaylistManager from "$lib/components/PlaylistManager.svelte";
   import SongList from "$lib/components/SongList.svelte";
   import UploadForm from "$lib/components/UploadForm.svelte";
+  import type { SongMetadata } from "$lib/services/songService";
   import { PlaylistViewModel } from "$lib/viewmodels/playlistViewModel.svelte";
   import { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -24,9 +25,9 @@
     }
   }
 
-  // Rename a song, then refresh the open playlist so its name updates there too.
-  async function handleRename(id: number, name: string) {
-    await vm.rename(id, name);
+  // Edit a song's metadata, then refresh the open playlist so it updates there.
+  async function handleUpdate(id: number, fields: SongMetadata) {
+    await vm.updateMeta(id, fields);
     if (playlistVm.selectedId !== null) {
       await playlistVm.select(playlistVm.selectedId);
     }
@@ -44,7 +45,7 @@
 
 <section>
   <h2>Songs</h2>
-  <SongList {vm} onDelete={handleDelete} onRename={handleRename} />
+  <SongList {vm} onDelete={handleDelete} onUpdate={handleUpdate} />
 </section>
 
 <section>

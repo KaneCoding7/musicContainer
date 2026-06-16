@@ -37,18 +37,30 @@ export async function uploadSong(file: File): Promise<Song> {
   return body.song as Song;
 }
 
-// Renames a song's user-facing name; returns the updated song.
-export async function renameSong(
+// Editable song metadata fields.
+export interface SongMetadata {
+  originalFilename?: string;
+  artist?: string;
+  album?: string;
+}
+
+// Updates a song's metadata (name/artist/album); returns the updated song.
+export async function updateSongMeta(
   songId: number,
-  originalFilename: string
+  fields: SongMetadata
 ): Promise<Song> {
   const res = await fetch(`${API_BASE}/api/songs/${songId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ originalFilename }),
+    body: JSON.stringify(fields),
   });
   if (!res.ok) throw new Error(await errorMessage(res));
   return (await res.json()).song as Song;
+}
+
+// Returns the album-art URL for a song (only meaningful when song.hasArt).
+export function artUrl(songId: number): string {
+  return `${API_BASE}/api/songs/${songId}/art`;
 }
 
 // Deletes a song from the library.

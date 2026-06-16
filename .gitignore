@@ -9,6 +9,8 @@ frontend/.svelte-kit/
 # Data (runtime: uploaded audio + sqlite db)
 data/music/*
 !data/music/.gitkeep
+data/art/*
+!data/art/.gitkeep
 data/*.db
 data/*.db-journal
 data/*.db-wal
