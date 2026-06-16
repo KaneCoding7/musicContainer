@@ -1,0 +1,43 @@
+// Service layer: thin wrapper around the backend song API.
+import { env } from "$env/dynamic/public";
+import type { Song } from "$lib/types";
+
+const API_BASE = env.PUBLIC_API_BASE_URL ?? "http://localhost:3001";
+
+// Extracts a human-readable error message from a failed API response.
+async function errorMessage(res: Response): Promise<string> {
+  try {
+    const body = await res.json();
+    if (body?.error?.message) return body.error.message;
+  } catch {
+    /* fall through */
+  }
+  return `Request failed (${res.status})`;
+}
+
+// Fetches all songs from the backend.
+export async function fetchSongs(): Promise<Song[]> {
+  const res = await fetch(`${API_BASE}/api/songs`);
+  if (!res.ok) throw new Error(await errorMessage(res));
+  const body = await res.json();
+  return body.songs as Song[];
+}
+
+// Uploads a single audio file and returns the created song.
+export async function uploadSong(file: File): Promise<Song> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_BASE}/api/upload`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  const body = await res.json();
+  return body.song as Song;
+}
+
+// Returns the streaming URL for a song (used in Cycle 2).
+export function streamUrl(songId: number): string {
+  return `${API_BASE}/api/songs/${songId}/stream`;
+}

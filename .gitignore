@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build output
+backend/dist/
+frontend/build/
+frontend/.svelte-kit/
+
+# Data (runtime: uploaded audio + sqlite db)
+data/music/*
+!data/music/.gitkeep
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# Logs
+*.log
+npm-debug.log*
+
+# Env
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db

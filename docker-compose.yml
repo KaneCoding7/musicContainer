@@ -1,0 +1,26 @@
+services:
+  backend:
+    build: ./backend
+    container_name: music-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DATA_DIR=/data
+    volumes:
+      - ./data:/data
+
+  frontend:
+    build: ./frontend
+    container_name: music-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      # Browser-facing URL of the backend API.
+      # For Cloudflare Tunnel, point this at your public API hostname.
+      - PUBLIC_API_BASE_URL=http://localhost:3001
+    depends_on:
+      - backend

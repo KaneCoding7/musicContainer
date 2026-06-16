@@ -1,0 +1,36 @@
+# Music Server
+
+Personal music server for storing, managing, and playing unreleased beats/music.
+See [`Claude.md`](./Claude.md) for the full project plan and architecture.
+
+## Quick start (Docker)
+
+```bash
+docker compose up --build
+```
+
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:3001
+
+## Local development (no Docker)
+
+```bash
+# Terminal 1 — backend API (http://localhost:3001)
+cd backend
+npm install
+npm run dev
+
+# Terminal 2 — frontend (http://localhost:5173)
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend talks to the backend via `PUBLIC_API_BASE_URL`
+(defaults to `http://localhost:3001`).
+
+## Status
+
+- ✅ **Cycle 1** — Upload & list songs
+- ⬜ **Cycle 2** — Player & streaming
+- ⬜ **Cycle 3** — Playlists
