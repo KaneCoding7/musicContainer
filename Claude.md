@@ -549,6 +549,19 @@ network needed.
 
 ---
 
+### Cycle 25: CI Workflow  ✅ (post-MVP)
+**Goal:** Run checks automatically on every PR
+
+**Tasks:**
+- `.github/workflows/ci.yml`: two jobs on push-to-main + PRs
+  - backend: `npm ci` → `typecheck` → `test`
+  - frontend: `npm ci` → `check` → `build`
+- Node 20 with npm caching per workspace
+
+**Done When:** CI runs and passes on pull requests
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

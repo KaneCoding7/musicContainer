@@ -55,6 +55,7 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 22** — Playlist sharing (read-only)
 - ✅ **Cycle 23** — Public share links (listen without an account)
 - ✅ **Cycle 24** — Automated test suite (Vitest, functional core)
+- ✅ **Cycle 25** — CI workflow (GitHub Actions: typecheck, tests, build)
 
 ## Tests
 
