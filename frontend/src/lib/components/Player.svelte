@@ -3,7 +3,15 @@
   import { artUrl, streamUrl } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
-  let { vm }: { vm: SongViewModel } = $props();
+  let {
+    vm,
+    queueOpen = false,
+    onToggleQueue,
+  }: {
+    vm: SongViewModel;
+    queueOpen?: boolean;
+    onToggleQueue?: () => void;
+  } = $props();
 
   let audio = $state<HTMLAudioElement | null>(null);
   let currentTime = $state(0);
@@ -138,6 +146,13 @@
     </div>
 
     <div class="volume">
+      <button
+        class="queue-toggle"
+        class:active={queueOpen}
+        onclick={() => onToggleQueue?.()}
+        aria-label="Toggle queue"
+        title="Queue"><Icon name="queue_music" size={22} /></button
+      >
       <Icon name="volume_up" size={20} />
       <input
         type="range"
@@ -153,17 +168,14 @@
 
 <style>
   .player {
-    position: sticky;
-    bottom: 0;
-    margin-top: 1.5rem;
+    flex-shrink: 0;
     display: grid;
     grid-template-columns: 1fr auto 2fr auto;
     align-items: center;
     gap: 1rem;
-    padding: 0.75rem 1rem;
+    padding: 0.75rem 1.25rem;
     background: #18181b;
-    border: 1px solid #27272a;
-    border-radius: 0.75rem;
+    border-top: 1px solid #27272a;
   }
   .now-playing {
     display: flex;
@@ -261,6 +273,26 @@
   }
   .volume input {
     width: 70px;
+  }
+  .queue-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 0.3rem;
+    border-radius: 0.4rem;
+    margin-right: 0.25rem;
+  }
+  .queue-toggle:hover {
+    background: #27272a;
+    color: #e5e7eb;
+  }
+  .queue-toggle.active {
+    color: #a78bfa;
+    background: #2a1d4d;
   }
   input[type="range"] {
     accent-color: #6d28d9;

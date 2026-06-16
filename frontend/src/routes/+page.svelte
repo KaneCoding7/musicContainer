@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import AlbumsView from "$lib/components/AlbumsView.svelte";
   import Icon from "$lib/components/Icon.svelte";
   import Player from "$lib/components/Player.svelte";
   import PlaylistManager from "$lib/components/PlaylistManager.svelte";
@@ -12,6 +13,16 @@
 
   const vm = new SongViewModel();
   const playlistVm = new PlaylistViewModel();
+
+  type View = "songs" | "playlists" | "albums";
+  let view = $state<View>("songs");
+  let queueOpen = $state(false);
+
+  const nav: { id: View; label: string; icon: string }[] = [
+    { id: "songs", label: "All Songs", icon: "library_music" },
+    { id: "playlists", label: "Playlists", icon: "queue_music" },
+    { id: "albums", label: "Albums", icon: "album" },
+  ];
 
   onMount(() => {
     vm.load();
@@ -45,7 +56,8 @@
 
     if (e.key === "/" && !typing) {
       e.preventDefault();
-      document.getElementById("song-search")?.focus();
+      view = "songs";
+      requestAnimationFrame(() => document.getElementById("song-search")?.focus());
       return;
     }
     if (typing) return;
@@ -75,62 +87,159 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<header>
-  <h1><Icon name="library_music" fill size={28} /> Music Server</h1>
-  <UploadForm {vm} />
-</header>
+<div class="layout">
+  <div class="body">
+    <aside class="sidebar">
+      <div class="brand">
+        <Icon name="library_music" fill size={26} /> Music Server
+      </div>
 
-{#if vm.error}
-  <p class="error">{vm.error}</p>
-{/if}
+      <nav>
+        {#each nav as item (item.id)}
+          <button
+            class="nav-item"
+            class:active={view === item.id}
+            onclick={() => (view = item.id)}
+          >
+            <Icon name={item.icon} size={22} />
+            {item.label}
+          </button>
+        {/each}
+      </nav>
 
-<section>
-  <h2>Songs</h2>
-  <SongList {vm} onDelete={handleDelete} onUpdate={handleUpdate} />
-</section>
+      <div class="upload-area">
+        <UploadForm {vm} />
+      </div>
 
-<section>
-  <h2>Playlists</h2>
-  <PlaylistManager vm={playlistVm} songVm={vm} />
-</section>
+      <p class="shortcuts">
+        <kbd>Space</kbd> play · <kbd>←</kbd>/<kbd>→</kbd> skip ·
+        <kbd>↑</kbd>/<kbd>↓</kbd> vol · <kbd>/</kbd> search
+      </p>
+    </aside>
 
-{#if vm.queue.length > 0}
-  <section>
-    <h2>Up Next</h2>
-    <QueueView {vm} />
-  </section>
-{/if}
+    <main class="content">
+      {#if vm.error}
+        <p class="error">{vm.error}</p>
+      {/if}
 
-<Player {vm} />
+      {#if view === "songs"}
+        <h2>All Songs</h2>
+        <SongList {vm} onDelete={handleDelete} onUpdate={handleUpdate} />
+      {:else if view === "playlists"}
+        <h2>Playlists</h2>
+        <PlaylistManager vm={playlistVm} songVm={vm} />
+      {:else}
+        <h2>Albums</h2>
+        <AlbumsView {vm} />
+      {/if}
+    </main>
+  </div>
 
-<p class="shortcuts">
-  Shortcuts: <kbd>Space</kbd> play/pause · <kbd>←</kbd>/<kbd>→</kbd> prev/next ·
-  <kbd>↑</kbd>/<kbd>↓</kbd> volume · <kbd>/</kbd> search
-</p>
+  {#if queueOpen}
+    <section class="queue-panel">
+      <div class="queue-head">
+        <h3>Queue</h3>
+        <button
+          class="collapse"
+          onclick={() => (queueOpen = false)}
+          aria-label="Collapse queue"
+        >
+          <Icon name="keyboard_arrow_down" size={22} />
+        </button>
+      </div>
+      {#if vm.queue.length === 0}
+        <p class="muted">Nothing queued yet.</p>
+      {:else}
+        <QueueView {vm} />
+      {/if}
+    </section>
+  {/if}
+
+  <Player {vm} {queueOpen} onToggleQueue={() => (queueOpen = !queueOpen)} />
+</div>
 
 <style>
-  header {
+  .layout {
     display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 1.5rem;
+    flex-direction: column;
+    height: 100vh;
   }
-  h1 {
-    margin: 0;
-    font-size: 1.6rem;
-    display: inline-flex;
+  .body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+  .sidebar {
+    width: 230px;
+    flex-shrink: 0;
+    background: #0b0b0e;
+    border-right: 1px solid #27272a;
+    padding: 1.25rem 1rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+  .brand {
+    display: flex;
     align-items: center;
     gap: 0.5rem;
+    font-size: 1.15rem;
+    font-weight: 700;
     color: #a78bfa;
   }
-  h2 {
-    font-size: 1rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #9ca3af;
-    margin: 0 0 0.5rem;
+  nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    background: transparent;
+    border: none;
+    border-radius: 0.5rem;
+    color: #cbd5e1;
+    font: inherit;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+  }
+  .nav-item:hover {
+    background: #1c1c20;
+    color: #fff;
+  }
+  .nav-item.active {
+    background: #2a1d4d;
+    color: #fff;
+  }
+  .upload-area {
+    margin-top: auto;
+  }
+  .shortcuts {
+    margin: 0;
+    color: #6b7280;
+    font-size: 0.72rem;
+    line-height: 1.6;
+  }
+  .shortcuts kbd {
+    background: #27272a;
+    border: 1px solid #3f3f46;
+    border-radius: 0.25rem;
+    padding: 0.02rem 0.3rem;
+    font-family: inherit;
+    font-size: 0.68rem;
+  }
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 2rem 2rem;
+  }
+  .content h2 {
+    margin: 0 0 1rem;
+    font-size: 1.4rem;
   }
   .error {
     background: #7f1d1d;
@@ -139,18 +248,41 @@
     border-radius: 0.5rem;
     margin: 0 0 1rem;
   }
-  .shortcuts {
-    margin: 1rem 0 0;
-    text-align: center;
-    color: #6b7280;
-    font-size: 0.78rem;
+  .queue-panel {
+    border-top: 1px solid #27272a;
+    background: #141417;
+    max-height: 38vh;
+    overflow-y: auto;
+    padding: 0.5rem 1rem 1rem;
   }
-  .shortcuts kbd {
-    background: #27272a;
-    border: 1px solid #3f3f46;
-    border-radius: 0.25rem;
-    padding: 0.05rem 0.35rem;
-    font-family: inherit;
-    font-size: 0.72rem;
+  .queue-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: #141417;
+    padding: 0.5rem 0;
+  }
+  .queue-head h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #9ca3af;
+  }
+  .collapse {
+    display: inline-flex;
+    background: transparent;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+  }
+  .collapse:hover {
+    color: #fff;
+  }
+  .muted {
+    color: #9ca3af;
+    padding: 0.5rem 0;
   }
 </style>
