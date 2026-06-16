@@ -449,6 +449,33 @@ queue from the player
 
 ---
 
+### Cycle 20: Auth & Multi-User (Phase 1)  ✅ (post-MVP)
+**Goal:** Accounts with isolated, private libraries
+
+**Backend Tasks:**
+- Integrate **Better Auth** (`src/auth.ts`): email/password + `bearer` plugin,
+  using the existing SQLite connection; auth tables folded into `migrate()`
+- `requireAuth` middleware (token via `Authorization` header, or `?token=` for
+  media elements); mount auth handler before `express.json()`
+- Add `user_id` to songs/playlists; scope every query by the owner; first user
+  claims pre-existing (ownerless) data
+- Env: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `FRONTEND_ORIGIN`,
+  `BETTER_AUTH_TRUSTED_ORIGINS`
+
+**Frontend Tasks:**
+- `authService` (token in localStorage) + `authViewModel`; all API calls send
+  the bearer token, media URLs append `?token=`
+- `AuthScreen` (login/register); the app is gated behind auth; account +
+  sign-out in the sidebar
+
+**Done When:** Users sign up/in, see only their own library, and can't reach
+others' songs
+
+### Cycle 21: Invites (Phase 2)  ⬜ (planned)
+- Invite codes so users can invite friends to the server.
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
@@ -482,7 +509,8 @@ The frontend reads the API base URL from `PUBLIC_API_BASE_URL`
   Functional core returns `Result<T>`; routes map it to HTTP status codes.
 - **Validation:** Input validation in functional core before operations.
 - **File Types:** Support MP3 and WAV initially.
-- **No Authentication:** MVP is single-user (you), accessed via Cloudflare Tunnel.
+- **Authentication:** Better Auth (email/password, bearer token in
+  localStorage). Libraries are isolated per user. See Cycle 20.
 - **Streaming:** Use HTTP Range requests for audio streaming (allows seeking).
 - **Icons:** Google Material Symbols, self-hosted as a variable woff2 in
   `frontend/static/fonts/` and rendered via `Icon.svelte` (no runtime CDN

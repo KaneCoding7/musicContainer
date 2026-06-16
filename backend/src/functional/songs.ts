@@ -80,6 +80,7 @@ export function recordSong(
   params: {
     filename: string;
     originalFilename: string;
+    userId: string;
     artist?: string | null;
     album?: string | null;
     artFilename?: string | null;
@@ -95,7 +96,7 @@ export function recordSong(
   try {
     const info = db
       .prepare(
-        "INSERT INTO songs (filename, original_filename, artist, album, art_filename, duration) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO songs (filename, original_filename, artist, album, art_filename, duration, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         filename,
@@ -103,7 +104,8 @@ export function recordSong(
         params.artist ?? null,
         params.album ?? null,
         params.artFilename ?? null,
-        params.duration ?? null
+        params.duration ?? null,
+        params.userId
       );
 
     const row = db
@@ -119,14 +121,14 @@ export function recordSong(
   }
 }
 
-// Returns all songs, newest first.
-export function listSongs(db: Database): Result<Song[]> {
+// Returns all of a user's songs, newest first.
+export function listSongs(db: Database, userId: string): Result<Song[]> {
   try {
     const rows = db
       .prepare(
-        `SELECT ${SONG_COLUMNS} FROM songs ORDER BY datetime(uploaded_at) DESC, id DESC`
+        `SELECT ${SONG_COLUMNS} FROM songs WHERE user_id = ? ORDER BY datetime(uploaded_at) DESC, id DESC`
       )
-      .all() as SongRow[];
+      .all(userId) as SongRow[];
     return ok(rows.map(rowToSong));
   } catch (e) {
     return err("internal", `Failed to list songs: ${(e as Error).message}`);
@@ -146,9 +148,10 @@ export interface SongFile {
 export function resolveSongFile(
   db: Database,
   id: number,
-  musicDir: string
+  musicDir: string,
+  userId: string
 ): Result<SongFile> {
-  const songResult = getSong(db, id);
+  const songResult = getSong(db, id, userId);
   if (!songResult.ok) return songResult;
 
   const path = join(musicDir, songResult.value.filename);
@@ -176,9 +179,10 @@ export function resolveSongFile(
 export function updateSong(
   db: Database,
   id: number,
-  fields: { originalFilename?: string; artist?: string; album?: string }
+  fields: { originalFilename?: string; artist?: string; album?: string },
+  userId: string
 ): Result<Song> {
-  const existing = getSong(db, id);
+  const existing = getSong(db, id, userId);
   if (!existing.ok) return existing;
 
   const sets: string[] = [];
@@ -204,11 +208,10 @@ export function updateSong(
   if (sets.length === 0) return existing; // nothing to change
 
   try {
-    db.prepare(`UPDATE songs SET ${sets.join(", ")} WHERE id = ?`).run(
-      ...values,
-      id
-    );
-    return getSong(db, id);
+    db.prepare(
+      `UPDATE songs SET ${sets.join(", ")} WHERE id = ? AND user_id = ?`
+    ).run(...values, id, userId);
+    return getSong(db, id, userId);
   } catch (e) {
     return err("internal", `Failed to update song: ${(e as Error).message}`);
   }
@@ -218,27 +221,36 @@ export function updateSong(
 export function setLiked(
   db: Database,
   id: number,
-  liked: boolean
+  liked: boolean,
+  userId: string
 ): Result<Song> {
-  const existing = getSong(db, id);
+  const existing = getSong(db, id, userId);
   if (!existing.ok) return existing;
   try {
-    db.prepare("UPDATE songs SET liked = ? WHERE id = ?").run(liked ? 1 : 0, id);
-    return getSong(db, id);
+    db.prepare("UPDATE songs SET liked = ? WHERE id = ? AND user_id = ?").run(
+      liked ? 1 : 0,
+      id,
+      userId
+    );
+    return getSong(db, id, userId);
   } catch (e) {
     return err("internal", `Failed to set liked: ${(e as Error).message}`);
   }
 }
 
 // Records a play: increments play_count and sets last_played_at to now.
-export function recordPlay(db: Database, id: number): Result<Song> {
-  const existing = getSong(db, id);
+export function recordPlay(
+  db: Database,
+  id: number,
+  userId: string
+): Result<Song> {
+  const existing = getSong(db, id, userId);
   if (!existing.ok) return existing;
   try {
     db.prepare(
-      "UPDATE songs SET play_count = play_count + 1, last_played_at = datetime('now') WHERE id = ?"
-    ).run(id);
-    return getSong(db, id);
+      "UPDATE songs SET play_count = play_count + 1, last_played_at = datetime('now') WHERE id = ? AND user_id = ?"
+    ).run(id, userId);
+    return getSong(db, id, userId);
   } catch (e) {
     return err("internal", `Failed to record play: ${(e as Error).message}`);
   }
@@ -248,14 +260,15 @@ export function recordPlay(db: Database, id: number): Result<Song> {
 export function resolveSongArt(
   db: Database,
   id: number,
-  artDir: string
+  artDir: string,
+  userId: string
 ): Result<{ path: string; contentType: string }> {
   if (!Number.isInteger(id) || id <= 0) {
     return err("validation", "Invalid song id");
   }
   const row = db
-    .prepare("SELECT art_filename FROM songs WHERE id = ?")
-    .get(id) as { art_filename: string | null } | undefined;
+    .prepare("SELECT art_filename FROM songs WHERE id = ? AND user_id = ?")
+    .get(id, userId) as { art_filename: string | null } | undefined;
   if (!row) return err("not_found", `Song ${id} not found`);
   if (!row.art_filename) return err("not_found", "Song has no album art");
 
@@ -273,18 +286,19 @@ export function deleteSong(
   db: Database,
   id: number,
   musicDir: string,
-  artDir: string
+  artDir: string,
+  userId: string
 ): Result<void> {
-  const songResult = getSong(db, id);
+  const songResult = getSong(db, id, userId);
   if (!songResult.ok) return songResult;
 
   // Capture the art filename before deleting the row.
   const artRow = db
-    .prepare("SELECT art_filename FROM songs WHERE id = ?")
-    .get(id) as { art_filename: string | null } | undefined;
+    .prepare("SELECT art_filename FROM songs WHERE id = ? AND user_id = ?")
+    .get(id, userId) as { art_filename: string | null } | undefined;
 
   try {
-    db.prepare("DELETE FROM songs WHERE id = ?").run(id);
+    db.prepare("DELETE FROM songs WHERE id = ? AND user_id = ?").run(id, userId);
     const removeFile = (p: string) => {
       if (existsSync(p)) {
         try {
@@ -302,15 +316,19 @@ export function deleteSong(
   }
 }
 
-// Looks up a single song by id.
-export function getSong(db: Database, id: number): Result<Song> {
+// Looks up a single song by id, scoped to its owner.
+export function getSong(
+  db: Database,
+  id: number,
+  userId: string
+): Result<Song> {
   if (!Number.isInteger(id) || id <= 0) {
     return err("validation", "Invalid song id");
   }
   try {
     const row = db
-      .prepare(`SELECT ${SONG_COLUMNS} FROM songs WHERE id = ?`)
-      .get(id) as SongRow | undefined;
+      .prepare(`SELECT ${SONG_COLUMNS} FROM songs WHERE id = ? AND user_id = ?`)
+      .get(id, userId) as SongRow | undefined;
     if (!row) {
       return err("not_found", `Song ${id} not found`);
     }
