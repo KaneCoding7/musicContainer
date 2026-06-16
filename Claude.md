@@ -374,6 +374,22 @@ queue from the player
 
 ---
 
+### Cycle 15: Playlist Art & Counts (+ sidebar cleanup)  ✅ (post-MVP)
+**Goal:** Richer playlist browsing; tidy the sidebar footer
+
+**Backend Tasks:**
+- `listPlaylists` returns `trackCount` + `coverSongId` (first track with art)
+
+**Frontend Tasks:**
+- Playlist type gains `trackCount`/`coverSongId`; PlaylistManager shows
+  playlists as cards with cover art + track count; counts refresh on add/remove
+- Sidebar footer cleanup: full-width Upload button; shortcuts moved into a
+  collapsible disclosure
+
+**Done When:** Playlists show art + counts and the sidebar footer looks clean
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

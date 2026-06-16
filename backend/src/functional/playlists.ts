@@ -58,15 +58,34 @@ export function createPlaylist(db: Database, name: string): Result<Playlist> {
   }
 }
 
-// Lists all playlists, newest first.
+interface PlaylistListRow extends PlaylistRow {
+  track_count: number;
+  cover_song_id: number | null;
+}
+
+// Lists all playlists (with track count + cover art song), newest first.
 export function listPlaylists(db: Database): Result<Playlist[]> {
   try {
     const rows = db
       .prepare(
-        "SELECT id, name, created_at FROM playlists ORDER BY datetime(created_at) DESC, id DESC"
+        `SELECT p.id, p.name, p.created_at,
+                (SELECT COUNT(*) FROM playlist_songs ps WHERE ps.playlist_id = p.id)
+                  AS track_count,
+                (SELECT ps.song_id FROM playlist_songs ps
+                   JOIN songs s ON s.id = ps.song_id
+                   WHERE ps.playlist_id = p.id AND s.art_filename IS NOT NULL
+                   ORDER BY ps.position ASC LIMIT 1) AS cover_song_id
+         FROM playlists p
+         ORDER BY datetime(p.created_at) DESC, p.id DESC`
       )
-      .all() as PlaylistRow[];
-    return ok(rows.map(rowToPlaylist));
+      .all() as PlaylistListRow[];
+    return ok(
+      rows.map((row) => ({
+        ...rowToPlaylist(row),
+        trackCount: row.track_count,
+        coverSongId: row.cover_song_id,
+      }))
+    );
   } catch (e) {
     return err("internal", `Failed to list playlists: ${(e as Error).message}`);
   }

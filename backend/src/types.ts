@@ -15,4 +15,6 @@ export interface Playlist {
   id: number;
   name: string;
   createdAt: string; // ISO timestamp
+  trackCount?: number; // populated by list queries
+  coverSongId?: number | null; // first track with album art, for the cover
 }

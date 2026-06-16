@@ -15,6 +15,8 @@ export interface Playlist {
   id: number;
   name: string;
   createdAt: string;
+  trackCount?: number;
+  coverSongId?: number | null;
 }
 
 export interface ApiError {
