@@ -32,6 +32,28 @@ export async function createPlaylist(name: string): Promise<Playlist> {
   return (await res.json()).playlist as Playlist;
 }
 
+// Renames a playlist; returns the updated playlist.
+export async function renamePlaylist(
+  playlistId: number,
+  name: string
+): Promise<Playlist> {
+  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).playlist as Playlist;
+}
+
+// Deletes a playlist.
+export async function deletePlaylist(playlistId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
 // Returns the songs in a playlist, in order.
 export async function fetchPlaylistSongs(playlistId: number): Promise<Song[]> {
   const res = await fetch(`${API_BASE}/api/playlists/${playlistId}`);

@@ -86,6 +86,36 @@ export function getPlaylist(db: Database, id: number): Result<Playlist> {
   }
 }
 
+// Renames a playlist.
+export function renamePlaylist(
+  db: Database,
+  id: number,
+  name: string
+): Result<Playlist> {
+  const trimmed = name.trim();
+  if (!trimmed) return err("validation", "Playlist name is required");
+  const existing = getPlaylist(db, id);
+  if (!existing.ok) return existing;
+  try {
+    db.prepare("UPDATE playlists SET name = ? WHERE id = ?").run(trimmed, id);
+    return getPlaylist(db, id);
+  } catch (e) {
+    return err("internal", `Failed to rename playlist: ${(e as Error).message}`);
+  }
+}
+
+// Deletes a playlist (its song links drop via ON DELETE CASCADE).
+export function deletePlaylist(db: Database, id: number): Result<void> {
+  const existing = getPlaylist(db, id);
+  if (!existing.ok) return existing;
+  try {
+    db.prepare("DELETE FROM playlists WHERE id = ?").run(id);
+    return ok(undefined);
+  } catch (e) {
+    return err("internal", `Failed to delete playlist: ${(e as Error).message}`);
+  }
+}
+
 // Returns the songs in a playlist, ordered by their position.
 export function getPlaylistSongs(
   db: Database,

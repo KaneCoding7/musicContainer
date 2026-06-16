@@ -302,6 +302,22 @@ backend changes needed.
 
 ---
 
+### Cycle 10: Rename & Delete Playlists  ✅ (post-MVP)
+**Goal:** Manage playlists, not just create them
+
+**Backend Tasks:**
+- `renamePlaylist(id, name)`, `deletePlaylist(id)` (song links cascade)
+- Routes: `PATCH /api/playlists/:id`, `DELETE /api/playlists/:id`
+
+**Frontend Tasks:**
+- PlaylistService rename/delete; PlaylistViewModel rename/remove (clears
+  selection on delete)
+- PlaylistManager: rename + delete buttons in the selected-playlist header
+
+**Done When:** Can rename and delete playlists from the UI
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
