@@ -40,3 +40,4 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 7** — Player polish (shuffle, repeat, download)
 - ✅ **Cycle 8** — Reorder playlist songs (drag & drop)
 - ✅ **Cycle 9** — Metadata & album art
+- ✅ **Cycle 10** — Rename & delete playlists

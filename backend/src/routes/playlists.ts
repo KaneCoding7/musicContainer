@@ -3,9 +3,11 @@ import { getDb } from "../db/init.js";
 import {
   addSongToPlaylist,
   createPlaylist,
+  deletePlaylist,
   getPlaylistSongs,
   listPlaylists,
   removeSongFromPlaylist,
+  renamePlaylist,
   reorderPlaylist,
 } from "../functional/playlists.js";
 import { statusForError } from "../functional/result.js";
@@ -44,6 +46,29 @@ playlistsRouter.get("/playlists/:id", (req, res) => {
       .json({ error: result.error });
   }
   return res.json({ songs: result.value });
+});
+
+// PATCH /api/playlists/:id — rename a playlist.
+playlistsRouter.patch("/playlists/:id", (req, res) => {
+  const name = typeof req.body?.name === "string" ? req.body.name : "";
+  const result = renamePlaylist(getDb(), Number(req.params.id), name);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ playlist: result.value });
+});
+
+// DELETE /api/playlists/:id — delete a playlist.
+playlistsRouter.delete("/playlists/:id", (req, res) => {
+  const result = deletePlaylist(getDb(), Number(req.params.id));
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.status(204).end();
 });
 
 // PUT /api/playlists/:id/order — reorder songs within a playlist.

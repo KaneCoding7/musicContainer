@@ -36,6 +36,23 @@
     songVm.playQueue(vm.selectedSongs, index);
   }
 
+  function renameSelected() {
+    const current = vm.selected;
+    if (!current) return;
+    const name = prompt("Rename playlist", current.name);
+    if (name && name.trim() && name.trim() !== current.name) {
+      vm.rename(current.id, name.trim());
+    }
+  }
+
+  function deleteSelected() {
+    const current = vm.selected;
+    if (!current) return;
+    if (confirm(`Delete playlist "${current.name}"? This cannot be undone.`)) {
+      vm.remove(current.id);
+    }
+  }
+
   // --- Drag-to-reorder ---
   let dragIndex = $state<number | null>(null);
   let overIndex = $state<number | null>(null);
@@ -96,7 +113,21 @@
 
   {#if vm.selected}
     <div class="detail">
-      <h3>{vm.selected.name}</h3>
+      <div class="detail-head">
+        <h3>{vm.selected.name}</h3>
+        <button
+          class="head-action"
+          title="Rename playlist"
+          aria-label="Rename playlist"
+          onclick={renameSelected}><Icon name="edit" size={20} /></button
+        >
+        <button
+          class="head-action danger"
+          title="Delete playlist"
+          aria-label="Delete playlist"
+          onclick={deleteSelected}><Icon name="delete" size={20} /></button
+        >
+      </div>
 
       {#if vm.selectedSongs.length === 0}
         <p class="muted">No songs in this playlist yet.</p>
@@ -207,6 +238,37 @@
   .detail {
     border-top: 1px solid #27272a;
     padding-top: 1rem;
+  }
+  .detail-head {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+  }
+  .detail-head h3 {
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .head-action {
+    display: inline-flex;
+    align-items: center;
+    border: none;
+    background: transparent;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 0.35rem 0.5rem;
+    border-radius: 0.4rem;
+  }
+  .head-action:hover {
+    background: #27272a;
+  }
+  .head-action.danger:hover {
+    background: #7f1d1d;
+    color: #fecaca;
   }
   h3 {
     margin: 0 0 0.5rem;

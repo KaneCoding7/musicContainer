@@ -40,6 +40,32 @@ export class PlaylistViewModel {
     }
   }
 
+  // Renames a playlist.
+  async rename(id: number, name: string): Promise<void> {
+    this.error = null;
+    try {
+      const updated = await api.renamePlaylist(id, name);
+      this.playlists = this.playlists.map((p) => (p.id === id ? updated : p));
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Failed to rename playlist";
+    }
+  }
+
+  // Deletes a playlist, clearing the selection if it was selected.
+  async remove(id: number): Promise<void> {
+    this.error = null;
+    try {
+      await api.deletePlaylist(id);
+      this.playlists = this.playlists.filter((p) => p.id !== id);
+      if (this.selectedId === id) {
+        this.selectedId = null;
+        this.selectedSongs = [];
+      }
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Failed to delete playlist";
+    }
+  }
+
   // Selects a playlist and loads its songs.
   async select(id: number): Promise<void> {
     this.selectedId = id;
