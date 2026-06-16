@@ -23,17 +23,40 @@ export class SongViewModel {
   // Search query for filtering the library (Cycle 5).
   query = $state("");
 
+  // Sort order for the library list (Cycle 34).
+  sortBy = $state<"added" | "name" | "plays" | "duration">("added");
+
   // The library filtered by the current query (case-insensitive match across
-  // song name, artist, and album).
+  // song name, artist, and album), then sorted by the chosen order.
   get filteredSongs(): Song[] {
     const q = this.query.trim().toLowerCase();
-    if (!q) return this.songs;
-    return this.songs.filter(
-      (s) =>
-        s.originalFilename.toLowerCase().includes(q) ||
-        (s.artist?.toLowerCase().includes(q) ?? false) ||
-        (s.album?.toLowerCase().includes(q) ?? false)
-    );
+    const matched = q
+      ? this.songs.filter(
+          (s) =>
+            s.originalFilename.toLowerCase().includes(q) ||
+            (s.artist?.toLowerCase().includes(q) ?? false) ||
+            (s.album?.toLowerCase().includes(q) ?? false)
+        )
+      : this.songs;
+    return this.applySort(matched);
+  }
+
+  // Applies the current sort. "added" keeps the backend order (newest first).
+  private applySort(list: Song[]): Song[] {
+    switch (this.sortBy) {
+      case "name":
+        return [...list].sort((a, b) =>
+          a.originalFilename.localeCompare(b.originalFilename)
+        );
+      case "plays":
+        return [...list].sort((a, b) => b.playCount - a.playCount);
+      case "duration":
+        return [...list].sort(
+          (a, b) => (a.duration ?? Infinity) - (b.duration ?? Infinity)
+        );
+      default:
+        return list;
+    }
   }
 
   // Songs that have been played, most-recently-played first.

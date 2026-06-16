@@ -676,6 +676,17 @@ shares cannot
 
 ---
 
+### Cycle 34: Library Sort  ✅ (post-MVP)
+**Goal:** Sort the All Songs list
+
+**Frontend Tasks:**
+- `sortBy` (added / name / plays / duration) applied in `filteredSongs`; a sort
+  dropdown in the SongList toolbar
+
+**Done When:** All Songs can be sorted by added/name/plays/duration
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

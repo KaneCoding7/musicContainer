@@ -85,6 +85,15 @@
           bind:value={vm.query}
         />
       </div>
+      <label class="sort" title="Sort">
+        <Icon name="sort" size={20} />
+        <select bind:value={vm.sortBy} aria-label="Sort songs">
+          <option value="added">Recently added</option>
+          <option value="name">Name (A–Z)</option>
+          <option value="plays">Most played</option>
+          <option value="duration">Duration</option>
+        </select>
+      </label>
       {#if onBulkAdd && playlists.length > 0}
         {#if selecting}
           <button class="ghost" onclick={exitSelect}>Done</button>
@@ -280,6 +289,25 @@
   }
   .ghost:hover {
     background: var(--border-strong);
+  }
+  .sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+    padding: 0.4rem 0.6rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    color: var(--muted);
+  }
+  .sort select {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+    outline: none;
   }
   .selbar {
     display: flex;
