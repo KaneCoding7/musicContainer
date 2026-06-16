@@ -1,9 +1,14 @@
 // Service layer: wrapper around the backend playlist API.
 import { env } from "$env/dynamic/public";
-import { authHeaders } from "$lib/services/authService";
+import { authHeaders, withToken } from "$lib/services/authService";
 import type { Playlist, Song } from "$lib/types";
 
 const API_BASE = env.PUBLIC_API_BASE_URL ?? "http://localhost:3001";
+
+// URL to download a playlist's tracks as a zip (token in query for the link).
+export function playlistZipUrl(playlistId: number): string {
+  return withToken(`${API_BASE}/api/playlists/${playlistId}/download`);
+}
 
 async function errorMessage(res: Response): Promise<string> {
   try {

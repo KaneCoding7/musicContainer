@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
+  import { playlistZipUrl } from "$lib/services/playlistService";
   import { artUrl } from "$lib/services/songService";
   import {
     disablePublicLink,
@@ -225,6 +226,14 @@
           aria-label="Rename playlist"
           onclick={renameSelected}><Icon name="edit" size={20} /></button
         >
+        {#if vm.selectedSongs.length > 0}
+          <a
+            class="head-action"
+            href={playlistZipUrl(vm.selectedId ?? 0)}
+            title="Download as zip"
+            aria-label="Download playlist as zip"><Icon name="download" size={20} /></a
+          >
+        {/if}
         <button
           class="head-action"
           class:on={shareOpen}

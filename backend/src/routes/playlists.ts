@@ -1,5 +1,8 @@
+import { existsSync } from "node:fs";
+import { extname, join } from "node:path";
+import { ZipArchive } from "archiver";
 import { Router } from "express";
-import { getDb } from "../db/init.js";
+import { getDb, MUSIC_DIR } from "../db/init.js";
 import {
   addSongToPlaylist,
   addSongsToPlaylist,
@@ -12,8 +15,67 @@ import {
   reorderPlaylist,
 } from "../functional/playlists.js";
 import { statusForError } from "../functional/result.js";
+import { getSharedPlaylistSongs } from "../functional/shares.js";
+import type { Song } from "../types.js";
 
 export const playlistsRouter = Router();
+
+// GET /api/playlists/:id/download — download a playlist's tracks as a zip.
+playlistsRouter.get("/playlists/:id/download", (req, res) => {
+  const id = Number(req.params.id);
+  const userId = req.userId!;
+  const db = getDb();
+
+  // Owner first, then a shared-with viewer.
+  let songsResult = getPlaylistSongs(db, id, userId);
+  if (!songsResult.ok && songsResult.error.code === "not_found") {
+    songsResult = getSharedPlaylistSongs(db, userId, id);
+  }
+  if (!songsResult.ok) {
+    return res
+      .status(statusForError(songsResult.error.code))
+      .json({ error: songsResult.error });
+  }
+  const songs: Song[] = songsResult.value;
+
+  const nameRow = db
+    .prepare("SELECT name FROM playlists WHERE id = ?")
+    .get(id) as { name: string } | undefined;
+  const zipName = (nameRow?.name ?? "playlist").replace(/[^\w.\- ]+/g, "_");
+
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${zipName}.zip"`
+  );
+
+  const archive = new ZipArchive({ zlib: { level: 0 } }); // store; audio is already compressed
+  archive.on("error", () => {
+    if (!res.headersSent) res.status(500);
+    res.end();
+  });
+  archive.pipe(res);
+
+  const used = new Set<string>();
+  for (const song of songs) {
+    const path = join(MUSIC_DIR, song.filename);
+    if (!existsSync(path)) continue;
+    const ext = extname(song.filename);
+    let entry = extname(song.originalFilename)
+      ? song.originalFilename
+      : `${song.originalFilename}${ext}`;
+    // De-duplicate identical entry names within the zip.
+    if (used.has(entry)) {
+      const base = entry.slice(0, entry.length - extname(entry).length);
+      let i = 2;
+      while (used.has(`${base} (${i})${extname(entry)}`)) i++;
+      entry = `${base} (${i})${extname(entry)}`;
+    }
+    used.add(entry);
+    archive.file(path, { name: entry });
+  }
+  archive.finalize();
+});
 
 // POST /api/playlists — create a playlist.
 playlistsRouter.post("/playlists", (req, res) => {
