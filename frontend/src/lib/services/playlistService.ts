@@ -52,6 +52,19 @@ export async function addSongToPlaylist(
   if (!res.ok) throw new Error(await errorMessage(res));
 }
 
+// Reorders songs within a playlist to match the given id order.
+export async function reorderPlaylist(
+  playlistId: number,
+  songIds: number[]
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}/order`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ songIds }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
 // Removes a song from a playlist.
 export async function removeSongFromPlaylist(
   playlistId: number,

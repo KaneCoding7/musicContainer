@@ -64,6 +64,23 @@ export class PlaylistViewModel {
     }
   }
 
+  // Reorders the selected playlist's songs (optimistic; reloads on failure).
+  async reorder(orderedSongs: Song[]): Promise<void> {
+    if (this.selectedId === null) return;
+    const previous = this.selectedSongs;
+    this.selectedSongs = orderedSongs; // optimistic update
+    this.error = null;
+    try {
+      await api.reorderPlaylist(
+        this.selectedId,
+        orderedSongs.map((s) => s.id)
+      );
+    } catch (e) {
+      this.selectedSongs = previous; // revert on error
+      this.error = e instanceof Error ? e.message : "Failed to reorder";
+    }
+  }
+
   // Removes a song from the selected playlist and refreshes its songs.
   async removeSong(songId: number): Promise<void> {
     if (this.selectedId === null) return;

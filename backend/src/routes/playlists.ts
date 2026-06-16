@@ -6,6 +6,7 @@ import {
   getPlaylistSongs,
   listPlaylists,
   removeSongFromPlaylist,
+  reorderPlaylist,
 } from "../functional/playlists.js";
 import { statusForError } from "../functional/result.js";
 
@@ -43,6 +44,25 @@ playlistsRouter.get("/playlists/:id", (req, res) => {
       .json({ error: result.error });
   }
   return res.json({ songs: result.value });
+});
+
+// PUT /api/playlists/:id/order — reorder songs within a playlist.
+playlistsRouter.put("/playlists/:id/order", (req, res) => {
+  const songIds = Array.isArray(req.body?.songIds)
+    ? req.body.songIds.map(Number)
+    : null;
+  if (!songIds) {
+    return res.status(400).json({
+      error: { code: "validation", message: "songIds array is required" },
+    });
+  }
+  const result = reorderPlaylist(getDb(), Number(req.params.id), songIds);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ ok: true });
 });
 
 // POST /api/playlists/:id/songs — add a song to a playlist.
