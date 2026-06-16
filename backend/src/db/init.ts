@@ -108,6 +108,17 @@ function migrate(database: Database.Database): void {
       used_at    TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_invites_created_by ON invites(created_by);
+
+    -- Playlist sharing (Cycle 22): read-only access granted to another user.
+    CREATE TABLE IF NOT EXISTS playlist_shares (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+      shared_with TEXT NOT NULL,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(playlist_id, shared_with)
+    );
+    CREATE INDEX IF NOT EXISTS idx_playlist_shares_user
+      ON playlist_shares(shared_with);
   `);
 
   // Metadata columns added post-MVP (Cycle 9). Added conditionally so existing

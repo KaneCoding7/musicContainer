@@ -7,6 +7,7 @@ import { getDb } from "./db/init.js";
 import { invitesRouter } from "./routes/invites.js";
 import { playlistsRouter } from "./routes/playlists.js";
 import { registerRouter } from "./routes/register.js";
+import { sharesRouter } from "./routes/shares.js";
 import { songsRouter } from "./routes/songs.js";
 
 const INVITE_ONLY = process.env.INVITE_ONLY === "true";
@@ -51,6 +52,7 @@ app.use("/api", registerRouter);
 app.use("/api", requireAuth, songsRouter);
 app.use("/api", requireAuth, playlistsRouter);
 app.use("/api", requireAuth, invitesRouter);
+app.use("/api", requireAuth, sharesRouter);
 
 // Initialize the database (creates schema + data dirs) before serving.
 getDb();
