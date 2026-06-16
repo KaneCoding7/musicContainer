@@ -124,6 +124,23 @@
     vm.togglePlay();
   }
 
+  // --- Sleep timer UI (Cycle 35) ---
+  let sleepMenu = $state(false);
+  let nowMs = $state(Date.now());
+  $effect(() => {
+    if (vm.sleepUntil === null) return;
+    const id = setInterval(() => (nowMs = Date.now()), 1000);
+    return () => clearInterval(id);
+  });
+  const sleepRemaining = $derived(
+    vm.sleepUntil !== null ? Math.max(0, vm.sleepUntil - nowMs) : 0
+  );
+  function fmtRemain(ms: number): string {
+    const s = Math.ceil(ms / 1000);
+    const m = Math.floor(s / 60);
+    return `${m}:${(s % 60).toString().padStart(2, "0")}`;
+  }
+
   function onSeek(event: Event) {
     const value = Number((event.target as HTMLInputElement).value);
     if (audio) audio.currentTime = value;
@@ -144,6 +161,11 @@
   onplay={() => (vm.isPlaying = true)}
   onpause={() => (vm.isPlaying = false)}
   onended={() => {
+    if (vm.sleepAtTrackEnd) {
+      vm.isPlaying = false;
+      vm.cancelSleep();
+      return;
+    }
     if (vm.repeat === "one" && audio) {
       audio.currentTime = 0;
       audio.play().catch(() => {});
@@ -152,6 +174,14 @@
     }
   }}
 ></audio>
+
+{#if sleepMenu}
+  <button
+    class="sleep-backdrop"
+    aria-label="Close sleep menu"
+    onclick={() => (sleepMenu = false)}
+  ></button>
+{/if}
 
 {#if song}
   <div class="player">
@@ -222,6 +252,33 @@
     </div>
 
     <div class="volume">
+      <div class="sleep-wrap">
+        <button
+          class="queue-toggle"
+          class:active={vm.sleepActive}
+          onclick={() => (sleepMenu = !sleepMenu)}
+          aria-label="Sleep timer"
+          title="Sleep timer"><Icon name="bedtime" size={20} /></button
+        >
+        {#if vm.sleepUntil !== null}
+          <span class="sleep-badge">{fmtRemain(sleepRemaining)}</span>
+        {/if}
+        {#if sleepMenu}
+          <div class="sleep-menu">
+            <button onclick={() => { vm.setSleepTimer(15); sleepMenu = false; }}>15 minutes</button>
+            <button onclick={() => { vm.setSleepTimer(30); sleepMenu = false; }}>30 minutes</button>
+            <button onclick={() => { vm.setSleepTimer(60); sleepMenu = false; }}>1 hour</button>
+            <button
+              class:on={vm.sleepAtTrackEnd}
+              onclick={() => { vm.setSleepAtTrackEnd(); sleepMenu = false; }}
+              >End of track</button
+            >
+            {#if vm.sleepActive}
+              <button class="off" onclick={() => { vm.cancelSleep(); sleepMenu = false; }}>Turn off</button>
+            {/if}
+          </div>
+        {/if}
+      </div>
       <button
         class="queue-toggle"
         class:active={queueOpen}
@@ -346,6 +403,58 @@
     display: flex;
     align-items: center;
     gap: 0.4rem;
+  }
+  .sleep-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+  .sleep-badge {
+    margin-left: 0.15rem;
+    color: var(--accent-text);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .sleep-menu {
+    position: absolute;
+    bottom: calc(100% + 0.4rem);
+    right: 0;
+    z-index: 30;
+    min-width: 150px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    padding: 0.25rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+  }
+  .sleep-menu button {
+    padding: 0.5rem 0.6rem;
+    background: transparent;
+    border: none;
+    border-radius: 0.35rem;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .sleep-menu button:hover {
+    background: var(--hover);
+  }
+  .sleep-menu button.on {
+    color: var(--accent-text);
+  }
+  .sleep-menu button.off {
+    color: var(--danger-text);
+  }
+  .sleep-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: transparent;
+    border: none;
+    padding: 0;
   }
   .volume input {
     width: 70px;
