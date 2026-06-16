@@ -252,6 +252,7 @@
   <EditSongDialog
     song={editing}
     onSave={(id, fields) => onUpdate?.(id, fields)}
+    onArtChanged={(s) => vm.replaceSong(s)}
     onClose={() => (editing = null)}
   />
 {/if}

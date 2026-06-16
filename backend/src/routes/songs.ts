@@ -12,6 +12,7 @@ import {
   resolveSongArtById,
   resolveSongFileById,
   setLiked,
+  setSongArt,
   updateSong,
   validateUpload,
 } from "../functional/songs.js";
@@ -44,6 +45,80 @@ const upload = multer({
       cb(new Error(result.error.message));
     }
   },
+});
+
+// Album art uploads (Cycle 32): JPEG/PNG into the art directory.
+const artUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, ART_DIR),
+    filename: (_req, file, cb) => {
+      const ext =
+        extname(file.originalname).toLowerCase() ||
+        (file.mimetype === "image/png" ? ".png" : ".jpg");
+      cb(null, `${randomUUID()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === "image/jpeg" || file.mimetype === "image/png") {
+      cb(null, true);
+    } else {
+      cb(new Error("Album art must be a JPEG or PNG image"));
+    }
+  },
+});
+
+const cleanupArt = (filename: string) => {
+  const p = join(ART_DIR, filename);
+  if (existsSync(p)) {
+    try {
+      unlinkSync(p);
+    } catch {
+      /* best-effort */
+    }
+  }
+};
+
+// PUT /api/songs/:id/art — upload/replace a song's album art (field "art").
+songsRouter.put("/songs/:id/art", (req, res) => {
+  artUpload.single("art")(req, res, (uploadErr: unknown) => {
+    if (uploadErr) {
+      const message =
+        uploadErr instanceof Error ? uploadErr.message : "Upload failed";
+      return res.status(400).json({ error: { code: "validation", message } });
+    }
+    if (!req.file) {
+      return res.status(400).json({
+        error: { code: "validation", message: "No image provided (field: art)" },
+      });
+    }
+    const result = setSongArt(
+      getDb(),
+      Number(req.params.id),
+      req.userId!,
+      req.file.filename
+    );
+    if (!result.ok) {
+      cleanupArt(req.file.filename);
+      return res
+        .status(statusForError(result.error.code))
+        .json({ error: result.error });
+    }
+    if (result.value.oldArt) cleanupArt(result.value.oldArt);
+    return res.json({ song: result.value.song });
+  });
+});
+
+// DELETE /api/songs/:id/art — remove a song's album art.
+songsRouter.delete("/songs/:id/art", (req, res) => {
+  const result = setSongArt(getDb(), Number(req.params.id), req.userId!, null);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  if (result.value.oldArt) cleanupArt(result.value.oldArt);
+  return res.json({ song: result.value.song });
 });
 
 // POST /api/upload — upload a single audio file (extracts embedded metadata).
