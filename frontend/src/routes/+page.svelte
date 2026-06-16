@@ -3,6 +3,7 @@
   import Icon from "$lib/components/Icon.svelte";
   import Player from "$lib/components/Player.svelte";
   import PlaylistManager from "$lib/components/PlaylistManager.svelte";
+  import QueueView from "$lib/components/QueueView.svelte";
   import SongList from "$lib/components/SongList.svelte";
   import UploadForm from "$lib/components/UploadForm.svelte";
   import type { SongMetadata } from "$lib/services/songService";
@@ -92,6 +93,13 @@
   <h2>Playlists</h2>
   <PlaylistManager vm={playlistVm} songVm={vm} />
 </section>
+
+{#if vm.queue.length > 0}
+  <section>
+    <h2>Up Next</h2>
+    <QueueView {vm} />
+  </section>
+{/if}
 
 <Player {vm} />
 

@@ -42,3 +42,4 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 9** — Metadata & album art
 - ✅ **Cycle 10** — Rename & delete playlists
 - ✅ **Cycle 11** — Keyboard shortcuts
+- ✅ **Cycle 12** — Queue / up-next view
