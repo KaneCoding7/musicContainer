@@ -331,6 +331,18 @@ backend changes needed.
 
 ---
 
+### Cycle 12: Queue / Up-Next View  ✅ (post-MVP)
+**Goal:** See and navigate the active play queue
+
+**Frontend Tasks:**
+- QueueView component listing the current queue (now-playing highlighted,
+  played tracks dimmed); click any track to jump to it
+- "Up Next" section on the page, shown only when something is queued
+
+**Done When:** The queue is visible and you can jump to any track in it
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
