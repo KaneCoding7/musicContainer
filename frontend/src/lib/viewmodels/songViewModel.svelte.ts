@@ -1,6 +1,11 @@
 // ViewModel: owns song-list state and the operations the UI triggers.
 // Uses Svelte 5 runes ($state) for reactive state in a plain class.
-import { deleteSong, fetchSongs, uploadSong } from "$lib/services/songService";
+import {
+  deleteSong,
+  fetchSongs,
+  renameSong,
+  uploadSong,
+} from "$lib/services/songService";
 import type { Song } from "$lib/types";
 
 export class SongViewModel {
@@ -45,6 +50,18 @@ export class SongViewModel {
   // Plays from the full library list (used by the song list).
   play(index: number): void {
     this.playQueue(this.songs, index);
+  }
+
+  // Renames a song, updating it in both the library list and the play queue.
+  async rename(id: number, name: string): Promise<void> {
+    this.error = null;
+    try {
+      const updated = await renameSong(id, name);
+      this.songs = this.songs.map((s) => (s.id === id ? updated : s));
+      this.queue = this.queue.map((s) => (s.id === id ? updated : s));
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Failed to rename song";
+    }
   }
 
   // Deletes a song from the library and reconciles the play queue.

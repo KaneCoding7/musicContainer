@@ -130,6 +130,32 @@ export function resolveSongFile(
   return ok({ path, size: statSync(path).size, contentType });
 }
 
+// Renames a song's user-facing name (its original_filename). The stored file
+// on disk is untouched.
+export function renameSong(
+  db: Database,
+  id: number,
+  newName: string
+): Result<Song> {
+  const trimmed = newName.trim();
+  if (!trimmed) {
+    return err("validation", "Song name is required");
+  }
+
+  const existing = getSong(db, id);
+  if (!existing.ok) return existing;
+
+  try {
+    db.prepare("UPDATE songs SET original_filename = ? WHERE id = ?").run(
+      trimmed,
+      id
+    );
+    return getSong(db, id);
+  } catch (e) {
+    return err("internal", `Failed to rename song: ${(e as Error).message}`);
+  }
+}
+
 // Deletes a song: removes its database row (cascading playlist references via
 // the foreign key) and its audio file from disk (best-effort).
 export function deleteSong(
