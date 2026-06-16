@@ -98,6 +98,16 @@ function migrate(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS "session_userId_idx" ON "session" ("userId");
     CREATE INDEX IF NOT EXISTS "account_userId_idx" ON "account" ("userId");
     CREATE INDEX IF NOT EXISTS "verification_identifier_idx" ON "verification" ("identifier");
+
+    -- Friend invites (Cycle 21).
+    CREATE TABLE IF NOT EXISTS invites (
+      code       TEXT PRIMARY KEY,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      used_by    TEXT,
+      used_at    TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_invites_created_by ON invites(created_by);
   `);
 
   // Metadata columns added post-MVP (Cycle 9). Added conditionally so existing

@@ -41,12 +41,13 @@ export class AuthViewModel {
   async register(
     email: string,
     password: string,
-    name: string
+    name: string,
+    invite?: string
   ): Promise<boolean> {
     this.busy = true;
     this.error = null;
     try {
-      this.user = await signUp(email, password, name);
+      this.user = await signUp(email, password, name, invite);
       return true;
     } catch (e) {
       this.error = e instanceof Error ? e.message : "Sign up failed";

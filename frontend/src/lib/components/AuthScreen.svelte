@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
   import type { AuthViewModel } from "$lib/viewmodels/authViewModel.svelte";
 
@@ -8,13 +9,23 @@
   let email = $state("");
   let password = $state("");
   let name = $state("");
+  let invite = $state("");
+
+  // An invite link (?invite=CODE) prefills the code and opens registration.
+  onMount(() => {
+    const code = new URLSearchParams(window.location.search).get("invite");
+    if (code) {
+      invite = code;
+      mode = "register";
+    }
+  });
 
   async function submit(e: Event) {
     e.preventDefault();
     const ok =
       mode === "login"
         ? await vm.login(email.trim(), password)
-        : await vm.register(email.trim(), password, name.trim());
+        : await vm.register(email.trim(), password, name.trim(), invite.trim());
     if (ok) onAuthed();
   }
 
@@ -47,6 +58,10 @@
       <label>
         Name
         <input bind:value={name} autocomplete="name" required />
+      </label>
+      <label>
+        Invite code <span class="opt">(if you have one)</span>
+        <input bind:value={invite} placeholder="Optional" />
       </label>
     {/if}
     <label>
@@ -136,6 +151,10 @@
     gap: 0.3rem;
     font-size: 0.85rem;
     color: var(--muted);
+  }
+  .opt {
+    color: var(--dim);
+    font-weight: 400;
   }
   input {
     padding: 0.55rem 0.7rem;
