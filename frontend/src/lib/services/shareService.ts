@@ -9,9 +9,11 @@ export interface ShareUser {
   id: string;
   name: string;
   email: string;
+  canEdit: boolean;
 }
 export interface SharedPlaylist extends Playlist {
   ownerName: string;
+  canEdit: boolean;
 }
 
 async function errorMessage(res: Response): Promise<string> {
@@ -28,12 +30,13 @@ const jsonHeaders = () => ({ "Content-Type": "application/json", ...authHeaders(
 // Shares a playlist with a user by email.
 export async function sharePlaylist(
   playlistId: number,
-  email: string
+  email: string,
+  canEdit = false
 ): Promise<ShareUser> {
   const res = await fetch(`${API_BASE}/api/playlists/${playlistId}/share`, {
     method: "POST",
     headers: jsonHeaders(),
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, canEdit }),
   });
   if (!res.ok) throw new Error(await errorMessage(res));
   return (await res.json()).sharedWith as ShareUser;

@@ -164,6 +164,37 @@ export function deletePlaylist(
   }
 }
 
+// True if the user may edit a playlist: they own it, or hold an editor share.
+export function canEditPlaylist(
+  db: Database,
+  playlistId: number,
+  userId: string
+): boolean {
+  const owned = db
+    .prepare("SELECT 1 AS x FROM playlists WHERE id = ? AND user_id = ?")
+    .get(playlistId, userId);
+  if (owned) return true;
+  const editor = db
+    .prepare(
+      "SELECT 1 AS x FROM playlist_shares WHERE playlist_id = ? AND shared_with = ? AND can_edit = 1"
+    )
+    .get(playlistId, userId);
+  return !!editor;
+}
+
+// Ensures the user can edit the playlist (owner or editor); not_found otherwise.
+function requireEditAccess(
+  db: Database,
+  playlistId: number,
+  userId: string
+): Result<void> {
+  if (!Number.isInteger(playlistId) || playlistId <= 0) {
+    return err("validation", "Invalid playlist id");
+  }
+  if (canEditPlaylist(db, playlistId, userId)) return ok(undefined);
+  return err("not_found", `Playlist ${playlistId} not found`);
+}
+
 // Returns a playlist's songs in order, WITHOUT an ownership check. Callers must
 // have already authorized access (owner or an active share).
 export function songsInPlaylist(db: Database, playlistId: number): Song[] {
@@ -203,13 +234,14 @@ export function addSongToPlaylist(
   songId: number,
   userId: string
 ): Result<void> {
-  const playlist = getPlaylist(db, playlistId, userId);
-  if (!playlist.ok) return playlist;
+  const access = requireEditAccess(db, playlistId, userId);
+  if (!access.ok) return access;
   if (!Number.isInteger(songId) || songId <= 0) {
     return err("validation", "Invalid song id");
   }
 
   try {
+    // Users may only add songs from their own library.
     const song = db
       .prepare("SELECT id FROM songs WHERE id = ? AND user_id = ?")
       .get(songId, userId) as { id: number } | undefined;
@@ -248,8 +280,8 @@ export function reorderPlaylist(
   songIds: number[],
   userId: string
 ): Result<void> {
-  const playlist = getPlaylist(db, playlistId, userId);
-  if (!playlist.ok) return playlist;
+  const access = requireEditAccess(db, playlistId, userId);
+  if (!access.ok) return access;
   if (!Array.isArray(songIds)) {
     return err("validation", "songIds must be an array");
   }
@@ -277,8 +309,8 @@ export function addSongsToPlaylist(
   songIds: number[],
   userId: string
 ): Result<{ added: number }> {
-  const playlist = getPlaylist(db, playlistId, userId);
-  if (!playlist.ok) return playlist;
+  const access = requireEditAccess(db, playlistId, userId);
+  if (!access.ok) return access;
   if (!Array.isArray(songIds)) {
     return err("validation", "songIds must be an array");
   }
@@ -322,8 +354,8 @@ export function removeSongFromPlaylist(
   songId: number,
   userId: string
 ): Result<void> {
-  const playlist = getPlaylist(db, playlistId, userId);
-  if (!playlist.ok) return playlist;
+  const access = requireEditAccess(db, playlistId, userId);
+  if (!access.ok) return access;
 
   try {
     const info = db

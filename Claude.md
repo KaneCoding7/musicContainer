@@ -656,6 +656,26 @@ progress
 
 ---
 
+### Cycle 33: Collaborative Playlists  ✅ (post-MVP)
+**Goal:** Let shared-with users add/remove tracks (read-write sharing)
+
+**Backend Tasks:**
+- `playlist_shares.can_edit` flag; `sharePlaylist(…, canEdit)` upserts permission
+- `canEditPlaylist`; add/remove/reorder/bulk now allow owner **or** editor;
+  editors may only add their own songs
+- `canAccessSong` also covers tracks in a playlist the user owns (so the owner
+  can stream collaborator-added songs)
+
+**Frontend Tasks:**
+- Share panel "Allow editing" checkbox + per-collaborator "editor" tag
+- SharedView: editors get a "collaborative" badge, an add-from-library control,
+  and per-track remove
+
+**Done When:** An editor can add/remove tracks in a shared playlist; view-only
+shares cannot
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

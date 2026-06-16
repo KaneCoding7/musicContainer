@@ -114,6 +114,7 @@ export function migrate(database: Database.Database): void {
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
       shared_with TEXT NOT NULL,
+      can_edit    INTEGER NOT NULL DEFAULT 0,
       created_at  TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(playlist_id, shared_with)
     );
@@ -167,5 +168,16 @@ export function migrate(database: Database.Database): void {
   ).map((c) => c.name);
   if (!plColumns.includes("user_id")) {
     database.exec("ALTER TABLE playlists ADD COLUMN user_id TEXT");
+  }
+  // Collaborative sharing (Cycle 33): editors may add/remove tracks.
+  const shareColumns = (
+    database
+      .prepare("PRAGMA table_info(playlist_shares)")
+      .all() as { name: string }[]
+  ).map((c) => c.name);
+  if (shareColumns.length > 0 && !shareColumns.includes("can_edit")) {
+    database.exec(
+      "ALTER TABLE playlist_shares ADD COLUMN can_edit INTEGER NOT NULL DEFAULT 0"
+    );
   }
 }
