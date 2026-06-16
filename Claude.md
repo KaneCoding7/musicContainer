@@ -562,6 +562,22 @@ network needed.
 
 ---
 
+### Cycle 26: Media Session  ✅ (post-MVP)
+**Goal:** OS-level playback controls + now-playing metadata
+
+**Frontend Tasks:**
+- In Player, publish `MediaMetadata` (title/artist/album/artwork) per track
+- Register `mediaSession` action handlers (play/pause/prev/next/seek) and keep
+  `playbackState` + `setPositionState` in sync
+
+**Done When:** Lock-screen / Bluetooth / headphone controls drive playback and
+show the current track
+
+> Note: shuffle & repeat (off/all/one) were already implemented in the player
+> (VM logic + controls), so no separate cycle was needed.
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

@@ -46,6 +46,80 @@
     if (audio) audio.volume = vm.volume;
   });
 
+  // --- Media Session (Cycle 26): OS / lock-screen / headphone controls ---
+  const hasMediaSession =
+    typeof navigator !== "undefined" && "mediaSession" in navigator;
+
+  // Publish now-playing metadata as the track changes.
+  $effect(() => {
+    if (!hasMediaSession) return;
+    const s = song;
+    if (!s) {
+      navigator.mediaSession.metadata = null;
+      return;
+    }
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: s.originalFilename,
+      artist: s.artist ?? "",
+      album: s.album ?? "",
+      artwork: s.hasArt
+        ? [{ src: artUrl(s.id), sizes: "512x512", type: "image/jpeg" }]
+        : [],
+    });
+  });
+
+  // Mirror play/pause state to the OS.
+  $effect(() => {
+    if (hasMediaSession) {
+      navigator.mediaSession.playbackState = vm.isPlaying ? "playing" : "paused";
+    }
+  });
+
+  // Register hardware/lock-screen action handlers once the element exists.
+  $effect(() => {
+    const el = audio;
+    if (!el || !hasMediaSession) return;
+    const ms = navigator.mediaSession;
+    ms.setActionHandler("play", () => (vm.isPlaying = true));
+    ms.setActionHandler("pause", () => (vm.isPlaying = false));
+    ms.setActionHandler("previoustrack", () => vm.prev());
+    ms.setActionHandler("nexttrack", () => vm.next());
+    ms.setActionHandler("seekto", (d) => {
+      if (d.seekTime != null) el.currentTime = d.seekTime;
+    });
+    ms.setActionHandler("seekbackward", (d) => {
+      el.currentTime = Math.max(0, el.currentTime - (d.seekOffset ?? 10));
+    });
+    ms.setActionHandler("seekforward", (d) => {
+      el.currentTime = Math.min(
+        el.duration || 0,
+        el.currentTime + (d.seekOffset ?? 10)
+      );
+    });
+  });
+
+  // Keeps the OS scrubber in sync.
+  function updatePositionState() {
+    if (!audio || !hasMediaSession || !navigator.mediaSession.setPositionState)
+      return;
+    const d = audio.duration;
+    if (!Number.isFinite(d) || d <= 0) return;
+    navigator.mediaSession.setPositionState({
+      duration: d,
+      playbackRate: audio.playbackRate || 1,
+      position: Math.min(audio.currentTime, d),
+    });
+  }
+
+  function onTimeUpdate() {
+    currentTime = audio?.currentTime ?? 0;
+    updatePositionState();
+  }
+  function onLoadedMetadata() {
+    duration = audio?.duration ?? 0;
+    updatePositionState();
+  }
+
   function togglePlay() {
     vm.togglePlay();
   }
@@ -65,8 +139,8 @@
 
 <audio
   bind:this={audio}
-  ontimeupdate={() => (currentTime = audio?.currentTime ?? 0)}
-  onloadedmetadata={() => (duration = audio?.duration ?? 0)}
+  ontimeupdate={onTimeUpdate}
+  onloadedmetadata={onLoadedMetadata}
   onplay={() => (vm.isPlaying = true)}
   onpause={() => (vm.isPlaying = false)}
   onended={() => {
