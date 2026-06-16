@@ -15,6 +15,9 @@ export class SongViewModel {
   songs = $state<Song[]>([]);
   loading = $state(false);
   uploading = $state(false);
+  // Batch upload progress (Cycle 28).
+  uploadDone = $state(0);
+  uploadTotal = $state(0);
   error = $state<string | null>(null);
 
   // Search query for filtering the library (Cycle 5).
@@ -237,5 +240,33 @@ export class SongViewModel {
     } finally {
       this.uploading = false;
     }
+  }
+
+  // Uploads multiple files sequentially, tracking progress. Successful uploads
+  // are prepended as they complete; failures are summarized in `error`.
+  async uploadMany(files: File[]): Promise<void> {
+    if (files.length === 0) return;
+    this.uploading = true;
+    this.error = null;
+    this.uploadTotal = files.length;
+    this.uploadDone = 0;
+    const failed: string[] = [];
+    for (const file of files) {
+      try {
+        const song = await uploadSong(file);
+        this.songs = [song, ...this.songs];
+      } catch {
+        failed.push(file.name);
+      }
+      this.uploadDone += 1;
+    }
+    if (failed.length > 0) {
+      this.error = `Failed to upload ${failed.length} file${
+        failed.length === 1 ? "" : "s"
+      }: ${failed.join(", ")}`;
+    }
+    this.uploading = false;
+    this.uploadTotal = 0;
+    this.uploadDone = 0;
   }
 }

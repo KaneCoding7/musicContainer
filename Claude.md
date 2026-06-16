@@ -589,6 +589,19 @@ show the current track
 
 ---
 
+### Cycle 28: Multi-file Upload  ✅ (post-MVP)
+**Goal:** Upload many tracks at once
+
+**Frontend Tasks:**
+- `uploadMany(files)` in the VM (sequential, progress via `uploadDone/Total`,
+  summarizes failures)
+- UploadForm accepts multiple files + drag-and-drop, shows "Uploading n/total…"
+
+**Done When:** Selecting/dropping multiple audio files uploads them all with
+progress
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
