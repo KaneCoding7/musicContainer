@@ -64,6 +64,7 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 31** — Home view (smart sections) + theme toggle in Settings
 - ✅ **Cycle 32** — Custom album art (upload / replace / remove)
 - ✅ **Cycle 33** — Collaborative playlists (read-write sharing)
+- ✅ **Cycle 34** — Library sort (added / name / plays / duration)
 
 ## Tests
 
