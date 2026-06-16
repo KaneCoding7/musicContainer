@@ -770,6 +770,26 @@ shares cannot
 
 ---
 
+### Cycle 41: Docker Verification & Fixes  ✅ (post-MVP)
+**Goal:** Ensure `docker compose up` actually works post-hardening
+
+**Tasks:**
+- Verified the backend builds & runs as the image would: `tsc` -> `dist`,
+  `node dist/server.js` boots under `NODE_ENV=production` (native better-sqlite3
+  loads; health 200; register 201)
+- Fixed compose/guard conflict: the prod image runs `NODE_ENV=production`, so
+  `BETTER_AUTH_SECRET` is now **required** in `docker-compose.yml`
+  (`${BETTER_AUTH_SECRET:?...}`) instead of defaulting to the dev value
+  (which the guard rejects -> crash loop). Other URLs/origins overridable.
+- Added root `.env.example`; README Docker quick-start documents the secret
+
+**Note:** images can't be built in this sandbox (Docker Hub egress blocked), so
+build steps were validated locally against the same commands the Dockerfiles run.
+
+**Done When:** compose requires a secret and the compiled server runs in prod mode
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
