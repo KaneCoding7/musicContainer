@@ -615,6 +615,18 @@ progress
 
 ---
 
+### Cycle 30: Account Settings  ✅ (post-MVP)
+**Goal:** Manage your own account
+
+**Frontend Tasks:**
+- authService `updateName` / `changePassword` (Better Auth update-user /
+  change-password); authViewModel wrappers update local user
+- `SettingsView` (display name + change password) and a "Settings" sidebar entry
+
+**Done When:** A user can rename themselves and change their password
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

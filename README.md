@@ -60,6 +60,7 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 27** — Search across artist/album + Artists view
 - ✅ **Cycle 28** — Multi-file / drag-and-drop upload
 - ✅ **Cycle 29** — Queue management (play next / add to queue / reorder / remove)
+- ✅ **Cycle 30** — Account settings (display name + password)
 
 ## Tests
 

@@ -10,6 +10,7 @@
   import PlaylistManager from "$lib/components/PlaylistManager.svelte";
   import QueueView from "$lib/components/QueueView.svelte";
   import RecentlyPlayedView from "$lib/components/RecentlyPlayedView.svelte";
+  import SettingsView from "$lib/components/SettingsView.svelte";
   import SharedView from "$lib/components/SharedView.svelte";
   import SongList from "$lib/components/SongList.svelte";
   import UploadForm from "$lib/components/UploadForm.svelte";
@@ -41,7 +42,8 @@
     | "albums"
     | "artists"
     | "recent"
-    | "invite";
+    | "invite"
+    | "settings";
   let view = $state<View>("songs");
   let queueOpen = $state(false);
   let theme = $state<"dark" | "light">("dark");
@@ -61,6 +63,7 @@
     { id: "artists", label: "Artists", icon: "artist" },
     { id: "recent", label: "Recently Played", icon: "history" },
     { id: "invite", label: "Invite", icon: "person_add" },
+    { id: "settings", label: "Settings", icon: "settings" },
   ];
 
   onMount(async () => {
@@ -221,9 +224,12 @@
       {:else if view === "recent"}
         <h2>Recently Played</h2>
         <RecentlyPlayedView {vm} />
-      {:else}
+      {:else if view === "invite"}
         <h2>Invite a friend</h2>
         <InviteView />
+      {:else}
+        <h2>Settings</h2>
+        <SettingsView vm={authVm} />
       {/if}
     </main>
   </div>
