@@ -103,11 +103,12 @@ export function listSongs(db: Database): Result<Song[]> {
   }
 }
 
-// Information needed by the HTTP layer to stream a song's audio file.
+// Information needed by the HTTP layer to stream or download a song's file.
 export interface SongFile {
   path: string;
   size: number;
   contentType: string;
+  originalFilename: string;
 }
 
 // Resolves a song's on-disk audio file for streaming. The storage directory is
@@ -127,7 +128,17 @@ export function resolveSongFile(
 
   const ext = extname(path).toLowerCase();
   const contentType = ext === ".wav" ? "audio/wav" : "audio/mpeg";
-  return ok({ path, size: statSync(path).size, contentType });
+
+  // Ensure the download name carries an extension so the OS recognises it.
+  const name = songResult.value.originalFilename;
+  const originalFilename = extname(name) ? name : `${name}${ext}`;
+
+  return ok({
+    path,
+    size: statSync(path).size,
+    contentType,
+    originalFilename,
+  });
 }
 
 // Renames a song's user-facing name (its original_filename). The stored file

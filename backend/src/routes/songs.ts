@@ -115,6 +115,17 @@ songsRouter.delete("/songs/:id", (req, res) => {
   return res.status(204).end();
 });
 
+// GET /api/songs/:id/download — download the original audio file.
+songsRouter.get("/songs/:id/download", (req, res) => {
+  const result = resolveSongFile(getDb(), Number(req.params.id), MUSIC_DIR);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.download(result.value.path, result.value.originalFilename);
+});
+
 // GET /api/songs/:id/stream — stream an audio file with HTTP Range support
 // (enables seeking and progressive playback in the browser).
 songsRouter.get("/songs/:id/stream", (req, res) => {

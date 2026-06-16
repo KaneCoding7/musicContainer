@@ -33,6 +33,35 @@ export class SongViewModel {
   currentIndex = $state<number | null>(null);
   isPlaying = $state(false);
 
+  // Playback modes (Cycle 7).
+  shuffle = $state(false);
+  repeat = $state<"off" | "all" | "one">("off");
+
+  toggleShuffle(): void {
+    this.shuffle = !this.shuffle;
+  }
+
+  // Cycles repeat off -> all -> one -> off.
+  cycleRepeat(): void {
+    this.repeat =
+      this.repeat === "off" ? "all" : this.repeat === "all" ? "one" : "off";
+  }
+
+  // Picks the next index honoring shuffle + repeat; null means "stop".
+  private nextIndex(): number | null {
+    if (this.currentIndex === null || this.queue.length === 0) return null;
+    if (this.shuffle && this.queue.length > 1) {
+      let r = this.currentIndex;
+      while (r === this.currentIndex) {
+        r = Math.floor(Math.random() * this.queue.length);
+      }
+      return r;
+    }
+    const n = this.currentIndex + 1;
+    if (n < this.queue.length) return n;
+    return this.repeat === "all" ? 0 : null;
+  }
+
   // The song currently loaded in the player, if any.
   get currentSong(): Song | null {
     if (this.currentIndex === null) return null;
@@ -91,22 +120,31 @@ export class SongViewModel {
     }
   }
 
-  // Advances to the next song in the queue; false if already at the end.
+  // Advances to the next song (honoring shuffle/repeat); false if it stops.
   next(): boolean {
-    if (this.currentIndex === null) return false;
-    if (this.currentIndex < this.queue.length - 1) {
-      this.currentIndex += 1;
-      this.isPlaying = true;
-      return true;
+    const n = this.nextIndex();
+    if (n === null) {
+      this.isPlaying = false;
+      return false;
     }
-    return false;
+    this.currentIndex = n;
+    this.isPlaying = true;
+    return true;
   }
 
   // Goes back to the previous song; false if already at the start.
   prev(): boolean {
     if (this.currentIndex === null) return false;
+    if (this.shuffle && this.queue.length > 1) {
+      return this.next(); // shuffle: just jump to another track
+    }
     if (this.currentIndex > 0) {
       this.currentIndex -= 1;
+      this.isPlaying = true;
+      return true;
+    }
+    if (this.repeat === "all") {
+      this.currentIndex = this.queue.length - 1;
       this.isPlaying = true;
       return true;
     }

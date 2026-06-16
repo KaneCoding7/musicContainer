@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { downloadUrl } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -59,6 +60,12 @@
             <span class="name">{song.originalFilename}</span>
             <span class="date">{formatDate(song.uploadedAt)}</span>
           </button>
+          <a
+            class="action"
+            href={downloadUrl(song.id)}
+            title="Download song"
+            aria-label="Download song">⬇️</a
+          >
           {#if onRename}
             <button
               class="action"
@@ -125,12 +132,15 @@
   }
   .action,
   .delete {
+    display: inline-flex;
+    align-items: center;
     background: transparent;
     border: none;
     color: #9ca3af;
     cursor: pointer;
     padding: 0.5rem 0.7rem;
     font-size: 0.95rem;
+    text-decoration: none;
   }
   .action:hover {
     background: #27272a;

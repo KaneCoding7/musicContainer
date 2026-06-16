@@ -248,6 +248,23 @@ backend changes needed.
 
 ---
 
+### Cycle 7: Player Polish  ✅ (post-MVP)
+**Goal:** Shuffle, repeat, and downloading songs
+
+**Backend Tasks:**
+- Extend `resolveSongFile` to include the (extension-safe) download name
+- Create route: `GET /api/songs/:id/download` (Content-Disposition: attachment)
+
+**Frontend Tasks:**
+- SongViewModel: `shuffle` + `repeat` (off/all/one); next/prev honor them;
+  repeat-one replays the current track on end
+- Player: shuffle + repeat toggle buttons
+- SongList: per-song download link (`downloadUrl`)
+
+**Done When:** Can shuffle/repeat playback and download any song
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
