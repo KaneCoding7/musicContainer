@@ -2,6 +2,10 @@ import { betterAuth } from "better-auth";
 import { bearer } from "better-auth/plugins";
 import { getDb } from "./db/init.js";
 
+// The insecure development fallback secret; the server refuses to use it in
+// production (see server.ts).
+export const DEV_AUTH_SECRET = "dev-secret-change-me-in-production";
+
 // Better Auth instance. Uses our existing SQLite connection, email/password
 // auth, and the bearer plugin so clients authenticate with an
 // `Authorization: Bearer <token>` header (token kept in localStorage).
@@ -18,10 +22,20 @@ const trustedOrigins = [
 export const auth = betterAuth({
   database: getDb(),
   baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3001",
-  secret: process.env.BETTER_AUTH_SECRET ?? "dev-secret-change-me-in-production",
+  secret: process.env.BETTER_AUTH_SECRET ?? DEV_AUTH_SECRET,
   trustedOrigins,
   emailAndPassword: { enabled: true },
   plugins: [bearer()],
+  // Throttle auth endpoints (sign-in, etc.) against brute force.
+  rateLimit: {
+    enabled: true,
+    window: 60, // seconds
+    max: 100,
+    customRules: {
+      "/sign-in/email": { window: 60, max: 10 },
+      "/sign-up/email": { window: 60, max: 5 },
+    },
+  },
   databaseHooks: {
     user: {
       create: {
