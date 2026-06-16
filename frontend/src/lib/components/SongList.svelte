@@ -29,6 +29,9 @@
   let addTarget = $state<string>("");
   let addStatus = $state<string | null>(null);
 
+  // Per-row queue menu (Cycle 29): holds the song id whose menu is open.
+  let menuFor = $state<number | null>(null);
+
   function toggleSelect(id: number) {
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
@@ -170,6 +173,35 @@
               <span class="date">{formatDate(song.uploadedAt)}</span>
             {/if}
           </button>
+          <div class="menu-wrap">
+            <button
+              class="action"
+              title="Queue options"
+              aria-label="Queue options"
+              onclick={() => (menuFor = menuFor === song.id ? null : song.id)}
+              ><Icon name="more_vert" size={20} /></button
+            >
+            {#if menuFor === song.id}
+              <div class="menu">
+                <button
+                  onclick={() => {
+                    vm.playNext(song);
+                    menuFor = null;
+                  }}
+                >
+                  <Icon name="playlist_play" size={18} /> Play next
+                </button>
+                <button
+                  onclick={() => {
+                    vm.addToQueue(song);
+                    menuFor = null;
+                  }}
+                >
+                  <Icon name="queue_music" size={18} /> Add to queue
+                </button>
+              </div>
+            {/if}
+          </div>
           <button
             class="action like"
             class:liked={song.liked}
@@ -207,6 +239,14 @@
     </ul>
   {/if}
 </div>
+
+{#if menuFor !== null}
+  <button
+    class="menu-backdrop"
+    aria-label="Close menu"
+    onclick={() => (menuFor = null)}
+  ></button>
+{/if}
 
 {#if editing}
   <EditSongDialog
@@ -354,6 +394,50 @@
   }
   .action:hover {
     background: var(--surface-2);
+  }
+  .menu-wrap {
+    position: relative;
+    display: inline-flex;
+  }
+  .menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.25rem);
+    z-index: 20;
+    min-width: 160px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    padding: 0.25rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+  }
+  .menu button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    background: transparent;
+    border: none;
+    border-radius: 0.35rem;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .menu button:hover {
+    background: var(--hover);
+  }
+  .menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: default;
   }
   .like.liked {
     color: #ef4444;

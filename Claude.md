@@ -602,6 +602,19 @@ progress
 
 ---
 
+### Cycle 29: Queue Management  ✅ (post-MVP)
+**Goal:** Control the play queue
+
+**Frontend Tasks:**
+- VM: `addToQueue`, `playNext`, `removeFromQueue`, `moveInQueue` (all keep the
+  current-track pointer correct)
+- SongList per-row menu (Play next / Add to queue); QueueView gains drag-reorder
+  + a remove button
+
+**Done When:** Can queue tracks from rows and reorder/remove queue entries
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
