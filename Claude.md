@@ -699,6 +699,18 @@ shares cannot
 
 ---
 
+### Cycle 36: Full-screen Now Playing  ✅ (post-MVP)
+**Goal:** An immersive now-playing view
+
+**Frontend Tasks:**
+- In Player, an `expanded` overlay (big art, title/artist/album, seek, large
+  controls) opened by tapping the now-playing area; reuses the player's time
+  state so no audio is duplicated
+
+**Done When:** Tapping the now-playing area opens a full-screen player
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

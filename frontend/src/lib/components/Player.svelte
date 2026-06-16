@@ -124,6 +124,9 @@
     vm.togglePlay();
   }
 
+  // Full-screen now-playing overlay (Cycle 36).
+  let expanded = $state(false);
+
   // --- Sleep timer UI (Cycle 35) ---
   let sleepMenu = $state(false);
   let nowMs = $state(Date.now());
@@ -183,9 +186,73 @@
   ></button>
 {/if}
 
+{#if song && expanded}
+  <div class="np-full">
+    <button class="np-collapse" onclick={() => (expanded = false)} aria-label="Close">
+      <Icon name="keyboard_arrow_down" size={28} />
+    </button>
+    <div class="npf-art">
+      {#if song.hasArt}
+        <img src={artUrl(song.id)} alt="" />
+      {:else}
+        <Icon name="music_note" size={96} />
+      {/if}
+    </div>
+    <div class="npf-meta">
+      <h2>{song.originalFilename}</h2>
+      {#if song.artist}<p class="npf-artist">{song.artist}</p>{/if}
+      {#if song.album}<p class="npf-album">{song.album}</p>{/if}
+    </div>
+    <div class="npf-seek">
+      <span class="time">{formatTime(currentTime)}</span>
+      <input
+        type="range"
+        min="0"
+        max={duration || 0}
+        step="0.1"
+        value={currentTime}
+        oninput={onSeek}
+        aria-label="Seek"
+      />
+      <span class="time">{formatTime(duration)}</span>
+    </div>
+    <div class="npf-controls">
+      <button
+        class="toggle"
+        class:active={vm.shuffle}
+        onclick={() => vm.toggleShuffle()}
+        aria-label="Shuffle"><Icon name="shuffle" size={26} /></button
+      >
+      <button onclick={() => vm.prev()} aria-label="Previous"
+        ><Icon name="skip_previous" fill size={38} /></button
+      >
+      <button class="npf-play" onclick={togglePlay} aria-label="Play/Pause">
+        <Icon name={vm.isPlaying ? "pause" : "play_arrow"} fill size={48} />
+      </button>
+      <button onclick={() => vm.next()} aria-label="Next"
+        ><Icon name="skip_next" fill size={38} /></button
+      >
+      <button
+        class="toggle"
+        class:active={vm.repeat !== "off"}
+        onclick={() => vm.cycleRepeat()}
+        aria-label="Repeat"
+        ><Icon
+          name={vm.repeat === "one" ? "repeat_one" : "repeat"}
+          size={26}
+        /></button
+      >
+    </div>
+  </div>
+{/if}
+
 {#if song}
   <div class="player">
-    <div class="now-playing">
+    <button
+      class="now-playing"
+      onclick={() => (expanded = true)}
+      title="Open now playing"
+    >
       <span class="np-art">
         {#if song.hasArt}
           <img src={artUrl(song.id)} alt="" />
@@ -201,7 +268,7 @@
           <span class="np-artist" title={song.artist}>{song.artist}</span>
         {/if}
       </span>
-    </div>
+    </button>
 
     <div class="controls">
       <button
@@ -300,6 +367,112 @@
 {/if}
 
 <style>
+  .np-full {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    padding: 2rem 1.5rem;
+    box-sizing: border-box;
+  }
+  .np-collapse {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    display: inline-flex;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 0.5rem;
+  }
+  .np-collapse:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  .npf-art {
+    width: min(320px, 70vw);
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-2);
+    border-radius: 0.75rem;
+    color: var(--dim);
+    overflow: hidden;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+  }
+  .npf-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .npf-meta {
+    text-align: center;
+    max-width: min(520px, 90vw);
+  }
+  .npf-meta h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .npf-artist {
+    margin: 0.35rem 0 0;
+    color: var(--muted);
+  }
+  .npf-album {
+    margin: 0.15rem 0 0;
+    color: var(--dim);
+    font-size: 0.85rem;
+  }
+  .npf-seek {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: min(520px, 90vw);
+  }
+  .npf-seek input {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+  .npf-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .npf-controls button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 50%;
+  }
+  .npf-controls button:hover {
+    background: var(--surface-2);
+  }
+  .npf-controls .npf-play {
+    color: var(--accent-text);
+  }
+  .npf-controls .toggle {
+    color: var(--muted);
+    opacity: 0.7;
+  }
+  .npf-controls .toggle.active {
+    color: var(--accent-text);
+    opacity: 1;
+  }
   .player {
     flex-shrink: 0;
     display: grid;
@@ -315,6 +488,13 @@
     align-items: center;
     gap: 0.6rem;
     min-width: 0;
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
   }
   .np-art {
     width: 40px;
