@@ -390,6 +390,22 @@ queue from the player
 
 ---
 
+### Cycle 16: Bulk Add to Playlist  ✅ (post-MVP)
+**Goal:** Add many songs to a playlist at once
+
+**Backend Tasks:**
+- `addSongsToPlaylist(id, songIds)` (transactional, skips dupes/missing,
+  returns count); route `POST /api/playlists/:id/songs/bulk`
+
+**Frontend Tasks:**
+- PlaylistService/ViewModel bulk add
+- SongList "Select" mode: per-row checkboxes + a bar to pick a target playlist
+  and add the selection
+
+**Done When:** Can multi-select songs and add them to a playlist in one action
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

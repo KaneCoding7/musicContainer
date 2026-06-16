@@ -112,7 +112,9 @@
 
         <details class="shortcuts">
           <summary>
-            <Icon name="keyboard" size={18} /> Shortcuts
+            <Icon name="keyboard" size={18} />
+            <span class="sc-label">Shortcuts</span>
+            <span class="chev"><Icon name="expand_more" size={18} /></span>
           </summary>
           <dl>
             <div><dt><kbd>Space</kbd></dt><dd>Play / pause</dd></div>
@@ -131,7 +133,13 @@
 
       {#if view === "songs"}
         <h2>All Songs</h2>
-        <SongList {vm} onDelete={handleDelete} onUpdate={handleUpdate} />
+        <SongList
+          {vm}
+          onDelete={handleDelete}
+          onUpdate={handleUpdate}
+          playlists={playlistVm.playlists}
+          onBulkAdd={(id, songIds) => playlistVm.addSongs(id, songIds)}
+        />
       {:else if view === "playlists"}
         <h2>Playlists</h2>
         <PlaylistManager vm={playlistVm} songVm={vm} />
@@ -249,6 +257,16 @@
   .shortcuts summary:hover {
     background: #1c1c20;
     color: #e5e7eb;
+  }
+  .sc-label {
+    flex: 1;
+  }
+  .chev {
+    display: inline-flex;
+    transition: transform 0.15s ease;
+  }
+  .shortcuts[open] .chev {
+    transform: rotate(180deg);
   }
   .shortcuts dl {
     margin: 0.25rem 0 0;

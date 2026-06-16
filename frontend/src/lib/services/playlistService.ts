@@ -87,6 +87,20 @@ export async function reorderPlaylist(
   if (!res.ok) throw new Error(await errorMessage(res));
 }
 
+// Adds multiple songs to a playlist at once; returns how many were added.
+export async function addSongsToPlaylist(
+  playlistId: number,
+  songIds: number[]
+): Promise<number> {
+  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}/songs/bulk`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ songIds }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return ((await res.json()).added as number) ?? 0;
+}
+
 // Removes a song from a playlist.
 export async function removeSongFromPlaylist(
   playlistId: number,

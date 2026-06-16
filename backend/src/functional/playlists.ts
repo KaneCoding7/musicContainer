@@ -231,6 +231,50 @@ export function reorderPlaylist(
   }
 }
 
+// Adds multiple songs to a playlist in one transaction, appending in order and
+// skipping ids that don't exist or are already present. Returns how many were
+// actually added.
+export function addSongsToPlaylist(
+  db: Database,
+  playlistId: number,
+  songIds: number[]
+): Result<{ added: number }> {
+  const playlist = getPlaylist(db, playlistId);
+  if (!playlist.ok) return playlist;
+  if (!Array.isArray(songIds)) {
+    return err("validation", "songIds must be an array");
+  }
+
+  try {
+    let added = 0;
+    const apply = db.transaction((ids: number[]) => {
+      let { next } = db
+        .prepare(
+          "SELECT COALESCE(MAX(position), 0) + 1 AS next FROM playlist_songs WHERE playlist_id = ?"
+        )
+        .get(playlistId) as { next: number };
+      const songExists = db.prepare("SELECT id FROM songs WHERE id = ?");
+      const already = db.prepare(
+        "SELECT id FROM playlist_songs WHERE playlist_id = ? AND song_id = ?"
+      );
+      const insert = db.prepare(
+        "INSERT INTO playlist_songs (playlist_id, song_id, position) VALUES (?, ?, ?)"
+      );
+      for (const songId of ids) {
+        if (!Number.isInteger(songId)) continue;
+        if (!songExists.get(songId)) continue;
+        if (already.get(playlistId, songId)) continue;
+        insert.run(playlistId, songId, next++);
+        added++;
+      }
+    });
+    apply(songIds.map(Number));
+    return ok({ added });
+  } catch (e) {
+    return err("internal", `Failed to add songs: ${(e as Error).message}`);
+  }
+}
+
 // Removes a song from a playlist.
 export function removeSongFromPlaylist(
   db: Database,

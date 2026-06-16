@@ -102,6 +102,22 @@ export class PlaylistViewModel {
     }
   }
 
+  // Adds multiple songs to a playlist at once; returns how many were added.
+  async addSongs(playlistId: number, songIds: number[]): Promise<number> {
+    this.error = null;
+    try {
+      const added = await api.addSongsToPlaylist(playlistId, songIds);
+      await this.refreshList();
+      if (this.selectedId === playlistId) {
+        this.selectedSongs = await api.fetchPlaylistSongs(playlistId);
+      }
+      return added;
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Failed to add songs";
+      return 0;
+    }
+  }
+
   // Reorders the selected playlist's songs (optimistic; reloads on failure).
   async reorder(orderedSongs: Song[]): Promise<void> {
     if (this.selectedId === null) return;

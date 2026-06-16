@@ -2,6 +2,7 @@ import { Router } from "express";
 import { getDb } from "../db/init.js";
 import {
   addSongToPlaylist,
+  addSongsToPlaylist,
   createPlaylist,
   deletePlaylist,
   getPlaylistSongs,
@@ -88,6 +89,23 @@ playlistsRouter.put("/playlists/:id/order", (req, res) => {
       .json({ error: result.error });
   }
   return res.json({ ok: true });
+});
+
+// POST /api/playlists/:id/songs/bulk — add multiple songs at once.
+playlistsRouter.post("/playlists/:id/songs/bulk", (req, res) => {
+  const songIds = Array.isArray(req.body?.songIds) ? req.body.songIds : null;
+  if (!songIds) {
+    return res.status(400).json({
+      error: { code: "validation", message: "songIds array is required" },
+    });
+  }
+  const result = addSongsToPlaylist(getDb(), Number(req.params.id), songIds);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.status(201).json(result.value);
 });
 
 // POST /api/playlists/:id/songs — add a song to a playlist.

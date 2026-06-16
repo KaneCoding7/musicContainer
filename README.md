@@ -46,3 +46,4 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 13** — Track duration
 - ✅ **Cycle 14** — Sidebar layout & collapsible queue
 - ✅ **Cycle 15** — Playlist art & counts (+ sidebar cleanup)
+- ✅ **Cycle 16** — Bulk add to playlist
