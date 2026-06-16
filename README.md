@@ -66,6 +66,7 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 33** — Collaborative playlists (read-write sharing)
 - ✅ **Cycle 34** — Library sort (added / name / plays / duration)
 - ✅ **Cycle 35** — Sleep timer
+- ✅ **Cycle 36** — Full-screen now-playing view
 
 ## Tests
 
