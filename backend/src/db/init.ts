@@ -128,6 +128,14 @@ export function migrate(database: Database.Database): void {
       created_by  TEXT NOT NULL,
       created_at  TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Public share links for a single song (Cycle 39).
+    CREATE TABLE IF NOT EXISTS song_public_shares (
+      token      TEXT PRIMARY KEY,
+      song_id    INTEGER NOT NULL UNIQUE REFERENCES songs(id) ON DELETE CASCADE,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Metadata columns added post-MVP (Cycle 9). Added conditionally so existing

@@ -17,6 +17,11 @@ import {
   validateUpload,
 } from "../functional/songs.js";
 import { canAccessSong } from "../functional/shares.js";
+import {
+  disableSongPublicLink,
+  enableSongPublicLink,
+  getSongPublicToken,
+} from "../functional/publicShares.js";
 import { statusForError } from "../functional/result.js";
 import { extractMetadata } from "../metadata.js";
 import { streamSongFile } from "../stream.js";
@@ -78,6 +83,39 @@ const cleanupArt = (filename: string) => {
     }
   }
 };
+
+// GET /api/songs/:id/public — current public token for a song (or null).
+songsRouter.get("/songs/:id/public", (req, res) => {
+  const result = getSongPublicToken(getDb(), req.userId!, Number(req.params.id));
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ token: result.value });
+});
+
+// POST /api/songs/:id/public — enable a public link for a song.
+songsRouter.post("/songs/:id/public", (req, res) => {
+  const result = enableSongPublicLink(getDb(), req.userId!, Number(req.params.id));
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.status(201).json({ token: result.value });
+});
+
+// DELETE /api/songs/:id/public — disable a song's public link.
+songsRouter.delete("/songs/:id/public", (req, res) => {
+  const result = disableSongPublicLink(getDb(), req.userId!, Number(req.params.id));
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.status(204).end();
+});
 
 // PUT /api/songs/:id/art — upload/replace a song's album art (field "art").
 songsRouter.put("/songs/:id/art", (req, res) => {

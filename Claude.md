@@ -739,6 +739,23 @@ shares cannot
 
 ---
 
+### Cycle 39: Individual-Song Public Links  ✅ (post-MVP)
+**Goal:** Share a single track via a no-account link
+
+**Backend Tasks:**
+- `song_public_shares` table; enable/disable/get token (owner-scoped)
+- `resolvePublicShare` + `publicTokenAllowsSong` also handle song tokens (a song
+  link resolves to a one-song payload), so the public page + stream/art routes
+  work unchanged; routes `GET/POST/DELETE /api/songs/:id/public`
+
+**Frontend Tasks:**
+- shareService song-link helpers; EditSongDialog "Public link" section
+  (create / copy / turn off)
+
+**Done When:** A single song can be shared via a public link
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
