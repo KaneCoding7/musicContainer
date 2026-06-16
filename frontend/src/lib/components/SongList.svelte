@@ -1,11 +1,21 @@
 <script lang="ts">
+  import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
-  let { vm }: { vm: SongViewModel } = $props();
+  let {
+    vm,
+    onDelete,
+  }: { vm: SongViewModel; onDelete?: (id: number) => void } = $props();
 
   function formatDate(iso: string): string {
     const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T") + "Z");
     return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+  }
+
+  function confirmDelete(song: Song) {
+    if (confirm(`Delete "${song.originalFilename}"? This cannot be undone.`)) {
+      onDelete?.(song.id);
+    }
   }
 </script>
 
@@ -26,6 +36,14 @@
             <span class="name">{song.originalFilename}</span>
             <span class="date">{formatDate(song.uploadedAt)}</span>
           </button>
+          {#if onDelete}
+            <button
+              class="delete"
+              title="Delete song"
+              aria-label="Delete song"
+              onclick={() => confirmDelete(song)}>🗑</button
+            >
+          {/if}
         </li>
       {/each}
     </ul>
@@ -39,13 +57,16 @@
     margin: 0;
   }
   li {
+    display: flex;
+    align-items: center;
     border-bottom: 1px solid #27272a;
   }
   li.current {
     background: #2a1d4d;
   }
   .row {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 1rem;
@@ -56,6 +77,18 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
+  }
+  .delete {
+    background: transparent;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.95rem;
+  }
+  .delete:hover {
+    background: #7f1d1d;
+    color: #fecaca;
   }
   .row:hover {
     background: #1c1c20;

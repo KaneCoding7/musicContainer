@@ -14,6 +14,14 @@
     vm.load();
     playlistVm.load();
   });
+
+  // Delete a song, then refresh the open playlist (its membership may change).
+  async function handleDelete(id: number) {
+    await vm.remove(id);
+    if (playlistVm.selectedId !== null) {
+      await playlistVm.select(playlistVm.selectedId);
+    }
+  }
 </script>
 
 <header>
@@ -27,7 +35,7 @@
 
 <section>
   <h2>Songs</h2>
-  <SongList {vm} />
+  <SongList {vm} onDelete={handleDelete} />
 </section>
 
 <section>

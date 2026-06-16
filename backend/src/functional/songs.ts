@@ -1,5 +1,5 @@
 import type { Database } from "better-sqlite3";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, statSync, unlinkSync } from "node:fs";
 import { extname, join } from "node:path";
 import type { Song } from "../types.js";
 import { err, ok, type Result } from "./result.js";
@@ -128,6 +128,32 @@ export function resolveSongFile(
   const ext = extname(path).toLowerCase();
   const contentType = ext === ".wav" ? "audio/wav" : "audio/mpeg";
   return ok({ path, size: statSync(path).size, contentType });
+}
+
+// Deletes a song: removes its database row (cascading playlist references via
+// the foreign key) and its audio file from disk (best-effort).
+export function deleteSong(
+  db: Database,
+  id: number,
+  musicDir: string
+): Result<void> {
+  const songResult = getSong(db, id);
+  if (!songResult.ok) return songResult;
+
+  try {
+    db.prepare("DELETE FROM songs WHERE id = ?").run(id);
+    const path = join(musicDir, songResult.value.filename);
+    if (existsSync(path)) {
+      try {
+        unlinkSync(path);
+      } catch {
+        /* row already gone; orphaned file is harmless */
+      }
+    }
+    return ok(undefined);
+  } catch (e) {
+    return err("internal", `Failed to delete song: ${(e as Error).message}`);
+  }
 }
 
 // Looks up a single song by id.

@@ -37,6 +37,14 @@ export async function uploadSong(file: File): Promise<Song> {
   return body.song as Song;
 }
 
+// Deletes a song from the library.
+export async function deleteSong(songId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/songs/${songId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
 // Returns the streaming URL for a song (used in Cycle 2).
 export function streamUrl(songId: number): string {
   return `${API_BASE}/api/songs/${songId}/stream`;
