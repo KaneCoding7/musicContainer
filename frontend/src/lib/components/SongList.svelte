@@ -78,7 +78,7 @@
         <input
           id="song-search"
           type="search"
-          placeholder="Search songs…"
+          placeholder="Search songs, artists, albums…"
           bind:value={vm.query}
         />
       </div>

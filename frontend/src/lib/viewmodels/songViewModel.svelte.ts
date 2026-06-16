@@ -20,12 +20,16 @@ export class SongViewModel {
   // Search query for filtering the library (Cycle 5).
   query = $state("");
 
-  // The library filtered by the current query (case-insensitive name match).
+  // The library filtered by the current query (case-insensitive match across
+  // song name, artist, and album).
   get filteredSongs(): Song[] {
     const q = this.query.trim().toLowerCase();
     if (!q) return this.songs;
-    return this.songs.filter((s) =>
-      s.originalFilename.toLowerCase().includes(q)
+    return this.songs.filter(
+      (s) =>
+        s.originalFilename.toLowerCase().includes(q) ||
+        (s.artist?.toLowerCase().includes(q) ?? false) ||
+        (s.album?.toLowerCase().includes(q) ?? false)
     );
   }
 

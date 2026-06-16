@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import AlbumsView from "$lib/components/AlbumsView.svelte";
+  import ArtistsView from "$lib/components/ArtistsView.svelte";
   import AuthScreen from "$lib/components/AuthScreen.svelte";
   import Icon from "$lib/components/Icon.svelte";
   import InviteView from "$lib/components/InviteView.svelte";
@@ -38,6 +39,7 @@
     | "playlists"
     | "shared"
     | "albums"
+    | "artists"
     | "recent"
     | "invite";
   let view = $state<View>("songs");
@@ -56,6 +58,7 @@
     { id: "playlists", label: "Playlists", icon: "queue_music" },
     { id: "shared", label: "Shared with me", icon: "folder_shared" },
     { id: "albums", label: "Albums", icon: "album" },
+    { id: "artists", label: "Artists", icon: "artist" },
     { id: "recent", label: "Recently Played", icon: "history" },
     { id: "invite", label: "Invite", icon: "person_add" },
   ];
@@ -212,6 +215,9 @@
       {:else if view === "albums"}
         <h2>Albums</h2>
         <AlbumsView {vm} />
+      {:else if view === "artists"}
+        <h2>Artists</h2>
+        <ArtistsView {vm} />
       {:else if view === "recent"}
         <h2>Recently Played</h2>
         <RecentlyPlayedView {vm} />

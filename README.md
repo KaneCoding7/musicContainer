@@ -57,6 +57,7 @@ The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 - ✅ **Cycle 24** — Automated test suite (Vitest, functional core)
 - ✅ **Cycle 25** — CI workflow (GitHub Actions: typecheck, tests, build)
 - ✅ **Cycle 26** — Media Session (lock-screen / headphone controls)
+- ✅ **Cycle 27** — Search across artist/album + Artists view
 
 ## Tests
 
