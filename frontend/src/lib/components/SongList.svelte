@@ -20,16 +20,27 @@
 </script>
 
 <div class="song-list">
+  {#if vm.songs.length > 0}
+    <input
+      class="search"
+      type="search"
+      placeholder="Search songs…"
+      bind:value={vm.query}
+    />
+  {/if}
+
   {#if vm.loading}
     <p class="muted">Loading songs…</p>
   {:else if vm.songs.length === 0}
     <p class="muted">No songs yet. Upload one to get started.</p>
+  {:else if vm.filteredSongs.length === 0}
+    <p class="muted">No songs match "{vm.query}".</p>
   {:else}
     <ul>
-      {#each vm.songs as song, i (song.id)}
+      {#each vm.filteredSongs as song, i (song.id)}
         {@const isCurrent = song.id === vm.currentSong?.id}
         <li class:current={isCurrent}>
-          <button class="row" onclick={() => vm.play(i)}>
+          <button class="row" onclick={() => vm.playQueue(vm.filteredSongs, i)}>
             <span class="icon">
               {#if isCurrent && vm.isPlaying}⏸{:else}▶{/if}
             </span>
@@ -51,6 +62,20 @@
 </div>
 
 <style>
+  .search {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.55rem 0.8rem;
+    margin-bottom: 0.75rem;
+    background: #18181b;
+    border: 1px solid #3f3f46;
+    border-radius: 0.5rem;
+    color: #e5e7eb;
+    font: inherit;
+  }
+  .search::placeholder {
+    color: #6b7280;
+  }
   .song-list ul {
     list-style: none;
     padding: 0;

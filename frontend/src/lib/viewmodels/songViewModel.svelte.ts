@@ -9,6 +9,18 @@ export class SongViewModel {
   uploading = $state(false);
   error = $state<string | null>(null);
 
+  // Search query for filtering the library (Cycle 5).
+  query = $state("");
+
+  // The library filtered by the current query (case-insensitive name match).
+  get filteredSongs(): Song[] {
+    const q = this.query.trim().toLowerCase();
+    if (!q) return this.songs;
+    return this.songs.filter((s) =>
+      s.originalFilename.toLowerCase().includes(q)
+    );
+  }
+
   // --- Player state (Cycles 2 & 3) ---
   // The player plays from a queue, which may be the whole library or a
   // playlist's songs (in order).
