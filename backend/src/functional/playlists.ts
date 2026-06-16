@@ -146,6 +146,33 @@ export function addSongToPlaylist(
   }
 }
 
+// Reorders a playlist's songs to match the given id order (positions become
+// 1..n). Ids not in the playlist are ignored; applied in a transaction.
+export function reorderPlaylist(
+  db: Database,
+  playlistId: number,
+  songIds: number[]
+): Result<void> {
+  const playlist = getPlaylist(db, playlistId);
+  if (!playlist.ok) return playlist;
+  if (!Array.isArray(songIds)) {
+    return err("validation", "songIds must be an array");
+  }
+
+  try {
+    const update = db.prepare(
+      "UPDATE playlist_songs SET position = ? WHERE playlist_id = ? AND song_id = ?"
+    );
+    const apply = db.transaction((ids: number[]) => {
+      ids.forEach((songId, index) => update.run(index + 1, playlistId, songId));
+    });
+    apply(songIds);
+    return ok(undefined);
+  } catch (e) {
+    return err("internal", `Failed to reorder playlist: ${(e as Error).message}`);
+  }
+}
+
 // Removes a song from a playlist.
 export function removeSongFromPlaylist(
   db: Database,

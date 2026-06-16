@@ -35,6 +35,32 @@
   function playFrom(index: number) {
     songVm.playQueue(vm.selectedSongs, index);
   }
+
+  // --- Drag-to-reorder ---
+  let dragIndex = $state<number | null>(null);
+  let overIndex = $state<number | null>(null);
+
+  function onDragStart(i: number) {
+    dragIndex = i;
+  }
+  function onDragOver(e: DragEvent, i: number) {
+    e.preventDefault(); // allow drop
+    overIndex = i;
+  }
+  function onDrop(i: number) {
+    const from = dragIndex;
+    dragIndex = null;
+    overIndex = null;
+    if (from === null || from === i) return;
+    const arr = [...vm.selectedSongs];
+    const [moved] = arr.splice(from, 1);
+    arr.splice(i, 0, moved);
+    vm.reorder(arr);
+  }
+  function onDragEnd() {
+    dragIndex = null;
+    overIndex = null;
+  }
 </script>
 
 <div class="playlists">
@@ -78,7 +104,19 @@
         <ol>
           {#each vm.selectedSongs as song, i (song.id)}
             {@const isCurrent = song.id === songVm.currentSong?.id}
-            <li class:current={isCurrent}>
+            <li
+              class:current={isCurrent}
+              class:dragging={i === dragIndex}
+              class:dragover={i === overIndex && i !== dragIndex}
+              draggable="true"
+              ondragstart={() => onDragStart(i)}
+              ondragover={(e) => onDragOver(e, i)}
+              ondrop={() => onDrop(i)}
+              ondragend={onDragEnd}
+            >
+              <span class="handle" title="Drag to reorder" aria-hidden="true">
+                <Icon name="drag_indicator" size={20} />
+              </span>
               <button class="play-btn" onclick={() => playFrom(i)}>
                 <span class="icon">
                   <Icon
@@ -201,6 +239,22 @@
   }
   .play-btn:hover {
     background: #1c1c20;
+  }
+  li.dragging {
+    opacity: 0.4;
+  }
+  li.dragover {
+    border-top: 2px solid #a78bfa;
+  }
+  .handle {
+    display: inline-flex;
+    align-items: center;
+    color: #6b7280;
+    cursor: grab;
+    padding-left: 0.25rem;
+  }
+  .handle:active {
+    cursor: grabbing;
   }
   .icon {
     display: inline-flex;

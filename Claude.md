@@ -265,6 +265,23 @@ backend changes needed.
 
 ---
 
+### Cycle 8: Reorder Playlist Songs  ✅ (post-MVP)
+**Goal:** Drag to reorder songs within a playlist
+
+**Backend Tasks:**
+- Implement functional core: `reorderPlaylist(id, songIds) -> void`
+  (rewrites `position` 1..n in a transaction)
+- Create route: `PUT /api/playlists/:id/order`
+
+**Frontend Tasks:**
+- Add `reorderPlaylist` to PlaylistService
+- Add `reorder(songs)` to PlaylistViewModel (optimistic; reverts on error)
+- Drag-and-drop in PlaylistManager (drag handle + HTML5 DnD)
+
+**Done When:** Dragging a song in a playlist persists the new order
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:
