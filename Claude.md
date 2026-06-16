@@ -343,6 +343,21 @@ backend changes needed.
 
 ---
 
+### Cycle 13: Track Duration  ✅ (post-MVP)
+**Goal:** Show each track's length
+
+**Backend Tasks:**
+- Add `duration` column (in-place migration); extract `format.duration` on
+  upload (`music-metadata`); thread through `recordSong`/queries
+
+**Frontend Tasks:**
+- Song type gains `duration`; SongList shows m:ss (falls back to upload date
+  for songs without it)
+
+**Done When:** Uploaded songs display their length
+
+---
+
 ## Docker Setup
 
 `docker-compose.yml` runs two services:

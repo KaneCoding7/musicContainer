@@ -8,6 +8,7 @@ export interface Song {
   artist: string | null;
   album: string | null;
   hasArt: boolean; // whether embedded album art was extracted
+  duration: number | null; // seconds, if known
 }
 
 export interface Playlist {

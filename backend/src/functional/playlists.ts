@@ -16,6 +16,7 @@ interface SongRow {
   artist: string | null;
   album: string | null;
   art_filename: string | null;
+  duration: number | null;
 }
 
 function rowToPlaylist(row: PlaylistRow): Playlist {
@@ -31,6 +32,7 @@ function rowToSong(row: SongRow): Song {
     artist: row.artist,
     album: row.album,
     hasArt: row.art_filename !== null,
+    duration: row.duration,
   };
 }
 
@@ -127,7 +129,7 @@ export function getPlaylistSongs(
     const rows = db
       .prepare(
         `SELECT s.id, s.filename, s.original_filename, s.uploaded_at,
-                s.artist, s.album, s.art_filename
+                s.artist, s.album, s.art_filename, s.duration
          FROM playlist_songs ps
          JOIN songs s ON s.id = ps.song_id
          WHERE ps.playlist_id = ?
