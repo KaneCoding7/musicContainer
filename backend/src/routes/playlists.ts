@@ -1,0 +1,73 @@
+import { Router } from "express";
+import { getDb } from "../db/init.js";
+import {
+  addSongToPlaylist,
+  createPlaylist,
+  getPlaylistSongs,
+  listPlaylists,
+  removeSongFromPlaylist,
+} from "../functional/playlists.js";
+import { statusForError } from "../functional/result.js";
+
+export const playlistsRouter = Router();
+
+// POST /api/playlists — create a playlist.
+playlistsRouter.post("/playlists", (req, res) => {
+  const name = typeof req.body?.name === "string" ? req.body.name : "";
+  const result = createPlaylist(getDb(), name);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.status(201).json({ playlist: result.value });
+});
+
+// GET /api/playlists — list playlists.
+playlistsRouter.get("/playlists", (_req, res) => {
+  const result = listPlaylists(getDb());
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ playlists: result.value });
+});
+
+// GET /api/playlists/:id — songs in a playlist, in order.
+playlistsRouter.get("/playlists/:id", (req, res) => {
+  const result = getPlaylistSongs(getDb(), Number(req.params.id));
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ songs: result.value });
+});
+
+// POST /api/playlists/:id/songs — add a song to a playlist.
+playlistsRouter.post("/playlists/:id/songs", (req, res) => {
+  const songId = Number(req.body?.songId);
+  const result = addSongToPlaylist(getDb(), Number(req.params.id), songId);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.status(201).json({ ok: true });
+});
+
+// DELETE /api/playlists/:id/songs/:songId — remove a song from a playlist.
+playlistsRouter.delete("/playlists/:id/songs/:songId", (req, res) => {
+  const result = removeSongFromPlaylist(
+    getDb(),
+    Number(req.params.id),
+    Number(req.params.songId)
+  );
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.status(204).end();
+});

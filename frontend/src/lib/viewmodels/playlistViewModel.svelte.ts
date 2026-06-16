@@ -1,0 +1,78 @@
+// ViewModel: owns playlist state and the operations the UI triggers.
+import * as api from "$lib/services/playlistService";
+import type { Playlist, Song } from "$lib/types";
+
+export class PlaylistViewModel {
+  playlists = $state<Playlist[]>([]);
+  selectedId = $state<number | null>(null);
+  selectedSongs = $state<Song[]>([]);
+  loading = $state(false);
+  error = $state<string | null>(null);
+
+  get selected(): Playlist | null {
+    return this.playlists.find((p) => p.id === this.selectedId) ?? null;
+  }
+
+  // Loads the list of playlists.
+  async load(): Promise<void> {
+    this.loading = true;
+    this.error = null;
+    try {
+      this.playlists = await api.fetchPlaylists();
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Failed to load playlists";
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  // Creates a playlist and selects it. Returns true on success.
+  async create(name: string): Promise<boolean> {
+    this.error = null;
+    try {
+      const playlist = await api.createPlaylist(name);
+      this.playlists = [playlist, ...this.playlists];
+      await this.select(playlist.id);
+      return true;
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Failed to create playlist";
+      return false;
+    }
+  }
+
+  // Selects a playlist and loads its songs.
+  async select(id: number): Promise<void> {
+    this.selectedId = id;
+    this.error = null;
+    try {
+      this.selectedSongs = await api.fetchPlaylistSongs(id);
+    } catch (e) {
+      this.selectedSongs = [];
+      this.error = e instanceof Error ? e.message : "Failed to load songs";
+    }
+  }
+
+  // Adds a song to the selected playlist and refreshes its songs.
+  async addSong(songId: number): Promise<void> {
+    if (this.selectedId === null) return;
+    this.error = null;
+    try {
+      await api.addSongToPlaylist(this.selectedId, songId);
+      this.selectedSongs = await api.fetchPlaylistSongs(this.selectedId);
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Failed to add song";
+    }
+  }
+
+  // Removes a song from the selected playlist and refreshes its songs.
+  async removeSong(songId: number): Promise<void> {
+    if (this.selectedId === null) return;
+    this.error = null;
+    try {
+      await api.removeSongFromPlaylist(this.selectedId, songId);
+      this.selectedSongs = await api.fetchPlaylistSongs(this.selectedId);
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Failed to remove song";
+    }
+  }
+}

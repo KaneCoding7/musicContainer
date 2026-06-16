@@ -1,0 +1,171 @@
+import type { Database } from "better-sqlite3";
+import type { Playlist, Song } from "../types.js";
+import { err, ok, type Result } from "./result.js";
+
+interface PlaylistRow {
+  id: number;
+  name: string;
+  created_at: string;
+}
+
+interface SongRow {
+  id: number;
+  filename: string;
+  original_filename: string;
+  uploaded_at: string;
+}
+
+function rowToPlaylist(row: PlaylistRow): Playlist {
+  return { id: row.id, name: row.name, createdAt: row.created_at };
+}
+
+function rowToSong(row: SongRow): Song {
+  return {
+    id: row.id,
+    filename: row.filename,
+    originalFilename: row.original_filename,
+    uploadedAt: row.uploaded_at,
+  };
+}
+
+// Creates a new playlist with a non-empty name.
+export function createPlaylist(db: Database, name: string): Result<Playlist> {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return err("validation", "Playlist name is required");
+  }
+  try {
+    const info = db
+      .prepare("INSERT INTO playlists (name) VALUES (?)")
+      .run(trimmed);
+    const row = db
+      .prepare("SELECT id, name, created_at FROM playlists WHERE id = ?")
+      .get(info.lastInsertRowid as number) as PlaylistRow | undefined;
+    if (!row) {
+      return err("internal", "Playlist created but could not be read back");
+    }
+    return ok(rowToPlaylist(row));
+  } catch (e) {
+    return err("internal", `Failed to create playlist: ${(e as Error).message}`);
+  }
+}
+
+// Lists all playlists, newest first.
+export function listPlaylists(db: Database): Result<Playlist[]> {
+  try {
+    const rows = db
+      .prepare(
+        "SELECT id, name, created_at FROM playlists ORDER BY datetime(created_at) DESC, id DESC"
+      )
+      .all() as PlaylistRow[];
+    return ok(rows.map(rowToPlaylist));
+  } catch (e) {
+    return err("internal", `Failed to list playlists: ${(e as Error).message}`);
+  }
+}
+
+// Verifies a playlist exists, returning it.
+export function getPlaylist(db: Database, id: number): Result<Playlist> {
+  if (!Number.isInteger(id) || id <= 0) {
+    return err("validation", "Invalid playlist id");
+  }
+  try {
+    const row = db
+      .prepare("SELECT id, name, created_at FROM playlists WHERE id = ?")
+      .get(id) as PlaylistRow | undefined;
+    if (!row) return err("not_found", `Playlist ${id} not found`);
+    return ok(rowToPlaylist(row));
+  } catch (e) {
+    return err("internal", `Failed to get playlist: ${(e as Error).message}`);
+  }
+}
+
+// Returns the songs in a playlist, ordered by their position.
+export function getPlaylistSongs(
+  db: Database,
+  playlistId: number
+): Result<Song[]> {
+  const exists = getPlaylist(db, playlistId);
+  if (!exists.ok) return exists;
+  try {
+    const rows = db
+      .prepare(
+        `SELECT s.id, s.filename, s.original_filename, s.uploaded_at
+         FROM playlist_songs ps
+         JOIN songs s ON s.id = ps.song_id
+         WHERE ps.playlist_id = ?
+         ORDER BY ps.position ASC`
+      )
+      .all(playlistId) as SongRow[];
+    return ok(rows.map(rowToSong));
+  } catch (e) {
+    return err("internal", `Failed to get playlist songs: ${(e as Error).message}`);
+  }
+}
+
+// Appends a song to the end of a playlist. Songs are unique within a playlist.
+export function addSongToPlaylist(
+  db: Database,
+  playlistId: number,
+  songId: number
+): Result<void> {
+  const playlist = getPlaylist(db, playlistId);
+  if (!playlist.ok) return playlist;
+  if (!Number.isInteger(songId) || songId <= 0) {
+    return err("validation", "Invalid song id");
+  }
+
+  try {
+    const song = db
+      .prepare("SELECT id FROM songs WHERE id = ?")
+      .get(songId) as { id: number } | undefined;
+    if (!song) return err("not_found", `Song ${songId} not found`);
+
+    const already = db
+      .prepare(
+        "SELECT id FROM playlist_songs WHERE playlist_id = ? AND song_id = ?"
+      )
+      .get(playlistId, songId);
+    if (already) {
+      return err("conflict", "Song is already in this playlist");
+    }
+
+    const { next } = db
+      .prepare(
+        "SELECT COALESCE(MAX(position), 0) + 1 AS next FROM playlist_songs WHERE playlist_id = ?"
+      )
+      .get(playlistId) as { next: number };
+
+    db.prepare(
+      "INSERT INTO playlist_songs (playlist_id, song_id, position) VALUES (?, ?, ?)"
+    ).run(playlistId, songId, next);
+
+    return ok(undefined);
+  } catch (e) {
+    return err("internal", `Failed to add song: ${(e as Error).message}`);
+  }
+}
+
+// Removes a song from a playlist.
+export function removeSongFromPlaylist(
+  db: Database,
+  playlistId: number,
+  songId: number
+): Result<void> {
+  const playlist = getPlaylist(db, playlistId);
+  if (!playlist.ok) return playlist;
+
+  try {
+    const info = db
+      .prepare(
+        "DELETE FROM playlist_songs WHERE playlist_id = ? AND song_id = ?"
+      )
+      .run(playlistId, songId);
+    if (info.changes === 0) {
+      return err("not_found", "Song is not in this playlist");
+    }
+    return ok(undefined);
+  } catch (e) {
+    return err("internal", `Failed to remove song: ${(e as Error).message}`);
+  }
+}

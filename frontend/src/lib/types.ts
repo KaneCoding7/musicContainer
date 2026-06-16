@@ -7,6 +7,12 @@ export interface Song {
   uploadedAt: string;
 }
 
+export interface Playlist {
+  id: number;
+  name: string;
+  createdAt: string;
+}
+
 export interface ApiError {
   code: string;
   message: string;

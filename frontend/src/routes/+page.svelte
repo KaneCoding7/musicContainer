@@ -1,14 +1,18 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Player from "$lib/components/Player.svelte";
+  import PlaylistManager from "$lib/components/PlaylistManager.svelte";
   import SongList from "$lib/components/SongList.svelte";
   import UploadForm from "$lib/components/UploadForm.svelte";
+  import { PlaylistViewModel } from "$lib/viewmodels/playlistViewModel.svelte";
   import { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
   const vm = new SongViewModel();
+  const playlistVm = new PlaylistViewModel();
 
   onMount(() => {
     vm.load();
+    playlistVm.load();
   });
 </script>
 
@@ -24,6 +28,11 @@
 <section>
   <h2>Songs</h2>
   <SongList {vm} />
+</section>
+
+<section>
+  <h2>Playlists</h2>
+  <PlaylistManager vm={playlistVm} songVm={vm} />
 </section>
 
 <Player {vm} />

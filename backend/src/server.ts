@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
 import { getDb } from "./db/init.js";
+import { playlistsRouter } from "./routes/playlists.js";
 import { songsRouter } from "./routes/songs.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -17,6 +18,7 @@ app.get("/api/health", (_req, res) => {
 
 // Feature routes.
 app.use("/api", songsRouter);
+app.use("/api", playlistsRouter);
 
 // Initialize the database (creates schema + data dirs) before serving.
 getDb();

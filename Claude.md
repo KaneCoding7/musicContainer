@@ -178,7 +178,7 @@ music-server/
 
 ---
 
-### Cycle 3: Playlists
+### Cycle 3: Playlists  ✅
 **Goal:** Create playlists and play songs in order
 
 **Backend Tasks:**

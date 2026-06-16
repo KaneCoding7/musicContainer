@@ -17,7 +17,7 @@
   {:else}
     <ul>
       {#each vm.songs as song, i (song.id)}
-        {@const isCurrent = i === vm.currentIndex}
+        {@const isCurrent = song.id === vm.currentSong?.id}
         <li class:current={isCurrent}>
           <button class="row" onclick={() => vm.play(i)}>
             <span class="icon">
