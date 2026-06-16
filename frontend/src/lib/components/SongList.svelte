@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/Icon.svelte";
   import { downloadUrl } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -34,12 +35,14 @@
 
 <div class="song-list">
   {#if vm.songs.length > 0}
-    <input
-      class="search"
-      type="search"
-      placeholder="Search songs…"
-      bind:value={vm.query}
-    />
+    <div class="search">
+      <Icon name="search" size={20} />
+      <input
+        type="search"
+        placeholder="Search songs…"
+        bind:value={vm.query}
+      />
+    </div>
   {/if}
 
   {#if vm.loading}
@@ -55,7 +58,11 @@
         <li class:current={isCurrent}>
           <button class="row" onclick={() => vm.playQueue(vm.filteredSongs, i)}>
             <span class="icon">
-              {#if isCurrent && vm.isPlaying}⏸{:else}▶{/if}
+              <Icon
+                name={isCurrent && vm.isPlaying ? "pause" : "play_arrow"}
+                fill
+                size={22}
+              />
             </span>
             <span class="name">{song.originalFilename}</span>
             <span class="date">{formatDate(song.uploadedAt)}</span>
@@ -64,14 +71,15 @@
             class="action"
             href={downloadUrl(song.id)}
             title="Download song"
-            aria-label="Download song">⬇️</a
+            aria-label="Download song"><Icon name="download" size={20} /></a
           >
           {#if onRename}
             <button
               class="action"
               title="Rename song"
               aria-label="Rename song"
-              onclick={() => promptRename(song)}>✏️</button
+              onclick={() => promptRename(song)}
+              ><Icon name="edit" size={20} /></button
             >
           {/if}
           {#if onDelete}
@@ -79,7 +87,8 @@
               class="delete"
               title="Delete song"
               aria-label="Delete song"
-              onclick={() => confirmDelete(song)}>🗑</button
+              onclick={() => confirmDelete(song)}
+              ><Icon name="delete" size={20} /></button
             >
           {/if}
         </li>
@@ -92,15 +101,25 @@
   .search {
     width: 100%;
     box-sizing: border-box;
-    padding: 0.55rem 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.8rem;
     margin-bottom: 0.75rem;
     background: #18181b;
     border: 1px solid #3f3f46;
     border-radius: 0.5rem;
+    color: #6b7280;
+  }
+  .search input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
     color: #e5e7eb;
     font: inherit;
   }
-  .search::placeholder {
+  .search input::placeholder {
     color: #6b7280;
   }
   .song-list ul {
@@ -156,7 +175,7 @@
     background: #34245e;
   }
   .icon {
-    width: 1.2rem;
+    display: inline-flex;
     color: #a78bfa;
     flex-shrink: 0;
   }

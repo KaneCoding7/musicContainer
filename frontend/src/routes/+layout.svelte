@@ -7,6 +7,29 @@
 </main>
 
 <style>
+  /* Self-hosted Google Material Symbols (variable font). */
+  @font-face {
+    font-family: "Material Symbols Rounded";
+    font-style: normal;
+    font-weight: 100 700;
+    font-display: block;
+    src: url("/fonts/material-symbols-rounded.woff2") format("woff2");
+  }
+  :global(.material-symbols-rounded) {
+    font-family: "Material Symbols Rounded";
+    font-weight: normal;
+    font-style: normal;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    letter-spacing: normal;
+    text-transform: none;
+    -webkit-font-feature-settings: "liga";
+    font-feature-settings: "liga";
+    -webkit-font-smoothing: antialiased;
+  }
+
   :global(body) {
     margin: 0;
     background: #0f0f12;

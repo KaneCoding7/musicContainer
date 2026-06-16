@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/Icon.svelte";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
   let { vm }: { vm: SongViewModel } = $props();
@@ -16,6 +17,7 @@
 
 <div class="upload">
   <label class="btn">
+    <Icon name={vm.uploading ? "progress_activity" : "upload"} size={20} />
     {vm.uploading ? "Uploading…" : "Upload song"}
     <input
       bind:this={fileInput}
@@ -36,7 +38,9 @@
     gap: 0.75rem;
   }
   .btn {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
     padding: 0.55rem 1.1rem;
     background: #6d28d9;
     color: white;

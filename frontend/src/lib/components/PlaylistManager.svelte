@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/Icon.svelte";
   import type { PlaylistViewModel } from "$lib/viewmodels/playlistViewModel.svelte";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -80,7 +81,11 @@
             <li class:current={isCurrent}>
               <button class="play-btn" onclick={() => playFrom(i)}>
                 <span class="icon">
-                  {#if isCurrent && songVm.isPlaying}⏸{:else}▶{/if}
+                  <Icon
+                    name={isCurrent && songVm.isPlaying ? "pause" : "play_arrow"}
+                    fill
+                    size={20}
+                  />
                 </span>
                 <span class="name">{song.originalFilename}</span>
               </button>
@@ -88,7 +93,8 @@
                 class="remove"
                 title="Remove from playlist"
                 aria-label="Remove from playlist"
-                onclick={() => vm.removeSong(song.id)}>✕</button
+                onclick={() => vm.removeSong(song.id)}
+                ><Icon name="close" size={20} /></button
               >
             </li>
           {/each}
@@ -197,8 +203,8 @@
     background: #1c1c20;
   }
   .icon {
+    display: inline-flex;
     color: #a78bfa;
-    width: 1.1rem;
   }
   .name {
     overflow: hidden;
@@ -206,8 +212,12 @@
     white-space: nowrap;
   }
   .remove {
+    display: inline-flex;
+    align-items: center;
+    border: none;
     background: transparent;
     color: #9ca3af;
+    cursor: pointer;
     padding: 0.4rem 0.6rem;
   }
   .remove:hover {
