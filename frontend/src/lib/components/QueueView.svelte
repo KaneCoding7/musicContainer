@@ -15,6 +15,18 @@
     dragIndex = null;
     overIndex = null;
   }
+
+  // When the queue opens, position the now-playing row at the top so you can
+  // scroll up for history and down for what's coming. QueueView mounts fresh
+  // each time the queue opens, so this runs on open.
+  function scrollToTopOnMount(node: HTMLElement, isCurrent: boolean) {
+    if (isCurrent) {
+      requestAnimationFrame(() =>
+        node.scrollIntoView({ block: "start", behavior: "auto" })
+      );
+    }
+    return {};
+  }
 </script>
 
 <div class="queue">
@@ -23,6 +35,7 @@
       {@const isCurrent = i === vm.currentIndex}
       {@const isPast = vm.currentIndex !== null && i < vm.currentIndex}
       <li
+        use:scrollToTopOnMount={isCurrent}
         class:current={isCurrent}
         class:past={isPast}
         class:dragging={i === dragIndex}
@@ -91,6 +104,8 @@
     display: flex;
     align-items: center;
     border-bottom: 1px solid var(--surface-2);
+    /* Clear the sticky queue header when scrolled to the top. */
+    scroll-margin-top: 2.8rem;
   }
   li.current {
     background: var(--active-bg);
