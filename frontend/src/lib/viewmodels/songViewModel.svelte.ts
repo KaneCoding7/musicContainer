@@ -204,6 +204,20 @@ export class SongViewModel {
     this.isPlaying = true;
   }
 
+  // Plays a list from the top in order (turns shuffle off).
+  playList(songs: Song[]): void {
+    if (songs.length === 0) return;
+    this.shuffle = false;
+    this.playQueue(songs, 0);
+  }
+
+  // Plays a list shuffled: turns shuffle on and starts on a random track.
+  shufflePlay(songs: Song[]): void {
+    if (songs.length === 0) return;
+    this.shuffle = true;
+    this.playQueue(songs, Math.floor(Math.random() * songs.length));
+  }
+
   // Plays from the full library list (used by the song list).
   play(index: number): void {
     this.playQueue(this.songs, index);

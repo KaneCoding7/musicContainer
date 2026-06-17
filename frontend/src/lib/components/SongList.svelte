@@ -1,6 +1,7 @@
 <script lang="ts">
   import EditSongDialog from "$lib/components/EditSongDialog.svelte";
   import Icon from "$lib/components/Icon.svelte";
+  import PlayActions from "$lib/components/PlayActions.svelte";
   import { thumbUrl, downloadUrl, type SongMetadata } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -99,6 +100,9 @@
 
 <div class="song-list">
   {#if vm.songs.length > 0}
+    <div class="actions-bar">
+      <PlayActions {vm} songs={vm.filteredSongs} />
+    </div>
     <div class="toolbar">
       <div class="search">
         <Icon name="search" size={20} />
@@ -325,6 +329,9 @@
 {/if}
 
 <style>
+  .actions-bar {
+    margin-bottom: 0.85rem;
+  }
   .toolbar {
     display: flex;
     align-items: center;

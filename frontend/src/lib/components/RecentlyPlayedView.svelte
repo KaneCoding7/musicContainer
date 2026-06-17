@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
+  import PlayActions from "$lib/components/PlayActions.svelte";
   import { thumbUrl } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -22,6 +23,7 @@
 {#if vm.recentlyPlayed.length === 0}
   <p class="muted">Nothing played yet. Play a song to see it here.</p>
 {:else}
+  <div class="actions-bar"><PlayActions {vm} songs={vm.recentlyPlayed} /></div>
   <ul>
     {#each vm.recentlyPlayed as song, i (song.id)}
       {@const isCurrent = song.id === vm.currentSong?.id}
@@ -52,6 +54,9 @@
 {/if}
 
 <style>
+  .actions-bar {
+    margin-bottom: 1rem;
+  }
   ul {
     list-style: none;
     padding: 0;

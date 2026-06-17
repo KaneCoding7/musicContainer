@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
+  import PlayActions from "$lib/components/PlayActions.svelte";
   import { playlistZipUrl } from "$lib/services/playlistService";
   import { thumbUrl } from "$lib/services/songService";
   import {
@@ -250,6 +251,12 @@
         >
       </div>
 
+      {#if vm.selectedSongs.length > 0}
+        <div class="actions-bar">
+          <PlayActions vm={songVm} songs={vm.selectedSongs} />
+        </div>
+      {/if}
+
       {#if shareOpen}
         <div class="share-panel">
           <div class="share-row">
@@ -461,6 +468,9 @@
   .detail {
     border-top: 1px solid var(--surface-2);
     padding-top: 1rem;
+  }
+  .actions-bar {
+    margin-bottom: 1rem;
   }
   .detail-head {
     display: flex;

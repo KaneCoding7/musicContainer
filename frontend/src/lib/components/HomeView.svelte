@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
+  import PlayActions from "$lib/components/PlayActions.svelte";
   import { thumbUrl } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -17,9 +18,7 @@
     <section>
       <div class="head">
         <h3><Icon name={icon} size={20} /> {title}</h3>
-        <button class="play-all" onclick={() => vm.playQueue(list, 0)}>
-          <Icon name="play_arrow" fill size={18} /> Play
-        </button>
+        <PlayActions {vm} songs={list} />
       </div>
       <div class="cards">
         {#each list as song, i (song.id)}
@@ -65,23 +64,6 @@
     gap: 0.45rem;
     margin: 0;
     font-size: 1.15rem;
-  }
-  .play-all {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    padding: 0.4rem 0.9rem;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 2rem;
-    font: inherit;
-    font-weight: 600;
-    font-size: 0.85rem;
-    cursor: pointer;
-  }
-  .play-all:hover {
-    background: var(--accent-hover);
   }
   .cards {
     display: grid;

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
+  import PlayActions from "$lib/components/PlayActions.svelte";
   import { thumbUrl } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -56,9 +57,7 @@
     <div>
       <h3>{current.name}</h3>
       <p class="muted">{durationLabel(current.songs)}</p>
-      <button class="play-all" onclick={() => vm.playQueue(current.songs, 0)}>
-        <Icon name="play_arrow" fill size={20} /> Play
-      </button>
+      <PlayActions {vm} songs={current.songs} />
     </div>
   </div>
   <ol>
@@ -187,22 +186,6 @@
   .album-head h3 {
     margin: 0 0 0.25rem;
     font-size: 1.6rem;
-  }
-  .play-all {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    margin-top: 0.75rem;
-    padding: 0.5rem 1rem;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 2rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .play-all:hover {
-    background: var(--accent-hover);
   }
   ol {
     list-style: none;
