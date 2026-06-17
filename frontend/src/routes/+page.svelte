@@ -374,7 +374,7 @@
     flex-shrink: 0;
     background: var(--sidebar);
     border-right: 1px solid var(--surface-2);
-    padding: 1.25rem 1rem;
+    padding: 1.25rem 1rem 0.6rem;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -436,7 +436,7 @@
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    padding: 0.4rem 0.5rem 0.1rem;
+    padding: 0.4rem 0.5rem;
     border-radius: 0.4rem;
     cursor: pointer;
     list-style: none;
