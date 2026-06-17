@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { mount, unmount } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
+  import MiniPlayer from "$lib/components/MiniPlayer.svelte";
   import { artUrl, streamUrl, thumbUrl } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -221,6 +223,7 @@
   }
   function onLoadedMetadata() {
     duration = audio?.duration ?? 0;
+    vm.duration = duration; // for the pop-out mini player
     // Resume from the saved position after a refresh, then clear the marker.
     if (audio && vm.resumeAt > 0) {
       audio.currentTime = Math.min(vm.resumeAt, duration || vm.resumeAt);
@@ -229,6 +232,16 @@
     }
     updatePositionState();
   }
+
+  // Apply a seek requested from the mini player.
+  $effect(() => {
+    const t = vm.seekRequest;
+    if (t !== null && audio) {
+      audio.currentTime = t;
+      currentTime = t;
+      vm.seekRequest = null;
+    }
+  });
 
   function togglePlay() {
     vm.togglePlay();
@@ -244,15 +257,14 @@
 
   // --- Pop-out mini player (Document Picture-in-Picture) ---
   // A small always-on-top window with our own controls, available on Chromium
-  // desktop. We render the mini UI into a hidden element and physically move
-  // that DOM node into the PiP window (and back on close) so it stays bound to
-  // the same view-model — no separate audio element, no duplicated state.
+  // desktop. We mount a MiniPlayer component into the PiP window so Svelte's
+  // event handling works there; it's driven through the shared view-model, so
+  // there's no separate audio element or duplicated state.
   const hasDocumentPip =
     typeof window !== "undefined" && "documentPictureInPicture" in window;
-  let pipHome = $state<HTMLElement | null>(null); // hidden host in the page
-  let pipRoot = $state<HTMLElement | null>(null); // the mini UI we relocate
   let pipActive = $state(false);
   let pipWindow: Window | null = null;
+  let pipApp: Record<string, unknown> | null = null; // mounted MiniPlayer
 
   // Clone the page's stylesheets into the PiP window so our scoped classes and
   // theme variables apply there too.
@@ -277,19 +289,23 @@
   }
 
   async function openPip() {
-    if (!hasDocumentPip || !pipRoot || pipActive) return;
+    if (!hasDocumentPip || pipActive) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dpip = (window as any).documentPictureInPicture;
-    pipWindow = await dpip.requestWindow({ width: 320, height: 360 });
+    pipWindow = await dpip.requestWindow({ width: 300, height: 340 });
     if (!pipWindow) return;
     copyStyles(pipWindow);
     pipWindow.document.documentElement.dataset.theme =
       document.documentElement.dataset.theme ?? "dark";
     pipWindow.document.body.style.margin = "0";
-    pipWindow.document.body.append(pipRoot);
+    pipApp = mount(MiniPlayer, {
+      target: pipWindow.document.body,
+      props: { vm },
+    });
     pipActive = true;
     pipWindow.addEventListener("pagehide", () => {
-      pipHome?.append(pipRoot!); // move the UI back into the page
+      if (pipApp) unmount(pipApp);
+      pipApp = null;
       pipActive = false;
       pipWindow = null;
     });
@@ -369,48 +385,6 @@
     }
   }}
 ></audio>
-
-<!-- Pop-out mini player content. Hidden in the page; physically relocated into
-     the Document Picture-in-Picture window when active. -->
-<div bind:this={pipHome} style="display: none">
-  <div bind:this={pipRoot} class="pip-mini">
-    <div class="pip-art">
-      {#if song?.hasArt}
-        <img src={thumbUrl(song.id, 256)} alt="" />
-      {:else}
-        <Icon name="music_note" size={48} />
-      {/if}
-    </div>
-    <div class="pip-meta">
-      <span class="pip-title">{song?.originalFilename ?? "Nothing playing"}</span>
-      {#if song?.artist}<span class="pip-artist">{song.artist}</span>{/if}
-    </div>
-    <div class="pip-seek">
-      <span class="time">{formatTime(currentTime)}</span>
-      <input
-        type="range"
-        min="0"
-        max={duration || 0}
-        step="0.1"
-        value={currentTime}
-        oninput={onSeek}
-        aria-label="Seek"
-      />
-      <span class="time">{formatTime(duration)}</span>
-    </div>
-    <div class="pip-controls">
-      <button onclick={() => vm.prev()} aria-label="Previous"
-        ><Icon name="skip_previous" fill size={30} /></button
-      >
-      <button class="pip-play" onclick={togglePlay} aria-label="Play/Pause">
-        <Icon name={vm.isPlaying ? "pause" : "play_arrow"} fill size={40} />
-      </button>
-      <button onclick={() => vm.next()} aria-label="Next"
-        ><Icon name="skip_next" fill size={30} /></button
-      >
-    </div>
-  </div>
-</div>
 
 {#if sleepMenu}
   <button
@@ -611,91 +585,6 @@
 {/if}
 
 <style>
-  /* Pop-out mini player (Document PiP). Styles are copied into the PiP window;
-     the scoped class hashes travel with the relocated nodes. */
-  .pip-mini {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.7rem;
-    height: 100%;
-    box-sizing: border-box;
-    padding: 0.9rem;
-    background: var(--bg);
-    color: var(--text);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  }
-  .pip-art {
-    width: 128px;
-    height: 128px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--surface-2);
-    border-radius: 0.6rem;
-    color: var(--dim);
-    overflow: hidden;
-  }
-  .pip-art img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .pip-meta {
-    width: 100%;
-    text-align: center;
-    min-width: 0;
-  }
-  .pip-title {
-    display: block;
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .pip-artist {
-    display: block;
-    color: var(--muted);
-    font-size: 0.85rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .pip-seek {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    width: 100%;
-  }
-  .pip-seek input {
-    flex: 1;
-    min-width: 0;
-    accent-color: var(--accent);
-  }
-  .pip-controls {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-  .pip-controls button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    color: var(--text);
-    cursor: pointer;
-    padding: 0.3rem;
-    border-radius: 50%;
-  }
-  .pip-controls button:hover {
-    background: var(--surface-2);
-  }
-  .pip-controls .pip-play {
-    color: var(--accent-text);
-  }
-
   .np-full {
     position: fixed;
     inset: 0;

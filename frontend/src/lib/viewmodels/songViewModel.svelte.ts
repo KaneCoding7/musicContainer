@@ -106,6 +106,10 @@ export class SongViewModel {
   // --- Now-playing persistence (survive a page refresh) ---
   // Live playback position in seconds (written by the player on timeupdate).
   position = $state(0);
+  // Current track duration (seconds) and a one-shot seek request — set by the
+  // pop-out mini player, applied by the main player's audio element.
+  duration = $state(0);
+  seekRequest = $state<number | null>(null);
   // Position to seek to when (re)loading a restored track; 0 = start.
   resumeAt = $state(0);
   // Set while restoring so the player doesn't log a fresh play for the track
