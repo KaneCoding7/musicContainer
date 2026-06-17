@@ -15,6 +15,9 @@ data/*.db
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm
+# Transient work dirs for link import / frame extraction
+data/import-*/
+data/frames-*/
 
 # Logs
 *.log
