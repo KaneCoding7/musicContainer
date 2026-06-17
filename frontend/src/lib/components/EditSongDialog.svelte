@@ -138,7 +138,7 @@
           <input
             bind:this={fileInput}
             type="file"
-            accept="image/jpeg,image/png"
+            accept="image/jpeg,image/png,image/webp"
             onchange={onPickArt}
             disabled={artBusy}
             hidden

@@ -53,23 +53,29 @@ const upload = multer({
   },
 });
 
-// Album art uploads (Cycle 32): JPEG/PNG into the art directory.
+// Album art uploads (Cycle 32): JPEG/PNG/WebP into the art directory.
+const ART_MIME_EXT: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+};
 const artUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, ART_DIR),
     filename: (_req, file, cb) => {
       const ext =
         extname(file.originalname).toLowerCase() ||
-        (file.mimetype === "image/png" ? ".png" : ".jpg");
+        ART_MIME_EXT[file.mimetype] ||
+        ".jpg";
       cb(null, `${randomUUID()}${ext}`);
     },
   }),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype === "image/jpeg" || file.mimetype === "image/png") {
+    if (file.mimetype in ART_MIME_EXT) {
       cb(null, true);
     } else {
-      cb(new Error("Album art must be a JPEG or PNG image"));
+      cb(new Error("Album art must be a JPEG, PNG, or WebP image"));
     }
   },
 });

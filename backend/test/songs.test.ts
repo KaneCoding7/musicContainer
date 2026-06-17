@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "better-sqlite3";
 import {
+  artContentType,
   deleteSong,
   getSong,
   listSongs,
@@ -92,6 +93,13 @@ describe("songs", () => {
 
   it("bulk update rejects an empty selection", () => {
     expect(updateSongsBulk(db, [], { artist: "X" }, alice).ok).toBe(false);
+  });
+
+  it("serves art with the right content type per extension (incl. webp)", () => {
+    expect(artContentType("/art/x.jpg")).toBe("image/jpeg");
+    expect(artContentType("/art/x.jpeg")).toBe("image/jpeg");
+    expect(artContentType("/art/x.PNG")).toBe("image/png");
+    expect(artContentType("/art/x.webp")).toBe("image/webp");
   });
 
   it("toggles liked and records plays (owner only)", () => {

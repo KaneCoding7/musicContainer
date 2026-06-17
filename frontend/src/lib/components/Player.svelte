@@ -63,7 +63,7 @@
       artist: s.artist ?? "",
       album: s.album ?? "",
       artwork: s.hasArt
-        ? [{ src: artUrl(s.id), sizes: "512x512", type: "image/jpeg" }]
+        ? [{ src: artUrl(s.id), sizes: "512x512" }]
         : [],
     });
   });

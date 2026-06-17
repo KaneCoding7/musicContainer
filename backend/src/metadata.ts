@@ -23,7 +23,12 @@ export async function extractMetadata(
     let artFilename: string | null = null;
     const picture = common.picture?.[0];
     if (picture) {
-      const ext = picture.format?.toLowerCase().includes("png") ? "png" : "jpg";
+      const fmt = picture.format?.toLowerCase() ?? "";
+      const ext = fmt.includes("png")
+        ? "png"
+        : fmt.includes("webp")
+          ? "webp"
+          : "jpg";
       artFilename = `${randomUUID()}.${ext}`;
       writeFileSync(join(artDir, artFilename), Buffer.from(picture.data));
     }

@@ -4,6 +4,14 @@ import { extname, join } from "node:path";
 import type { Song } from "../types.js";
 import { err, ok, type AppError, type Result } from "./result.js";
 
+// Maps a stored art file's extension to the MIME type used when serving it.
+export function artContentType(path: string): string {
+  const ext = extname(path).toLowerCase();
+  if (ext === ".png") return "image/png";
+  if (ext === ".webp") return "image/webp";
+  return "image/jpeg";
+}
+
 // Allowed audio formats for the MVP.
 const ALLOWED_EXTENSIONS = new Set([".mp3", ".wav"]);
 const ALLOWED_MIME_TYPES = new Set([
@@ -211,8 +219,7 @@ export function resolveSongArtById(
   if (!row.art_filename) return err("not_found", "Song has no album art");
   const path = join(artDir, row.art_filename);
   if (!existsSync(path)) return err("not_found", "Art file missing on disk");
-  const ext = extname(path).toLowerCase();
-  const contentType = ext === ".png" ? "image/png" : "image/jpeg";
+  const contentType = artContentType(path);
   return ok({ path, contentType });
 }
 
@@ -380,8 +387,7 @@ export function resolveSongArt(
   const path = join(artDir, row.art_filename);
   if (!existsSync(path)) return err("not_found", "Art file missing on disk");
 
-  const ext = extname(path).toLowerCase();
-  const contentType = ext === ".png" ? "image/png" : "image/jpeg";
+  const contentType = artContentType(path);
   return ok({ path, contentType });
 }
 
