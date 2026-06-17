@@ -25,10 +25,25 @@
 
   let open = $state(false);
   let editing = $state(false);
+  let wrapEl = $state<HTMLElement | null>(null);
 
   function close() {
     open = false;
   }
+
+  // Right-clicking (or long-pressing) anywhere on the row opens this menu, the
+  // same as tapping the ⋮ button. We attach to the enclosing row so no list
+  // component has to wire it up.
+  $effect(() => {
+    const row = wrapEl?.closest("li");
+    if (!row) return;
+    const onContext = (e: Event) => {
+      e.preventDefault();
+      open = true;
+    };
+    row.addEventListener("contextmenu", onContext);
+    return () => row.removeEventListener("contextmenu", onContext);
+  });
 
   async function saveEdit(id: number, fields: SongMetadata) {
     if (onEdit) await onEdit(id, fields);
@@ -46,7 +61,7 @@
   }
 </script>
 
-<div class="menu-wrap">
+<div class="menu-wrap" bind:this={wrapEl}>
   <button
     class="dots"
     title="More options"
