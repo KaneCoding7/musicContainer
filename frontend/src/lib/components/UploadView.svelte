@@ -62,7 +62,7 @@
       <p class="sub">or click to browse — MP3 or WAV, as many as you like</p>
     {/if}
     <input
-      class="file-input"
+      class="file-overlay"
       bind:this={fileInput}
       type="file"
       accept=".mp3,.wav,audio/mpeg,audio/wav"
@@ -90,20 +90,19 @@
   .upload-view {
     max-width: 640px;
   }
-  /* Visually hidden but still interactive — display:none/hidden file inputs
-     fail to open the picker on iOS Safari. */
-  .file-input {
+  /* The file input sits transparently over the dropzone so a tap hits the input
+     directly (reliable on iOS Safari); drag-and-drop still bubbles to the
+     dropzone's handlers. */
+  .file-overlay {
     position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    border: 0;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
+    inset: 0;
+    width: 100%;
+    height: 100%;
     opacity: 0;
+    cursor: pointer;
   }
   .dropzone {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;

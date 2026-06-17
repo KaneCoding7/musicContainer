@@ -134,9 +134,9 @@
       </span>
       <div class="art-actions">
         <label class="art-btn">
-          {artBusy ? "Working…" : hasArt ? "Change art" : "Upload art"}
+          <span>{artBusy ? "Working…" : hasArt ? "Change art" : "Upload art"}</span>
           <input
-            class="file-input"
+            class="file-overlay"
             bind:this={fileInput}
             type="file"
             accept="image/*"
@@ -245,6 +245,8 @@
     align-items: flex-start;
   }
   .art-btn {
+    position: relative;
+    overflow: hidden;
     padding: 0.4rem 0.8rem;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
@@ -257,18 +259,16 @@
   .art-btn:hover {
     background: var(--hover);
   }
-  /* Visually hidden but still interactive — display:none/hidden file inputs
-     fail to open the picker on iOS Safari. */
-  .file-input {
+  /* The file input sits transparently on top of the button, so tapping the
+     button taps the input directly — the only reliable way to open the picker
+     on iOS Safari. */
+  .file-overlay {
     position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    border: 0;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
+    inset: 0;
+    width: 100%;
+    height: 100%;
     opacity: 0;
+    cursor: pointer;
   }
   .art-remove {
     padding: 0.3rem 0.7rem;
