@@ -14,11 +14,16 @@
     artId: number | null; // id of a track with embedded art, for the avatar
   }
 
-  // Group the library by artist (untagged tracks go under "Unknown Artist").
+  // Untagged tracks are grouped under this label so they're easy to find. The
+  // card only appears when such tracks exist (no empty group), and it's pinned
+  // to the end of the list.
+  const NO_ARTIST = "No artist";
+
+  // Group the library by artist.
   const artists = $derived.by((): Artist[] => {
     const map = new Map<string, Song[]>();
     for (const s of vm.songs) {
-      const key = s.artist?.trim() || "Unknown Artist";
+      const key = s.artist?.trim() || NO_ARTIST;
       const list = map.get(key) ?? [];
       list.push(s);
       map.set(key, list);
@@ -29,7 +34,12 @@
         songs,
         artId: songs.find((s) => s.hasArt)?.id ?? null,
       }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => {
+        // Pin the "No artist" group last; everything else alphabetical.
+        if (a.name === NO_ARTIST) return 1;
+        if (b.name === NO_ARTIST) return -1;
+        return a.name.localeCompare(b.name);
+      });
   });
 
   const current = $derived(artists.find((a) => a.name === openArtist) ?? null);
@@ -49,6 +59,8 @@
     <span class="avatar">
       {#if current.artId !== null}
         <img src={thumbUrl(current.artId, 512)} alt="" />
+      {:else if current.name === NO_ARTIST}
+        <Icon name="music_note" size={44} />
       {:else}
         <Icon name="person" size={48} />
       {/if}
@@ -88,6 +100,8 @@
         <span class="avatar">
           {#if artist.artId !== null}
             <img src={thumbUrl(artist.artId, 512)} alt="" />
+          {:else if artist.name === NO_ARTIST}
+            <Icon name="music_note" size={36} />
           {:else}
             <Icon name="person" size={40} />
           {/if}
