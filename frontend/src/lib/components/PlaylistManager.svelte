@@ -279,57 +279,67 @@
 
       {#if shareOpen}
         <div class="share-panel">
-          <label class="can-edit">
+          <p class="sp-section">Invite people</p>
+          <UserAutocomplete
+            placeholder="Search by name or email…"
+            onSelect={(u) => doShare(u.email)}
+          />
+          <label class="sp-option">
             <input type="checkbox" bind:checked={shareCanEdit} />
-            Allow editing (add / remove tracks)
+            <span>
+              <span class="opt-title">Can edit</span>
+              <span class="opt-sub">Let them add &amp; remove tracks</span>
+            </span>
           </label>
-          <div class="share-row">
-            <UserAutocomplete
-              placeholder="Add people by name or email…"
-              onSelect={(u) => doShare(u.email)}
-            />
-          </div>
-          {#if shareError}<p class="share-error">{shareError}</p>{/if}
+          {#if shareError}<p class="sp-error">{shareError}</p>{/if}
+
+          <p class="sp-section">People with access</p>
           {#if shares.length > 0}
-            <ul class="share-list">
+            <ul class="people">
               {#each shares as u (u.id)}
                 <li>
-                  <span class="share-who"
-                    >{u.name} <span class="dim">({u.email})</span>{#if u.canEdit}<span
-                        class="edit-tag">editor</span
-                      >{/if}</span
-                  >
+                  <span class="avatar">{u.name.slice(0, 1).toUpperCase()}</span>
+                  <span class="who">
+                    <span class="who-name">
+                      {u.name}
+                      <span class="role" class:view={!u.canEdit}>
+                        {u.canEdit ? "Editor" : "Viewer"}
+                      </span>
+                    </span>
+                    <span class="who-email">{u.email}</span>
+                  </span>
                   <button
                     class="revoke"
-                    title="Revoke"
-                    aria-label="Revoke share"
+                    title="Remove access"
+                    aria-label="Remove access"
                     onclick={() => revoke(u.id)}><Icon name="close" size={18} /></button
                   >
                 </li>
               {/each}
             </ul>
           {:else}
-            <p class="muted small">Not shared with anyone yet.</p>
+            <p class="sp-empty">Not shared with anyone yet.</p>
           {/if}
 
-          <div class="public-block">
-            <div class="public-head">
-              <span><Icon name="public" size={18} /> Public link</span>
-              <button class="link-toggle" onclick={togglePublic}>
-                {publicToken ? "Turn off" : "Create"}
+          <p class="sp-section">Public link</p>
+          <div class="public-row">
+            <span class="public-desc">
+              <Icon name="public" size={18} />
+              <span>Anyone with the link can listen — no account needed.</span>
+            </span>
+            <button class="link-toggle" class:on={publicToken} onclick={togglePublic}>
+              {publicToken ? "Turn off" : "Create link"}
+            </button>
+          </div>
+          {#if publicToken}
+            <div class="public-url">
+              <span class="url">{publicLink(publicToken)}</span>
+              <button class="copy" onclick={copyPublic}>
+                <Icon name={publicCopied ? "check" : "content_copy"} size={16} />
+                {publicCopied ? "Copied" : "Copy"}
               </button>
             </div>
-            {#if publicToken}
-              <div class="public-url">
-                <span class="url">{publicLink(publicToken)}</span>
-                <button class="copy" onclick={copyPublic}>
-                  <Icon name={publicCopied ? "check" : "content_copy"} size={16} />
-                  {publicCopied ? "Copied" : "Copy"}
-                </button>
-              </div>
-              <p class="muted small">Anyone with this link can listen — no account needed.</p>
-            {/if}
-          </div>
+          {/if}
         </div>
       {/if}
 
@@ -576,110 +586,178 @@
   }
   .share-panel {
     background: var(--surface);
-    border: 1px solid var(--surface-2);
-    border-radius: 0.5rem;
-    padding: 0.75rem;
-    margin-bottom: 1rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 0.75rem;
+    padding: 1rem 1.1rem 1.1rem;
+    margin-bottom: 1.25rem;
   }
-  .share-row {
+  .sp-section {
+    margin: 1.1rem 0 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--dim);
+  }
+  .sp-section:first-child {
+    margin-top: 0;
+  }
+  .sp-option {
     display: flex;
-    gap: 0.5rem;
-    margin-top: 0.6rem;
+    align-items: flex-start;
+    gap: 0.55rem;
+    margin-top: 0.7rem;
+    cursor: pointer;
   }
-  .can-edit {
+  .sp-option input {
+    margin-top: 0.15rem;
+  }
+  .opt-title {
+    display: block;
+    color: var(--text);
+    font-size: 0.88rem;
+  }
+  .opt-sub {
+    display: block;
+    color: var(--dim);
+    font-size: 0.78rem;
+  }
+  .sp-error {
+    color: var(--danger-text);
+    font-size: 0.85rem;
+    margin: 0.5rem 0 0;
+  }
+  .sp-empty {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin: 0;
+  }
+  .people {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .people li {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0;
+  }
+  .avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .who {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .who-name {
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    margin-top: 0.5rem;
-    font-size: 0.82rem;
-    color: var(--muted);
-    cursor: pointer;
-  }
-  .edit-tag {
-    margin-left: 0.4rem;
-    padding: 0.05rem 0.4rem;
-    background: var(--active-bg);
-    color: var(--accent-text);
-    border-radius: 0.3rem;
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-  .share-list {
-    list-style: none;
-    padding: 0;
-    margin: 0.6rem 0 0;
-  }
-  .share-list li {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.3rem 0;
-  }
-  .share-who {
-    flex: 1;
-    min-width: 0;
-    font-size: 0.88rem;
+    color: var(--text);
+    font-size: 0.9rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .share-who .dim {
-    color: var(--muted);
+  .who-email {
+    color: var(--dim);
+    font-size: 0.78rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .role {
+    flex-shrink: 0;
+    padding: 0.05rem 0.4rem;
+    background: var(--active-bg);
+    color: var(--accent-text);
+    border-radius: 0.3rem;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .role.view {
+    background: var(--surface-2);
+    color: var(--dim);
   }
   .revoke {
     display: inline-flex;
+    flex-shrink: 0;
     border: none;
     background: transparent;
     color: var(--muted);
     cursor: pointer;
-    padding: 0.2rem;
+    padding: 0.3rem;
     border-radius: 0.3rem;
   }
   .revoke:hover {
     background: var(--danger-bg);
     color: var(--danger-text);
   }
-  .share-error {
-    color: var(--danger-text);
-    font-size: 0.85rem;
-    margin: 0.5rem 0 0;
-  }
-  .public-block {
-    margin-top: 0.85rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--surface-2);
-  }
-  .public-head {
+  .public-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 0.75rem;
   }
-  .public-head span {
+  .public-desc {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    font-size: 0.88rem;
-    font-weight: 600;
+    gap: 0.45rem;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+  .public-desc :global(.material-symbols-rounded) {
+    flex-shrink: 0;
+    color: var(--accent-text);
   }
   .link-toggle {
-    padding: 0.3rem 0.7rem;
+    flex-shrink: 0;
+    padding: 0.4rem 0.85rem;
     background: var(--surface-2);
-    border: none;
-    border-radius: 0.4rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 2rem;
     color: var(--text);
     font: inherit;
-    font-size: 0.82rem;
+    font-weight: 600;
+    font-size: 0.8rem;
     cursor: pointer;
   }
   .link-toggle:hover {
-    background: var(--border-strong);
+    background: var(--hover);
+  }
+  .link-toggle.on {
+    background: var(--active-bg);
+    border-color: var(--accent);
+    color: var(--accent-text);
   }
   .public-url {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-top: 0.5rem;
+    margin-top: 0.6rem;
+    padding: 0.45rem 0.6rem;
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
   }
   .public-url .url {
     flex: 1;
@@ -688,7 +766,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-family: ui-monospace, monospace;
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     color: var(--accent-text);
   }
   .public-url .copy {
@@ -698,15 +776,15 @@
     flex-shrink: 0;
     padding: 0.3rem 0.6rem;
     background: var(--surface-2);
-    border: none;
+    border: 1px solid var(--border-strong);
     border-radius: 0.4rem;
     color: var(--text);
     font: inherit;
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     cursor: pointer;
   }
   .public-url .copy:hover {
-    background: var(--border-strong);
+    background: var(--hover);
   }
   h3 {
     margin: 0 0 0.5rem;
