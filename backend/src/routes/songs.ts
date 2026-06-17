@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   unlinkSync,
 } from "node:fs";
@@ -15,6 +16,7 @@ import { ART_DIR, getDb, MUSIC_DIR } from "../db/init.js";
 import {
   deleteSong,
   finalizeSongs,
+  getSongSource,
   listPendingSongs,
   listSongs,
   listSongsNeedingLoudness,
@@ -363,6 +365,7 @@ songsRouter.post("/import-link", async (req, res) => {
         artFilename: meta.artFilename,
         duration: meta.duration,
         pending: true, // awaits review before joining the library
+        sourceUrl: url, // lets the user pick alternative frames as art
       });
       if (!result.ok) {
         if (existsSync(dest)) {
@@ -430,6 +433,115 @@ songsRouter.post("/songs/finalize", (req, res) => {
       .json({ error: result.error });
   }
   return res.json({ songs: result.value });
+});
+
+// Spawns a process, resolving on exit 0 (rejecting otherwise). Kills on timeout.
+function run(cmd: string, args: string[], cwd?: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, cwd ? { cwd } : {});
+    let tail = "";
+    child.stderr.on("data", (d: Buffer) => {
+      tail = (tail + d.toString()).slice(-500);
+    });
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error("Timed out"));
+    }, 4 * 60 * 1000);
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) return resolve();
+      const last = tail.split("\n").map((l) => l.trim()).filter(Boolean).pop();
+      reject(new Error(last || `${cmd} failed`));
+    });
+  });
+}
+
+// GET /api/songs/:id/frames — for a link-imported track, download a low-res copy
+// of the source video and return evenly-spaced frames (as data URLs) to offer as
+// alternative cover art.
+songsRouter.get("/songs/:id/frames", async (req, res) => {
+  const id = Number(req.params.id);
+  const src = getSongSource(getDb(), id, req.userId!);
+  if (!src) {
+    return res.status(404).json({
+      error: { code: "not_found", message: "No source video for this track" },
+    });
+  }
+
+  const work = mkdtempSync(join(dirname(MUSIC_DIR), "frames-"));
+  try {
+    await run(
+      "yt-dlp",
+      [
+        "-f",
+        "worst[ext=mp4]/worstvideo[ext=mp4]/worst",
+        "--no-playlist",
+        "-o",
+        "vid.%(ext)s",
+        src.sourceUrl,
+      ],
+      work
+    );
+    const vid = readdirSync(work).find((f) => f.startsWith("vid."));
+    if (!vid) {
+      return res.status(422).json({
+        error: { code: "validation", message: "Couldn't fetch the video" },
+      });
+    }
+    const vidPath = join(work, vid);
+
+    const duration = src.duration && src.duration > 1 ? src.duration : 60;
+    const COUNT = 9;
+    const frames: { t: number; dataUrl: string }[] = [];
+    for (let i = 1; i <= COUNT; i++) {
+      const t = (duration * i) / (COUNT + 1); // evenly spaced, excluding the ends
+      const out = join(work, `f${i}.jpg`);
+      try {
+        await run("ffmpeg", [
+          "-y",
+          "-ss",
+          t.toFixed(2),
+          "-i",
+          vidPath,
+          "-frames:v",
+          "1",
+          "-vf",
+          "scale=512:-1",
+          "-q:v",
+          "3",
+          out,
+        ]);
+      } catch {
+        continue;
+      }
+      if (existsSync(out)) {
+        frames.push({
+          t: Math.round(t),
+          dataUrl: `data:image/jpeg;base64,${readFileSync(out).toString("base64")}`,
+        });
+      }
+    }
+
+    if (frames.length === 0) {
+      return res.status(422).json({
+        error: { code: "validation", message: "Couldn't extract any frames" },
+      });
+    }
+    return res.json({ frames });
+  } catch (e) {
+    return res.status(422).json({
+      error: {
+        code: "validation",
+        message: e instanceof Error ? e.message : "Failed to get frames",
+      },
+    });
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
 });
 
 // POST /api/songs/analyze-loudness — measure loudness for any of the user's

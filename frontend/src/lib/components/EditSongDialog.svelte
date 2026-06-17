@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
+  import FramePickerDialog from "$lib/components/FramePickerDialog.svelte";
   import Icon from "$lib/components/Icon.svelte";
 
   // Move the dialog up to the app's top-level container so it isn't nested
@@ -87,6 +88,14 @@
     }
   }
 
+  // Pick album art from a frame of the source video (link-imported tracks).
+  let framePicking = $state(false);
+  function onFramePicked(updated: Song) {
+    hasArt = updated.hasArt;
+    artVersion += 1;
+    onArtChanged?.(updated);
+  }
+
   // Public link (Cycle 39).
   let publicToken = $state<string | null>(null);
   let publicCopied = $state(false);
@@ -157,17 +166,37 @@
           disabled={artBusy}
         />
         <span class="art-hint">{hasArt ? "Change album art" : "Add album art"}</span>
-        {#if hasArt}
-          <button
-            type="button"
-            class="art-remove"
-            onclick={clearArt}
-            disabled={artBusy}>Remove</button
-          >
-        {/if}
+        <div class="art-btns">
+          {#if song.hasSource}
+            <button
+              type="button"
+              class="art-frames"
+              onclick={() => (framePicking = true)}
+              disabled={artBusy}
+            >
+              <Icon name="album" size={16} /> Pick from video
+            </button>
+          {/if}
+          {#if hasArt}
+            <button
+              type="button"
+              class="art-remove"
+              onclick={clearArt}
+              disabled={artBusy}>Remove</button
+            >
+          {/if}
+        </div>
         {#if artError}<span class="art-error">{artError}</span>{/if}
       </div>
     </div>
+
+    {#if framePicking}
+      <FramePickerDialog
+        {song}
+        onPicked={onFramePicked}
+        onClose={() => (framePicking = false)}
+      />
+    {/if}
 
     <label>
       Name
@@ -286,6 +315,12 @@
     font-size: 0.72rem;
     color: var(--dim);
   }
+  .art-btns {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+  }
   .art-remove {
     padding: 0.3rem 0.7rem;
     background: transparent;
@@ -296,6 +331,27 @@
   .art-remove:hover:not(:disabled) {
     background: var(--surface-2);
     color: var(--text);
+  }
+  .art-frames {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.7rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.4rem;
+    color: var(--text);
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .art-frames:hover:not(:disabled) {
+    background: var(--hover);
+  }
+  .art-frames:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
   .art-error {
     color: var(--danger-text);

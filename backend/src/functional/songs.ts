@@ -62,10 +62,11 @@ interface SongRow {
   liked: number;
   loudness: number | null;
   sort_order: number | null;
+  source_url: string | null;
 }
 
 const SONG_COLUMNS =
-  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness, sort_order";
+  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness, sort_order, source_url";
 
 function rowToSong(row: SongRow): Song {
   return {
@@ -82,6 +83,7 @@ function rowToSong(row: SongRow): Song {
     liked: row.liked === 1,
     loudness: row.loudness,
     sortOrder: row.sort_order,
+    hasSource: row.source_url !== null,
   };
 }
 
@@ -154,6 +156,7 @@ export function recordSong(
     artFilename?: string | null;
     duration?: number | null;
     pending?: boolean;
+    sourceUrl?: string | null;
   }
 ): Result<Song> {
   const filename = params.filename.trim();
@@ -165,7 +168,7 @@ export function recordSong(
   try {
     const info = db
       .prepare(
-        "INSERT INTO songs (filename, original_filename, artist, album, art_filename, duration, user_id, pending) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO songs (filename, original_filename, artist, album, art_filename, duration, user_id, pending, source_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         filename,
@@ -175,7 +178,8 @@ export function recordSong(
         params.artFilename ?? null,
         params.duration ?? null,
         params.userId,
-        params.pending ? 1 : 0
+        params.pending ? 1 : 0,
+        params.sourceUrl ?? null
       );
 
     const row = db
@@ -202,6 +206,25 @@ export function listSongs(db: Database, userId: string): Result<Song[]> {
     return ok(rows.map(rowToSong));
   } catch (e) {
     return err("internal", `Failed to list songs: ${(e as Error).message}`);
+  }
+}
+
+// Returns a song's source link + duration (for re-fetching video frames as art).
+export function getSongSource(
+  db: Database,
+  id: number,
+  userId: string
+): { sourceUrl: string; duration: number | null } | null {
+  try {
+    const row = db
+      .prepare("SELECT source_url, duration FROM songs WHERE id = ? AND user_id = ?")
+      .get(id, userId) as
+      | { source_url: string | null; duration: number | null }
+      | undefined;
+    if (!row || !row.source_url) return null;
+    return { sourceUrl: row.source_url, duration: row.duration };
+  } catch {
+    return null;
   }
 }
 

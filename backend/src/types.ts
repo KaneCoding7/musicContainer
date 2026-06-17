@@ -14,6 +14,7 @@ export interface Song {
   liked: boolean;
   loudness: number | null; // integrated loudness in LUFS, for normalization
   sortOrder: number | null; // manual order within a grouping (e.g. artist)
+  hasSource: boolean; // imported from a video link (can offer frame artwork)
 }
 
 export interface Playlist {

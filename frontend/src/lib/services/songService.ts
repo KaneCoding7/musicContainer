@@ -100,6 +100,20 @@ export async function fetchPendingSongs(): Promise<Song[]> {
   return (await res.json()).songs as Song[];
 }
 
+export interface VideoFrame {
+  t: number; // timestamp in seconds
+  dataUrl: string; // data:image/jpeg;base64,...
+}
+
+// For a link-imported track, fetches candidate cover frames from the video.
+export async function fetchVideoFrames(songId: number): Promise<VideoFrame[]> {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}/frames`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).frames as VideoFrame[];
+}
+
 // Confirms pending songs into the library; returns the confirmed songs.
 export async function finalizeSongs(ids: number[]): Promise<Song[]> {
   const res = await fetch(`${apiBase()}/api/songs/finalize`, {

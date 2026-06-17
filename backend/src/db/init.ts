@@ -188,6 +188,11 @@ export function migrate(database: Database.Database): void {
       "ALTER TABLE songs ADD COLUMN pending INTEGER NOT NULL DEFAULT 0"
     );
   }
+  // Source link for tracks imported via yt-dlp; lets us re-fetch video frames
+  // to offer as alternative cover art. Null for file uploads.
+  if (!columns.includes("source_url")) {
+    database.exec("ALTER TABLE songs ADD COLUMN source_url TEXT");
+  }
   const plColumns = (
     database.prepare("PRAGMA table_info(playlists)").all() as { name: string }[]
   ).map((c) => c.name);
