@@ -276,13 +276,11 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    max-width: 320px;
   }
   .field-wrap {
     position: relative;
     display: flex;
     align-items: center;
-    max-width: 320px;
     margin-top: 0.6rem;
   }
   .pw-form .field-wrap {
