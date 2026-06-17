@@ -140,16 +140,29 @@ export class SongViewModel {
     }
   }
 
-  // Sets a countdown sleep timer in minutes (pauses playback when it elapses).
-  setSleepTimer(minutes: number): void {
+  // (Re)arms the timeout from the current sleepUntil. If it has already passed
+  // (e.g. it elapsed while the page was closed), pause immediately.
+  private armSleepTimeout(): void {
     this.clearSleepHandle();
-    this.sleepAtTrackEnd = false;
-    this.sleepUntil = Date.now() + minutes * 60_000;
+    if (this.sleepUntil === null) return;
+    const ms = this.sleepUntil - Date.now();
+    if (ms <= 0) {
+      this.isPlaying = false;
+      this.sleepUntil = null;
+      return;
+    }
     this.sleepHandle = setTimeout(() => {
       this.isPlaying = false;
       this.sleepUntil = null;
       this.sleepHandle = null;
-    }, minutes * 60_000);
+    }, ms);
+  }
+
+  // Sets a countdown sleep timer in minutes (pauses playback when it elapses).
+  setSleepTimer(minutes: number): void {
+    this.sleepAtTrackEnd = false;
+    this.sleepUntil = Date.now() + minutes * 60_000;
+    this.armSleepTimeout();
   }
 
   // Sleeps when the current track finishes (handled by the player on "ended").
@@ -449,6 +462,8 @@ export class SongViewModel {
           repeat: this.repeat,
           volume: this.volume,
           position: untrack(() => this.position),
+          sleepUntil: this.sleepUntil,
+          sleepAtTrackEnd: this.sleepAtTrackEnd,
         })
       );
     } catch {
@@ -479,6 +494,11 @@ export class SongViewModel {
       this.resumeAt = typeof s.position === "number" ? s.position : 0;
       this.suppressPlayRecord = true;
       this.isPlaying = !!s.isPlaying;
+      // Restore the sleep timer; re-arm from the saved deadline (pausing now if
+      // it already elapsed while the page was away).
+      this.sleepAtTrackEnd = !!s.sleepAtTrackEnd;
+      this.sleepUntil = typeof s.sleepUntil === "number" ? s.sleepUntil : null;
+      this.armSleepTimeout();
       return true;
     } catch {
       return false;
