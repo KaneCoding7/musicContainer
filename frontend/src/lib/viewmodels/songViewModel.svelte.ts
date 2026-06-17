@@ -179,8 +179,46 @@ export class SongViewModel {
     this.sleepAtTrackEnd = false;
   }
 
+  // Original queue order before shuffling, to restore when shuffle is turned off.
+  private preShuffleQueue: Song[] | null = null;
+
+  // Fisher-Yates shuffle; returns a new array (input untouched).
+  private shuffled(arr: Song[]): Song[] {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  // Shuffle reorders the queue itself so the visible order always matches what
+  // plays next. Turning it on shuffles the upcoming tracks (current + already
+  // played stay put); turning it off restores the pre-shuffle order.
   toggleShuffle(): void {
-    this.shuffle = !this.shuffle;
+    if (!this.shuffle) {
+      this.shuffle = true;
+      if (this.currentIndex === null || this.queue.length <= 1) return;
+      this.preShuffleQueue = [...this.queue];
+      const at = this.currentIndex + 1;
+      this.queue = [
+        ...this.queue.slice(0, at),
+        ...this.shuffled(this.queue.slice(at)),
+      ];
+    } else {
+      this.shuffle = false;
+      const saved = this.preShuffleQueue;
+      this.preShuffleQueue = null;
+      // Restore the original order (keeping the current track loaded), unless
+      // the queue was edited while shuffled.
+      if (saved && saved.length === this.queue.length) {
+        const curId = this.currentSong?.id ?? null;
+        this.queue = saved;
+        const idx =
+          curId !== null ? saved.findIndex((s) => s.id === curId) : -1;
+        if (idx >= 0) this.currentIndex = idx;
+      }
+    }
   }
 
   // Cycles repeat off -> all -> one -> off.
@@ -189,16 +227,10 @@ export class SongViewModel {
       this.repeat === "off" ? "all" : this.repeat === "all" ? "one" : "off";
   }
 
-  // Picks the next index honoring shuffle + repeat; null means "stop".
+  // The next index in the queue (shuffle is baked into the queue order, so this
+  // is always sequential); null means "stop".
   private nextIndex(): number | null {
     if (this.currentIndex === null || this.queue.length === 0) return null;
-    if (this.shuffle && this.queue.length > 1) {
-      let r = this.currentIndex;
-      while (r === this.currentIndex) {
-        r = Math.floor(Math.random() * this.queue.length);
-      }
-      return r;
-    }
     const n = this.currentIndex + 1;
     if (n < this.queue.length) return n;
     return this.repeat === "all" ? 0 : null;
@@ -210,11 +242,21 @@ export class SongViewModel {
     return this.queue[this.currentIndex] ?? null;
   }
 
-  // Plays an arbitrary list of songs starting at the given index.
+  // Plays an arbitrary list of songs starting at the given index. If shuffle is
+  // on, the list is shuffled (the chosen track first) so the queue order is
+  // exactly what will play.
   playQueue(songs: Song[], index: number): void {
     if (index < 0 || index >= songs.length) return;
-    this.queue = songs;
-    this.currentIndex = index;
+    if (this.shuffle && songs.length > 1) {
+      const picked = songs[index];
+      this.preShuffleQueue = [...songs];
+      this.queue = [picked, ...this.shuffled(songs.filter((_, i) => i !== index))];
+      this.currentIndex = 0;
+    } else {
+      this.preShuffleQueue = null;
+      this.queue = songs;
+      this.currentIndex = index;
+    }
     this.isPlaying = true;
   }
 
@@ -225,11 +267,11 @@ export class SongViewModel {
     this.playQueue(songs, 0);
   }
 
-  // Plays a list shuffled: turns shuffle on and starts on a random track.
+  // Plays a list shuffled (turns shuffle on; playQueue does the shuffling).
   shufflePlay(songs: Song[]): void {
     if (songs.length === 0) return;
     this.shuffle = true;
-    this.playQueue(songs, Math.floor(Math.random() * songs.length));
+    this.playQueue(songs, 0);
   }
 
   // Plays from the full library list (used by the song list).
@@ -426,9 +468,6 @@ export class SongViewModel {
   // Goes back to the previous song; false if already at the start.
   prev(): boolean {
     if (this.currentIndex === null) return false;
-    if (this.shuffle && this.queue.length > 1) {
-      return this.next(); // shuffle: just jump to another track
-    }
     if (this.currentIndex > 0) {
       this.currentIndex -= 1;
       this.isPlaying = true;
