@@ -76,12 +76,42 @@
     { id: "settings", label: "Settings", icon: "settings" },
   ];
 
+  // Becomes true once we've attempted to restore the saved player state, so the
+  // persistence effect below doesn't overwrite the snapshot before we read it.
+  let restoreReady = $state(false);
+
   onMount(async () => {
     const saved = localStorage.getItem("theme");
     theme = saved === "light" ? "light" : "dark";
     document.documentElement.dataset.theme = theme;
     await authVm.init();
-    if (authVm.isAuthed) loadLibrary();
+    if (authVm.isAuthed) {
+      loadLibrary();
+      vm.restore(); // resume playback from before a refresh
+    }
+    restoreReady = true;
+  });
+
+  // Persist a now-playing snapshot whenever the discrete player state changes.
+  // (Position isn't tracked here — it's captured on page hide below.)
+  $effect(() => {
+    if (!restoreReady) return;
+    vm.persist();
+  });
+
+  // Capture the exact playback position when the page is refreshed, closed, or
+  // backgrounded (covers mobile PWA tab switches).
+  $effect(() => {
+    const persistNow = () => vm.persist();
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") vm.persist();
+    };
+    window.addEventListener("pagehide", persistNow);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", persistNow);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   });
 
   // Delete a song, then refresh the open playlist (its membership may change).

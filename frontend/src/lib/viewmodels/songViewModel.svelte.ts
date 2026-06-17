@@ -1,5 +1,6 @@
 // ViewModel: owns song-list state and the operations the UI triggers.
 // Uses Svelte 5 runes ($state) for reactive state in a plain class.
+import { untrack } from "svelte";
 import {
   deleteSong,
   fetchSongs,
@@ -97,6 +98,16 @@ export class SongViewModel {
 
   // Volume 0..1 (Cycle 11; lives here so keyboard shortcuts can adjust it).
   volume = $state(1);
+
+  // --- Now-playing persistence (survive a page refresh) ---
+  // Live playback position in seconds (written by the player on timeupdate).
+  position = $state(0);
+  // Position to seek to when (re)loading a restored track; 0 = start.
+  resumeAt = $state(0);
+  // Set while restoring so the player doesn't log a fresh play for the track
+  // it's merely resuming.
+  suppressPlayRecord = false;
+  private readonly NOW_PLAYING_KEY = "musicNowPlaying";
 
   togglePlay(): void {
     if (this.currentSong) this.isPlaying = !this.isPlaying;
@@ -384,6 +395,62 @@ export class SongViewModel {
       return true;
     }
     return false;
+  }
+
+  // Writes a snapshot of the player to sessionStorage so playback survives a
+  // refresh. The live position is read untracked so this is safe to call from a
+  // reactive effect without re-running on every timeupdate.
+  persist(): void {
+    if (typeof sessionStorage === "undefined") return;
+    if (this.currentIndex === null || this.queue.length === 0) {
+      sessionStorage.removeItem(this.NOW_PLAYING_KEY);
+      return;
+    }
+    try {
+      sessionStorage.setItem(
+        this.NOW_PLAYING_KEY,
+        JSON.stringify({
+          queue: this.queue,
+          currentIndex: this.currentIndex,
+          isPlaying: this.isPlaying,
+          shuffle: this.shuffle,
+          repeat: this.repeat,
+          volume: this.volume,
+          position: untrack(() => this.position),
+        })
+      );
+    } catch {
+      /* storage full/unavailable — best-effort */
+    }
+  }
+
+  // Restores a persisted snapshot if present. Returns true when playback state
+  // was restored. The player decides whether autoplay policy lets it resume.
+  restore(): boolean {
+    if (typeof sessionStorage === "undefined") return false;
+    const raw = sessionStorage.getItem(this.NOW_PLAYING_KEY);
+    if (!raw) return false;
+    try {
+      const s = JSON.parse(raw);
+      if (!Array.isArray(s.queue) || s.queue.length === 0) return false;
+      const idx =
+        typeof s.currentIndex === "number" &&
+        s.currentIndex >= 0 &&
+        s.currentIndex < s.queue.length
+          ? s.currentIndex
+          : 0;
+      this.queue = s.queue;
+      this.currentIndex = idx;
+      this.shuffle = !!s.shuffle;
+      this.repeat = s.repeat === "all" || s.repeat === "one" ? s.repeat : "off";
+      if (typeof s.volume === "number") this.volume = s.volume;
+      this.resumeAt = typeof s.position === "number" ? s.position : 0;
+      this.suppressPlayRecord = true;
+      this.isPlaying = !!s.isPlaying;
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   // Loads the song list from the backend.

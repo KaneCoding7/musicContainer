@@ -29,15 +29,24 @@
     if (el.src !== url) {
       el.src = url;
       el.load();
-      el.play().catch(() => {});
-      vm.recordPlay(id);
+      // A track restored after a refresh was already counted; don't re-log it.
+      if (vm.suppressPlayRecord) {
+        vm.suppressPlayRecord = false;
+      } else {
+        vm.recordPlay(id);
+      }
+      // Only auto-start if we're meant to be playing. If the browser blocks
+      // autoplay (e.g. resuming on refresh before any interaction), reflect the
+      // paused reality so one tap resumes from the restored position.
+      if (vm.isPlaying) el.play().catch(() => (vm.isPlaying = false));
     }
   });
 
   // Mirror the requested play/pause state onto the element.
   $effect(() => {
     if (!audio || !song) return;
-    if (vm.isPlaying && audio.paused) audio.play().catch(() => {});
+    if (vm.isPlaying && audio.paused)
+      audio.play().catch(() => (vm.isPlaying = false));
     if (!vm.isPlaying && !audio.paused) audio.pause();
   });
 
@@ -113,10 +122,17 @@
 
   function onTimeUpdate() {
     currentTime = audio?.currentTime ?? 0;
+    vm.position = currentTime; // tracked for refresh-resume persistence
     updatePositionState();
   }
   function onLoadedMetadata() {
     duration = audio?.duration ?? 0;
+    // Resume from the saved position after a refresh, then clear the marker.
+    if (audio && vm.resumeAt > 0) {
+      audio.currentTime = Math.min(vm.resumeAt, duration || vm.resumeAt);
+      currentTime = audio.currentTime;
+      vm.resumeAt = 0;
+    }
     updatePositionState();
   }
 
