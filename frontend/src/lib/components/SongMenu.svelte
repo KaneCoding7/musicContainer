@@ -26,19 +26,29 @@
   let open = $state(false);
   let editing = $state(false);
   let wrapEl = $state<HTMLElement | null>(null);
+  // When opened by right-click, the menu is positioned at the cursor; null means
+  // anchored to the ⋮ button instead.
+  let cursorPos = $state<{ x: number; y: number } | null>(null);
 
   function close() {
     open = false;
+    cursorPos = null;
   }
 
-  // Right-clicking (or long-pressing) anywhere on the row opens this menu, the
-  // same as tapping the ⋮ button. We attach to the enclosing row so no list
-  // component has to wire it up.
+  // Right-clicking (or long-pressing) anywhere on the row opens this menu at the
+  // cursor, the same items as the ⋮ button. We attach to the enclosing row so
+  // no list component has to wire it up.
   $effect(() => {
     const row = wrapEl?.closest("li");
     if (!row) return;
-    const onContext = (e: Event) => {
+    const onContext = (e: MouseEvent) => {
       e.preventDefault();
+      const MENU_W = 180;
+      const MENU_H = 230;
+      cursorPos = {
+        x: Math.max(8, Math.min(e.clientX, window.innerWidth - MENU_W - 8)),
+        y: Math.max(8, Math.min(e.clientY, window.innerHeight - MENU_H - 8)),
+      };
       open = true;
     };
     row.addEventListener("contextmenu", onContext);
@@ -68,6 +78,7 @@
     aria-label="More options"
     onclick={(e) => {
       e.stopPropagation();
+      cursorPos = null;
       open = !open;
     }}
   >
@@ -75,7 +86,11 @@
   </button>
 
   {#if open}
-    <div class="menu">
+    <div
+      class="menu"
+      class:at-cursor={cursorPos}
+      style={cursorPos ? `left:${cursorPos.x}px; top:${cursorPos.y}px;` : ""}
+    >
       <button onclick={() => { vm.playNext(song); close(); }}>
         <Icon name="playlist_play" size={18} /> Play next
       </button>
@@ -145,6 +160,11 @@
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     display: flex;
     flex-direction: column;
+  }
+  /* When opened by right-click, inline left/top place it at the cursor. */
+  .menu.at-cursor {
+    position: fixed;
+    right: auto;
   }
   .menu button,
   .menu .item {
