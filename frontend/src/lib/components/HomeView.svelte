@@ -121,15 +121,12 @@
   }
   .cards {
     display: grid;
-    /* Song sections fill the row (1fr) so the cards' right edge lines up with
-       the header's Play button. */
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 1rem;
-  }
-  /* The artists section has no Play button and often few items, so cap the
-     card size instead of stretching them into giant cards. */
-  .cards.artists {
+    /* Cap the track size (auto-fit, max 200px) so a section with only a few
+       items doesn't stretch into giant cards — packed left, like the artists
+       section. */
     grid-template-columns: repeat(auto-fit, minmax(140px, 200px));
+    gap: 1rem;
+    justify-content: start;
   }
   .card {
     display: flex;
