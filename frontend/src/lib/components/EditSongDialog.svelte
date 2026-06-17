@@ -201,10 +201,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 1rem;
+    box-sizing: border-box;
     z-index: 50;
   }
   .dialog {
-    width: min(420px, 92vw);
+    width: min(420px, 100%);
+    max-height: 90vh;
+    overflow-y: auto;
+    box-sizing: border-box;
     background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: 0.75rem;
@@ -242,27 +247,25 @@
     gap: 0.4rem;
     align-items: flex-start;
   }
-  /* Native file input (its own button opens the picker — the most reliable on
-     iOS Safari). We hide the "no file chosen" text and style the button. */
+  /* Plain, fully-visible native file input — its own button opens the picker
+     (the most reliable on iOS Safari), and keeping it visible means the tap
+     can't fall through to a form field behind it. */
   .art-file {
-    font-size: 0;
-    color: transparent;
-    max-width: 130px;
+    max-width: 100%;
+    font-size: 0.8rem;
+    color: var(--muted);
   }
   .art-file::file-selector-button,
   .art-file::-webkit-file-upload-button {
-    margin: 0;
-    padding: 0.4rem 0.8rem;
-    background: var(--surface-2);
-    border: 1px solid var(--border-strong);
+    margin-right: 0.5rem;
+    padding: 0.45rem 0.85rem;
+    background: var(--accent);
+    border: none;
     border-radius: 0.4rem;
-    color: var(--text);
-    font-size: 0.85rem;
-    font-weight: 500;
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
     cursor: pointer;
-  }
-  .art-file::file-selector-button:hover {
-    background: var(--hover);
   }
   .art-hint {
     font-size: 0.72rem;
