@@ -7,12 +7,14 @@ import { ART_DIR, getDb, MUSIC_DIR } from "../db/init.js";
 import {
   deleteSong,
   listSongs,
+  listSongsNeedingLoudness,
   recordPlay,
   recordSong,
   resolveSongArtById,
   resolveSongFileById,
   setLiked,
   setSongArt,
+  setSongLoudness,
   updateSong,
   updateSongsBulk,
   validateUpload,
@@ -25,6 +27,7 @@ import {
 } from "../functional/publicShares.js";
 import { statusForError } from "../functional/result.js";
 import { extractMetadata } from "../metadata.js";
+import { measureLoudness } from "../loudness.js";
 import { streamSongFile } from "../stream.js";
 import { serveArt } from "../thumbnails.js";
 
@@ -212,6 +215,15 @@ songsRouter.post("/upload", (req, res) => {
         .json({ error: result.error });
     }
 
+    // Measure loudness in the background so the upload response isn't delayed;
+    // the value lands on the next library load.
+    const songId = result.value.id;
+    measureLoudness(audioPath)
+      .then((lufs) => {
+        if (lufs !== null) setSongLoudness(getDb(), songId, lufs);
+      })
+      .catch(() => {});
+
     return res.status(201).json({ song: result.value });
   });
 });
@@ -225,6 +237,28 @@ songsRouter.get("/songs", (req, res) => {
       .json({ error: result.error });
   }
   return res.json({ songs: result.value });
+});
+
+// POST /api/songs/analyze-loudness — measure loudness for any of the user's
+// tracks not yet analyzed (backfill, used to normalize the existing library).
+// Processes a bounded batch per call so a huge library can't tie up a request;
+// the client calls repeatedly until `remaining` reaches 0.
+songsRouter.post("/songs/analyze-loudness", async (req, res) => {
+  const pending = listSongsNeedingLoudness(getDb(), req.userId!);
+  const batch = pending.slice(0, 10);
+  let analyzed = 0;
+  for (const song of batch) {
+    const lufs = await measureLoudness(join(MUSIC_DIR, song.filename));
+    if (lufs !== null) {
+      setSongLoudness(getDb(), song.id, lufs);
+      analyzed += 1;
+    } else {
+      // Mark unmeasurable tracks as analyzed-at-target so we don't retry them
+      // forever (e.g. a missing/corrupt file).
+      setSongLoudness(getDb(), song.id, -14);
+    }
+  }
+  return res.json({ analyzed, remaining: pending.length - batch.length });
 });
 
 // PATCH /api/songs/bulk — edit metadata (artist, album) on many songs at once.

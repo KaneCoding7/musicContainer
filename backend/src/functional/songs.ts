@@ -60,10 +60,11 @@ interface SongRow {
   play_count: number;
   last_played_at: string | null;
   liked: number;
+  loudness: number | null;
 }
 
 const SONG_COLUMNS =
-  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked";
+  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness";
 
 function rowToSong(row: SongRow): Song {
   return {
@@ -78,7 +79,39 @@ function rowToSong(row: SongRow): Song {
     playCount: row.play_count,
     lastPlayedAt: row.last_played_at,
     liked: row.liked === 1,
+    loudness: row.loudness,
   };
+}
+
+// Records a track's measured integrated loudness (LUFS). Best-effort; used by
+// the analyzer and the upload flow.
+export function setSongLoudness(
+  db: Database,
+  id: number,
+  loudness: number
+): void {
+  try {
+    db.prepare("UPDATE songs SET loudness = ? WHERE id = ?").run(loudness, id);
+  } catch {
+    /* best-effort */
+  }
+}
+
+// Returns the on-disk filenames of a user's songs that have not been analyzed
+// for loudness yet (loudness IS NULL).
+export function listSongsNeedingLoudness(
+  db: Database,
+  userId: string
+): { id: number; filename: string }[] {
+  try {
+    return db
+      .prepare(
+        "SELECT id, filename FROM songs WHERE user_id = ? AND loudness IS NULL"
+      )
+      .all(userId) as { id: number; filename: string }[];
+  } catch {
+    return [];
+  }
 }
 
 // Records an already-stored audio file (plus any extracted metadata) in the

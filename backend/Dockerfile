@@ -3,9 +3,10 @@ FROM node:20-bookworm-slim AS base
 WORKDIR /app
 
 # better-sqlite3 ships prebuilt binaries for most platforms; build tools are a
-# fallback in case a native rebuild is needed.
+# fallback in case a native rebuild is needed. ffmpeg measures each track's
+# loudness (EBU R128) for volume normalization.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 make g++ \
+    && apt-get install -y --no-install-recommends python3 make g++ ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # --- deps ---

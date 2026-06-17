@@ -75,6 +75,20 @@ export async function updateSongsMeta(
   return (await res.json()).songs as Song[];
 }
 
+// Analyzes one batch of not-yet-measured tracks for loudness. Returns how many
+// were analyzed this call and how many remain (call repeatedly until 0).
+export async function analyzeLoudness(): Promise<{
+  analyzed: number;
+  remaining: number;
+}> {
+  const res = await fetch(`${apiBase()}/api/songs/analyze-loudness`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()) as { analyzed: number; remaining: number };
+}
+
 // Sets a song's liked flag; returns the updated song.
 export async function setLiked(songId: number, liked: boolean): Promise<Song> {
   const res = await fetch(`${apiBase()}/api/songs/${songId}/like`, {

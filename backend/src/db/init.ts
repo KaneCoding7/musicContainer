@@ -171,6 +171,11 @@ export function migrate(database: Database.Database): void {
   if (!columns.includes("user_id")) {
     database.exec("ALTER TABLE songs ADD COLUMN user_id TEXT");
   }
+  // Integrated loudness in LUFS (EBU R128), measured by ffmpeg, for volume
+  // normalization. Null until analyzed.
+  if (!columns.includes("loudness")) {
+    database.exec("ALTER TABLE songs ADD COLUMN loudness REAL");
+  }
   const plColumns = (
     database.prepare("PRAGMA table_info(playlists)").all() as { name: string }[]
   ).map((c) => c.name);

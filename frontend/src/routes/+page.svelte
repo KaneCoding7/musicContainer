@@ -63,6 +63,11 @@
     localStorage.setItem("theme", theme);
   }
 
+  function toggleNormalize() {
+    vm.normalize = !vm.normalize;
+    localStorage.setItem("normalize", String(vm.normalize));
+  }
+
   const nav: { id: View; label: string; icon: string }[] = [
     { id: "home", label: "Home", icon: "home" },
     { id: "songs", label: "All Songs", icon: "library_music" },
@@ -84,6 +89,7 @@
     const saved = localStorage.getItem("theme");
     theme = saved === "light" ? "light" : "dark";
     document.documentElement.dataset.theme = theme;
+    vm.normalize = localStorage.getItem("normalize") !== "false"; // default on
     await authVm.init();
     if (authVm.isAuthed) {
       loadLibrary();
@@ -302,7 +308,13 @@
         <InviteView />
       {:else}
         <h2>Settings</h2>
-        <SettingsView vm={authVm} {theme} onToggleTheme={toggleTheme} />
+        <SettingsView
+          vm={authVm}
+          songVm={vm}
+          {theme}
+          onToggleTheme={toggleTheme}
+          onToggleNormalize={toggleNormalize}
+        />
       {/if}
     </main>
   </div>

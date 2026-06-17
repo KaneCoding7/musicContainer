@@ -19,6 +19,51 @@
 
   const song = $derived(vm.currentSong);
 
+  // --- Volume normalization (loudness leveling) ---
+  const NORM_TARGET_LUFS = -14;
+  let audioCtx: AudioContext | null = null;
+  let gainNode: GainNode | null = null;
+
+  // Linear gain for the current track so it plays near the target loudness.
+  // 1 when normalization is off or the track hasn't been analyzed.
+  const normGain = $derived.by(() => {
+    if (!vm.normalize) return 1;
+    const lufs = song?.loudness;
+    if (lufs == null) return 1;
+    const gainDb = Math.max(-12, Math.min(12, NORM_TARGET_LUFS - lufs));
+    return Math.pow(10, gainDb / 20);
+  });
+
+  // Lazily build a Web Audio graph (source → gain → limiter → output) so quiet
+  // tracks can be boosted without clipping. Created on first playback; falls
+  // back to plain element volume if Web Audio is unavailable or the media is
+  // cross-origin without CORS (which would taint the graph).
+  function ensureAudioGraph() {
+    if (audioCtx || !audio) return;
+    try {
+      const Ctor =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (!Ctor) return;
+      audioCtx = new Ctor();
+      const source = audioCtx.createMediaElementSource(audio);
+      gainNode = audioCtx.createGain();
+      const limiter = audioCtx.createDynamicsCompressor();
+      limiter.threshold.value = -1;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0.003;
+      limiter.release.value = 0.25;
+      source.connect(gainNode);
+      gainNode.connect(limiter);
+      limiter.connect(audioCtx.destination);
+    } catch {
+      audioCtx = null;
+      gainNode = null;
+    }
+  }
+
   // True from the moment we try to resume a restored track until it actually
   // starts playing. While true, pause events are treated as "autoplay blocked"
   // (keep the intent + wait for a gesture) rather than "user paused".
@@ -35,7 +80,11 @@
     const resume = () => {
       for (const e of events) window.removeEventListener(e, resume);
       resumeArmed = false;
-      if (vm.isPlaying && audio?.paused) audio.play().catch(() => {});
+      if (vm.isPlaying && audio?.paused) {
+        ensureAudioGraph();
+        audioCtx?.resume();
+        audio.play().catch(() => {});
+      }
     };
     for (const e of events) window.addEventListener(e, resume);
   }
@@ -47,6 +96,8 @@
   // back to resuming on the first interaction. vm.isPlaying stays true so the UI
   // and lock-screen reflect the intent to play.
   function tryResume(el: HTMLAudioElement) {
+    ensureAudioGraph();
+    audioCtx?.resume();
     el.play().catch(() => armAutoResume());
   }
 
@@ -85,9 +136,17 @@
     if (!vm.isPlaying && !audio.paused) audio.pause();
   });
 
-  // Keep element volume in sync.
+  // Keep volume + normalization in sync. With the Web Audio graph active, the
+  // element stays at unity and the gain node carries volume × normalization
+  // (so quiet tracks can be boosted past 1). Without it, use element volume.
   $effect(() => {
-    if (audio) audio.volume = vm.volume;
+    if (!audio) return;
+    if (gainNode && audioCtx) {
+      audio.volume = 1;
+      gainNode.gain.value = vm.volume * normGain;
+    } else {
+      audio.volume = vm.volume;
+    }
   });
 
   // --- Media Session (Cycle 26): OS / lock-screen / headphone controls ---
@@ -271,6 +330,7 @@
 
 <audio
   bind:this={audio}
+  crossorigin="anonymous"
   ontimeupdate={onTimeUpdate}
   onloadedmetadata={onLoadedMetadata}
   onplay={() => {

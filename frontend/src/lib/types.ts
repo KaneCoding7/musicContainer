@@ -12,6 +12,7 @@ export interface Song {
   playCount: number;
   lastPlayedAt: string | null;
   liked: boolean;
+  loudness: number | null; // integrated loudness (LUFS) for normalization
 }
 
 export interface Playlist {

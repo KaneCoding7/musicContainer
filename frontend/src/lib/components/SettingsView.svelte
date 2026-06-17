@@ -1,16 +1,57 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
+  import { analyzeLoudness } from "$lib/services/songService";
   import type { AuthViewModel } from "$lib/viewmodels/authViewModel.svelte";
+  import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
   let {
     vm,
+    songVm,
     theme,
     onToggleTheme,
+    onToggleNormalize,
   }: {
     vm: AuthViewModel;
+    songVm: SongViewModel;
     theme: "dark" | "light";
     onToggleTheme: () => void;
+    onToggleNormalize: () => void;
   } = $props();
+
+  // How many tracks still need loudness analysis for normalization.
+  const pendingLoudness = $derived(
+    songVm.songs.filter((s) => s.loudness == null).length
+  );
+  let analyzing = $state(false);
+  let analyzeMsg = $state<{ ok: boolean; text: string } | null>(null);
+
+  async function runAnalyze() {
+    analyzing = true;
+    analyzeMsg = null;
+    try {
+      let remaining = Infinity;
+      let total = 0;
+      let guard = 0;
+      while (remaining > 0 && guard++ < 1000) {
+        const r = await analyzeLoudness();
+        total += r.analyzed;
+        remaining = r.remaining;
+        analyzeMsg = { ok: true, text: `Analyzing… ${remaining} left` };
+      }
+      await songVm.load(); // pull in the new loudness values
+      analyzeMsg = {
+        ok: true,
+        text: `Done — analyzed ${total} track${total === 1 ? "" : "s"}`,
+      };
+    } catch (e) {
+      analyzeMsg = {
+        ok: false,
+        text: e instanceof Error ? e.message : "Analysis failed",
+      };
+    } finally {
+      analyzing = false;
+    }
+  }
 
   let name = $state("");
   let nameInited = false;
@@ -64,6 +105,47 @@
         {theme === "dark" ? "Switch to light" : "Switch to dark"}
       </button>
     </div>
+  </div>
+
+  <div class="card">
+    <h3>Playback</h3>
+    <div class="row">
+      <span class="row-label">
+        Volume normalization
+        <span class="hint">Play all tracks at a consistent loudness</span>
+      </span>
+      <button
+        class="theme-btn"
+        class:on={songVm.normalize}
+        onclick={onToggleNormalize}
+      >
+        <Icon name={songVm.normalize ? "graphic_eq" : "volume_off"} size={18} />
+        {songVm.normalize ? "On" : "Off"}
+      </button>
+    </div>
+    <div class="row">
+      <span class="row-label">
+        Loudness analysis
+        <span class="hint">
+          {#if pendingLoudness === 0}
+            All tracks analyzed
+          {:else}
+            {pendingLoudness} track{pendingLoudness === 1 ? "" : "s"} not analyzed yet
+          {/if}
+        </span>
+      </span>
+      <button
+        class="theme-btn"
+        onclick={runAnalyze}
+        disabled={analyzing || pendingLoudness === 0}
+      >
+        <Icon name="equalizer" size={18} />
+        {analyzing ? "Analyzing…" : "Analyze library"}
+      </button>
+    </div>
+    {#if analyzeMsg}
+      <p class="msg" class:err={!analyzeMsg.ok}>{analyzeMsg.text}</p>
+    {/if}
   </div>
 
   <form class="card" onsubmit={saveName}>
@@ -137,8 +219,24 @@
     gap: 1rem;
   }
   .row-label {
-    color: var(--muted);
+    color: var(--text);
     font-size: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .hint {
+    color: var(--dim);
+    font-size: 0.78rem;
+  }
+  .theme-btn.on {
+    background: var(--active-bg);
+    border-color: var(--accent);
+    color: var(--accent-text);
+  }
+  .theme-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
   .theme-btn {
     align-self: auto;

@@ -99,6 +99,9 @@ export class SongViewModel {
   // Volume 0..1 (Cycle 11; lives here so keyboard shortcuts can adjust it).
   volume = $state(1);
 
+  // Volume normalization (loudness leveling) on/off. Persisted by the page.
+  normalize = $state(true);
+
   // --- Now-playing persistence (survive a page refresh) ---
   // Live playback position in seconds (written by the player on timeupdate).
   position = $state(0);
