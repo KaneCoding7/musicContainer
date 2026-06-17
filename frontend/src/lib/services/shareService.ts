@@ -13,6 +13,7 @@ export interface ShareUser {
 export interface SharedPlaylist extends Playlist {
   ownerName: string;
   canEdit: boolean;
+  savedCopyId: number | null; // my saved copy's id, if I've saved this one
 }
 export interface UserMatch {
   id: string;

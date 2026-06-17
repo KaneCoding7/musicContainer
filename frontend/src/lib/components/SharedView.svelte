@@ -5,6 +5,7 @@
   import { thumbUrl } from "$lib/services/songService";
   import {
     addSongToPlaylist,
+    deletePlaylist,
     removeSongFromPlaylist,
   } from "$lib/services/playlistService";
   import {
@@ -26,18 +27,26 @@
   let error = $state<string | null>(null);
   let addId = $state<string>("");
   let saving = $state(false);
-  let saved = $state(false);
+  // The id of my saved copy of the open shared playlist (null = not saved).
+  let savedCopyId = $state<number | null>(null);
 
-  async function saveToMine() {
+  // Toggles the open shared playlist in/out of my personal playlists.
+  async function toggleSave() {
     if (!open || saving) return;
     saving = true;
     error = null;
     try {
-      await copySharedPlaylist(open.id);
-      saved = true;
-      onCopied?.();
+      if (savedCopyId !== null) {
+        await deletePlaylist(savedCopyId);
+        savedCopyId = null;
+      } else {
+        const copy = await copySharedPlaylist(open.id);
+        savedCopyId = copy.id;
+      }
+      onCopied?.(); // refresh the personal playlist list
+      playlists = await fetchSharedWithMe(); // keep saved-state fresh
     } catch (e) {
-      error = e instanceof Error ? e.message : "Failed to save playlist";
+      error = e instanceof Error ? e.message : "Failed to update your library";
     } finally {
       saving = false;
     }
@@ -86,7 +95,7 @@
 
   async function openPlaylist(p: SharedPlaylist) {
     error = null;
-    saved = false;
+    savedCopyId = p.savedCopyId;
     try {
       songs = await fetchSharedPlaylistSongs(p.id);
       open = p;
@@ -122,9 +131,18 @@
             <Icon name="shuffle" size={18} /> Shuffle
           </button>
         {/if}
-        <button class="save-btn" onclick={saveToMine} disabled={saving || saved}>
-          <Icon name={saved ? "check_circle" : "playlist_add"} size={18} />
-          {saved ? "Saved to your playlists" : saving ? "Saving…" : "Add to my playlists"}
+        <button
+          class="save-btn"
+          class:on={savedCopyId !== null}
+          onclick={toggleSave}
+          disabled={saving}
+        >
+          <Icon name={savedCopyId !== null ? "check_circle" : "playlist_add"} size={18} />
+          {saving
+            ? "Working…"
+            : savedCopyId !== null
+              ? "Remove from library"
+              : "Add to my playlists"}
         </button>
       </div>
     </div>
@@ -153,9 +171,13 @@
           <span class="t-meta">
             <span class="t-name">{song.originalFilename}</span>
             {#if song.artist}<span class="t-artist">{song.artist}</span>{/if}
-            {#if song.addedBy}<span class="t-added">Added by {song.addedBy}</span>{/if}
           </span>
         </button>
+        {#if song.addedBy}
+          <span class="t-added" title={`Added by ${song.addedBy}`}>
+            <Icon name="person" size={13} />{song.addedBy}
+          </span>
+        {/if}
         {#if open.canEdit}
           <button
             class="remove"
@@ -329,6 +351,11 @@
   .save-btn:hover:not(:disabled) {
     background: var(--hover);
   }
+  .save-btn.on {
+    background: var(--active-bg);
+    border-color: var(--accent);
+    color: var(--accent-text);
+  }
   .save-btn:disabled {
     opacity: 0.7;
     cursor: default;
@@ -434,8 +461,17 @@
     font-size: 0.8rem;
   }
   .t-added {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    flex-shrink: 0;
+    padding-right: 0.5rem;
+    max-width: 9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     color: var(--dim);
-    font-size: 0.72rem;
+    font-size: 0.76rem;
   }
   .muted {
     color: var(--muted);

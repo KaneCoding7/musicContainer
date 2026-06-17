@@ -352,13 +352,13 @@
                     size={20}
                   />
                 </span>
-                <span class="meta">
-                  <span class="name">{song.originalFilename}</span>
-                  {#if collaborative && song.addedBy}
-                    <span class="added-by">Added by {song.addedBy}</span>
-                  {/if}
-                </span>
+                <span class="name">{song.originalFilename}</span>
               </button>
+              {#if collaborative && song.addedBy}
+                <span class="added-by" title={`Added by ${song.addedBy}`}>
+                  <Icon name="person" size={13} />{song.addedBy}
+                </span>
+              {/if}
               <span
                 class="plays"
                 title={`${song.playCount} play${song.playCount === 1 ? "" : "s"}`}
@@ -714,20 +714,23 @@
     display: inline-flex;
     color: var(--accent-text);
   }
-  .meta {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    text-align: left;
-  }
   .name {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .added-by {
-    font-size: 0.72rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    flex-shrink: 0;
+    max-width: 9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.76rem;
     font-weight: 400;
     color: var(--dim);
   }

@@ -14,6 +14,7 @@ export interface ShareUser {
 export interface SharedPlaylist extends Playlist {
   ownerName: string;
   canEdit: boolean;
+  savedCopyId: number | null; // my saved copy's id, if I've saved this one
 }
 
 function findUserByEmail(
@@ -143,14 +144,17 @@ export function listSharedWithMe(
                 (SELECT x.song_id FROM playlist_songs x
                    JOIN songs s ON s.id = x.song_id
                    WHERE x.playlist_id = p.id AND s.art_filename IS NOT NULL
-                   ORDER BY x.position ASC LIMIT 1) AS cover_song_id
+                   ORDER BY x.position ASC LIMIT 1) AS cover_song_id,
+                (SELECT mp.id FROM playlists mp
+                   WHERE mp.user_id = ? AND mp.copied_from = p.id LIMIT 1)
+                  AS saved_copy_id
          FROM playlist_shares ps
          JOIN playlists p ON p.id = ps.playlist_id
          JOIN "user" u ON u.id = p.user_id
          WHERE ps.shared_with = ?
          ORDER BY datetime(ps.created_at) DESC`
       )
-      .all(userId) as {
+      .all(userId, userId) as {
       id: number;
       name: string;
       created_at: string;
@@ -158,6 +162,7 @@ export function listSharedWithMe(
       can_edit: number;
       track_count: number;
       cover_song_id: number | null;
+      saved_copy_id: number | null;
     }[];
     return ok(
       rows.map((r) => ({
@@ -168,6 +173,7 @@ export function listSharedWithMe(
         canEdit: r.can_edit === 1,
         trackCount: r.track_count,
         coverSongId: r.cover_song_id,
+        savedCopyId: r.saved_copy_id,
       }))
     );
   } catch (e) {
@@ -224,8 +230,10 @@ export function copySharedPlaylist(
     let newId = 0;
     db.transaction(() => {
       const info = db
-        .prepare("INSERT INTO playlists (name, user_id) VALUES (?, ?)")
-        .run(src.name, userId);
+        .prepare(
+          "INSERT INTO playlists (name, user_id, copied_from) VALUES (?, ?, ?)"
+        )
+        .run(src.name, userId, playlistId);
       newId = info.lastInsertRowid as number;
       db.prepare(
         `INSERT INTO playlist_songs (playlist_id, song_id, position, added_by)

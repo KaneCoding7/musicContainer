@@ -199,6 +199,11 @@ export function migrate(database: Database.Database): void {
   if (!plColumns.includes("user_id")) {
     database.exec("ALTER TABLE playlists ADD COLUMN user_id TEXT");
   }
+  // Links a saved copy back to the shared playlist it was copied from, so the
+  // "Add to my playlists" action can toggle (and we can tell it's already saved).
+  if (!plColumns.includes("copied_from")) {
+    database.exec("ALTER TABLE playlists ADD COLUMN copied_from INTEGER");
+  }
   // Collaborative sharing (Cycle 33): editors may add/remove tracks.
   const shareColumns = (
     database
