@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
+  import SongMenu from "$lib/components/SongMenu.svelte";
   import { thumbUrl } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -28,6 +29,12 @@
             {#if song.artist}<span class="artist">{song.artist}</span>{/if}
           </span>
         </button>
+        <span
+          class="plays"
+          title={`${song.playCount} play${song.playCount === 1 ? "" : "s"}`}
+        >
+          <Icon name="play_arrow" size={13} />{song.playCount}
+        </span>
         <button
           class="like"
           title="Unlike"
@@ -36,6 +43,7 @@
         >
           <Icon name="favorite" fill size={20} />
         </button>
+        <SongMenu {vm} {song} />
       </li>
     {/each}
   </ul>
@@ -119,5 +127,14 @@
     color: #ef4444;
     cursor: pointer;
     padding: 0.5rem 0.9rem;
+  }
+  .plays {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
   }
 </style>

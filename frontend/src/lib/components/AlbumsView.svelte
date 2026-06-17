@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
+  import SongMenu from "$lib/components/SongMenu.svelte";
   import { thumbUrl } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -77,6 +78,7 @@
             <Icon name="play_arrow" size={13} />{song.playCount}
           </span>
         </button>
+        <SongMenu {vm} {song} />
       </li>
     {/each}
   </ol>
@@ -193,13 +195,16 @@
     margin: 0;
   }
   li {
+    display: flex;
+    align-items: center;
     border-bottom: 1px solid var(--surface-2);
   }
   li.current {
     background: var(--active-bg);
   }
   .track {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 1rem;

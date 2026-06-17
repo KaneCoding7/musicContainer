@@ -1,9 +1,8 @@
 <script lang="ts">
-  import EditSongDialog from "$lib/components/EditSongDialog.svelte";
   import Icon from "$lib/components/Icon.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
-  import { thumbUrl, downloadUrl, type SongMetadata } from "$lib/services/songService";
-  import type { Song } from "$lib/types";
+  import SongMenu from "$lib/components/SongMenu.svelte";
+  import { thumbUrl, type SongMetadata } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
   import type { Playlist } from "$lib/types";
@@ -24,8 +23,6 @@
     onBulkEdit?: (ids: number[], fields: SongMetadata) => Promise<number>;
   } = $props();
 
-  let editing = $state<Song | null>(null);
-
   // --- Multi-select (Cycle 16) ---
   let selecting = $state(false);
   let selected = $state<Set<number>>(new Set());
@@ -36,9 +33,6 @@
   let editMode = $state(false);
   let bulkArtist = $state("");
   let bulkAlbum = $state("");
-
-  // Per-row queue menu (Cycle 29): holds the song id whose menu is open.
-  let menuFor = $state<number | null>(null);
 
   function toggleSelect(id: number) {
     const next = new Set(selected);
@@ -91,11 +85,6 @@
     return `${m}:${s.toString().padStart(2, "0")}`;
   }
 
-  function confirmDelete(song: Song) {
-    if (confirm(`Delete "${song.originalFilename}"? This cannot be undone.`)) {
-      onDelete?.(song.id);
-    }
-  }
 </script>
 
 <div class="song-list">
@@ -244,35 +233,12 @@
               <span class="date">{formatDate(song.uploadedAt)}</span>
             {/if}
           </button>
-          <div class="menu-wrap">
-            <button
-              class="action"
-              title="Queue options"
-              aria-label="Queue options"
-              onclick={() => (menuFor = menuFor === song.id ? null : song.id)}
-              ><Icon name="more_vert" size={20} /></button
-            >
-            {#if menuFor === song.id}
-              <div class="menu">
-                <button
-                  onclick={() => {
-                    vm.playNext(song);
-                    menuFor = null;
-                  }}
-                >
-                  <Icon name="playlist_play" size={18} /> Play next
-                </button>
-                <button
-                  onclick={() => {
-                    vm.addToQueue(song);
-                    menuFor = null;
-                  }}
-                >
-                  <Icon name="queue_music" size={18} /> Add to queue
-                </button>
-              </div>
-            {/if}
-          </div>
+          <span
+            class="plays"
+            title={`${song.playCount} play${song.playCount === 1 ? "" : "s"}`}
+          >
+            <Icon name="play_arrow" size={13} />{song.playCount}
+          </span>
           <button
             class="action like"
             class:liked={song.liked}
@@ -281,52 +247,12 @@
             onclick={() => vm.toggleLike(song.id)}
             ><Icon name="favorite" fill={song.liked} size={20} /></button
           >
-          <a
-            class="action"
-            href={downloadUrl(song.id)}
-            title="Download song"
-            aria-label="Download song"><Icon name="download" size={20} /></a
-          >
-          {#if onUpdate}
-            <button
-              class="action"
-              title="Edit song"
-              aria-label="Edit song"
-              onclick={() => (editing = song)}
-              ><Icon name="edit" size={20} /></button
-            >
-          {/if}
-          {#if onDelete}
-            <button
-              class="delete"
-              title="Delete song"
-              aria-label="Delete song"
-              onclick={() => confirmDelete(song)}
-              ><Icon name="delete" size={20} /></button
-            >
-          {/if}
+          <SongMenu {vm} {song} onEdit={onUpdate} onDelete={onDelete} />
         </li>
       {/each}
     </ul>
   {/if}
 </div>
-
-{#if menuFor !== null}
-  <button
-    class="menu-backdrop"
-    aria-label="Close menu"
-    onclick={() => (menuFor = null)}
-  ></button>
-{/if}
-
-{#if editing}
-  <EditSongDialog
-    song={editing}
-    onSave={(id, fields) => onUpdate?.(id, fields)}
-    onArtChanged={(s) => vm.replaceSong(s)}
-    onClose={() => (editing = null)}
-  />
-{/if}
 
 <style>
   .actions-bar {
@@ -501,8 +427,7 @@
     text-align: left;
     cursor: pointer;
   }
-  .action,
-  .delete {
+  .action {
     display: inline-flex;
     align-items: center;
     background: transparent;
@@ -516,56 +441,17 @@
   .action:hover {
     background: var(--surface-2);
   }
-  .menu-wrap {
-    position: relative;
+  .plays {
     display: inline-flex;
-  }
-  .menu {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 0.25rem);
-    z-index: 20;
-    min-width: 160px;
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: 0.5rem;
-    padding: 0.25rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-    display: flex;
-    flex-direction: column;
-  }
-  .menu button {
-    display: flex;
     align-items: center;
-    gap: 0.5rem;
-    width: 100%;
-    padding: 0.5rem 0.6rem;
-    background: transparent;
-    border: none;
-    border-radius: 0.35rem;
-    color: var(--text);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-  .menu button:hover {
-    background: var(--hover);
-  }
-  .menu-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 10;
-    background: transparent;
-    border: none;
-    padding: 0;
-    cursor: default;
+    gap: 0.15rem;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
   }
   .like.liked {
     color: #ef4444;
-  }
-  .delete:hover {
-    background: var(--danger-bg);
-    color: var(--danger-text);
   }
   .row:hover {
     background: var(--hover);
@@ -643,8 +529,7 @@
       gap: 0.6rem;
       padding: 0.6rem 0.35rem;
     }
-    .action,
-    .delete {
+    .action {
       padding: 0.45rem 0.4rem;
     }
     .check {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
+  import SongMenu from "$lib/components/SongMenu.svelte";
   import { playlistZipUrl } from "$lib/services/playlistService";
   import { thumbUrl } from "$lib/services/songService";
   import {
@@ -351,6 +352,13 @@
               >
                 <Icon name="play_arrow" size={13} />{song.playCount}
               </span>
+              <SongMenu
+                vm={songVm}
+                {song}
+                onChanged={() => {
+                  if (vm.selectedId !== null) vm.select(vm.selectedId);
+                }}
+              />
               <button
                 class="remove"
                 title="Remove from playlist"

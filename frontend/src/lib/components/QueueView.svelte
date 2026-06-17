@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
+  import SongMenu from "$lib/components/SongMenu.svelte";
   import { thumbUrl } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -62,6 +63,13 @@
             <span class="badge">Now playing</span>
           {/if}
         </button>
+        <span
+          class="plays"
+          title={`${song.playCount} play${song.playCount === 1 ? "" : "s"}`}
+        >
+          <Icon name="play_arrow" size={13} />{song.playCount}
+        </span>
+        <SongMenu {vm} {song} />
         <button
           class="remove"
           title="Remove from queue"
@@ -106,6 +114,15 @@
     cursor: pointer;
     padding: 0.4rem 0.6rem;
     border-radius: 0.35rem;
+  }
+  .plays {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
   }
   .remove:hover {
     background: var(--surface-2);
