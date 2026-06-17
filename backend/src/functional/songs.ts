@@ -2,7 +2,7 @@ import type { Database } from "better-sqlite3";
 import { existsSync, statSync, unlinkSync } from "node:fs";
 import { extname, join } from "node:path";
 import type { Song } from "../types.js";
-import { err, ok, type Result } from "./result.js";
+import { err, ok, type AppError, type Result } from "./result.js";
 
 // Allowed audio formats for the MVP.
 const ALLOWED_EXTENSIONS = new Set([".mp3", ".wav"]);
@@ -256,6 +256,44 @@ export function updateSong(
     return getSong(db, id, userId);
   } catch (e) {
     return err("internal", `Failed to update song: ${(e as Error).message}`);
+  }
+}
+
+// Bulk-updates editable metadata (artist, album) across many songs at once.
+// Only provided fields are changed; blank/omitted fields leave a song's value
+// untouched. The whole batch is applied in a single transaction, so if any one
+// song fails (e.g. not owned by the user) nothing is written.
+export function updateSongsBulk(
+  db: Database,
+  ids: number[],
+  fields: { artist?: string; album?: string },
+  userId: string
+): Result<Song[]> {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return err("validation", "No songs selected");
+  }
+  if (fields.artist === undefined && fields.album === undefined) {
+    return err("validation", "No fields to update");
+  }
+
+  try {
+    const run = db.transaction((): Song[] => {
+      const updated: Song[] = [];
+      for (const id of ids) {
+        const r = updateSong(db, id, fields, userId);
+        if (!r.ok) throw r.error; // abort & roll back the whole batch
+        updated.push(r.value);
+      }
+      return updated;
+    });
+    return ok(run());
+  } catch (e) {
+    // A rolled-back AppError thrown from inside the transaction.
+    if (e && typeof e === "object" && "code" in e && "message" in e) {
+      const appErr = e as AppError;
+      return err(appErr.code, appErr.message);
+    }
+    return err("internal", `Failed to update songs: ${(e as Error).message}`);
   }
 }
 

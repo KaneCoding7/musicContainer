@@ -60,6 +60,22 @@ export async function updateSongMeta(
   return (await res.json()).song as Song;
 }
 
+// Updates metadata (artist/album) on many songs at once; returns the updated
+// songs. Only the fields present in `fields` are changed — omit a field to
+// leave it untouched across the selection.
+export async function updateSongsMeta(
+  ids: number[],
+  fields: { artist?: string; album?: string }
+): Promise<Song[]> {
+  const res = await fetch(`${API_BASE}/api/songs/bulk`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ ids, ...fields }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).songs as Song[];
+}
+
 // Sets a song's liked flag; returns the updated song.
 export async function setLiked(songId: number, liked: boolean): Promise<Song> {
   const res = await fetch(`${API_BASE}/api/songs/${songId}/like`, {

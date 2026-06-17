@@ -8,6 +8,7 @@ import {
   recordSong,
   setLiked,
   updateSong,
+  updateSongsBulk,
 } from "../src/functional/songs.js";
 import { addUser, testDb } from "./helpers.js";
 
@@ -66,6 +67,31 @@ describe("songs", () => {
     const s = seedSong(alice);
     const r = updateSong(db, s.id, { originalFilename: "hacked" }, bob);
     expect(r.ok).toBe(false);
+  });
+
+  it("bulk-updates metadata across many songs, leaving omitted fields alone", () => {
+    const a = seedSong(alice, "A1");
+    const b = seedSong(alice, "A2");
+    expect(updateSong(db, a.id, { album: "Keep" }, alice).ok).toBe(true);
+
+    // Only artist is supplied, so album must be untouched on both songs.
+    const r = updateSongsBulk(db, [a.id, b.id], { artist: "VA" }, alice);
+    expect(r.ok && r.value.length).toBe(2);
+    expect(getSong(db, a.id, alice).ok && getSong(db, a.id, alice).value).toMatchObject({ artist: "VA", album: "Keep" });
+    expect(getSong(db, b.id, alice).ok && getSong(db, b.id, alice).value.artist).toBe("VA");
+  });
+
+  it("bulk update is atomic and owner-scoped (one foreign id rolls back the batch)", () => {
+    const a = seedSong(alice, "A1");
+    const stranger = seedSong(bob, "B1");
+    const r = updateSongsBulk(db, [a.id, stranger.id], { artist: "X" }, alice);
+    expect(r.ok).toBe(false);
+    // Alice's song must be unchanged because the whole batch rolled back.
+    expect(getSong(db, a.id, alice).ok && getSong(db, a.id, alice).value.artist).toBe(null);
+  });
+
+  it("bulk update rejects an empty selection", () => {
+    expect(updateSongsBulk(db, [], { artist: "X" }, alice).ok).toBe(false);
   });
 
   it("toggles liked and records plays (owner only)", () => {

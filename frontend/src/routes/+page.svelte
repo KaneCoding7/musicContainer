@@ -93,6 +93,15 @@
     }
   }
 
+  // Edit metadata across many selected songs; refresh the open playlist too.
+  async function handleBulkUpdate(ids: number[], fields: SongMetadata) {
+    const n = await vm.updateMetaBulk(ids, fields);
+    if (playlistVm.selectedId !== null) {
+      await playlistVm.select(playlistVm.selectedId);
+    }
+    return n;
+  }
+
   // Global keyboard shortcuts (ignored while typing in a field).
   function handleKeydown(e: KeyboardEvent) {
     if (!authVm.isAuthed) return;
@@ -206,6 +215,7 @@
           onUpdate={handleUpdate}
           playlists={playlistVm.playlists}
           onBulkAdd={(id, songIds) => playlistVm.addSongs(id, songIds)}
+          onBulkEdit={handleBulkUpdate}
         />
       {:else if view === "liked"}
         <h2>Liked</h2>

@@ -13,12 +13,14 @@
     onUpdate,
     playlists = [],
     onBulkAdd,
+    onBulkEdit,
   }: {
     vm: SongViewModel;
     onDelete?: (id: number) => void;
     onUpdate?: (id: number, fields: SongMetadata) => void;
     playlists?: Playlist[];
     onBulkAdd?: (playlistId: number, songIds: number[]) => Promise<number>;
+    onBulkEdit?: (ids: number[], fields: SongMetadata) => Promise<number>;
   } = $props();
 
   let editing = $state<Song | null>(null);
@@ -28,6 +30,11 @@
   let selected = $state<Set<number>>(new Set());
   let addTarget = $state<string>("");
   let addStatus = $state<string | null>(null);
+
+  // Bulk metadata edit. Blank fields are left unchanged across the selection.
+  let editMode = $state(false);
+  let bulkArtist = $state("");
+  let bulkAlbum = $state("");
 
   // Per-row queue menu (Cycle 29): holds the song id whose menu is open.
   let menuFor = $state<number | null>(null);
@@ -44,6 +51,9 @@
     selected = new Set();
     addTarget = "";
     addStatus = null;
+    editMode = false;
+    bulkArtist = "";
+    bulkAlbum = "";
   }
 
   async function addSelected() {
@@ -53,6 +63,20 @@
     addStatus = `Added ${added} ${added === 1 ? "song" : "songs"}`;
     selected = new Set();
     addTarget = "";
+  }
+
+  async function applyBulkEdit() {
+    if (!onBulkEdit || selected.size === 0) return;
+    const fields: SongMetadata = {};
+    if (bulkArtist.trim()) fields.artist = bulkArtist.trim();
+    if (bulkAlbum.trim()) fields.album = bulkAlbum.trim();
+    if (fields.artist === undefined && fields.album === undefined) return;
+    const n = await onBulkEdit([...selected], fields);
+    addStatus = `Updated ${n} ${n === 1 ? "song" : "songs"}`;
+    bulkArtist = "";
+    bulkAlbum = "";
+    editMode = false;
+    selected = new Set();
   }
 
   function formatDate(iso: string): string {
@@ -94,7 +118,7 @@
           <option value="duration">Duration</option>
         </select>
       </label>
-      {#if onBulkAdd && playlists.length > 0}
+      {#if (onBulkAdd && playlists.length > 0) || onBulkEdit}
         {#if selecting}
           <button class="ghost" onclick={exitSelect}>Done</button>
         {:else}
@@ -108,17 +132,51 @@
     {#if selecting}
       <div class="selbar">
         <span class="count">{selected.size} selected</span>
-        <select bind:value={addTarget}>
-          <option value="" disabled selected>Add to playlist…</option>
-          {#each playlists as p (p.id)}
-            <option value={String(p.id)}>{p.name}</option>
-          {/each}
-        </select>
-        <button onclick={addSelected} disabled={!addTarget || selected.size === 0}>
-          Add
-        </button>
+        {#if onBulkAdd && playlists.length > 0}
+          <select bind:value={addTarget}>
+            <option value="" disabled selected>Add to playlist…</option>
+            {#each playlists as p (p.id)}
+              <option value={String(p.id)}>{p.name}</option>
+            {/each}
+          </select>
+          <button onclick={addSelected} disabled={!addTarget || selected.size === 0}>
+            Add
+          </button>
+        {/if}
+        {#if onBulkEdit}
+          <button
+            class="ghost"
+            class:active={editMode}
+            onclick={() => (editMode = !editMode)}
+            disabled={selected.size === 0}
+          >
+            <Icon name="edit" size={18} /> Edit
+          </button>
+        {/if}
         {#if addStatus}<span class="status">{addStatus}</span>{/if}
       </div>
+
+      {#if editMode && onBulkEdit}
+        <div class="selbar editbar">
+          <input
+            bind:value={bulkArtist}
+            placeholder="Artist (blank = keep)"
+            aria-label="Set artist on selected songs"
+          />
+          <input
+            bind:value={bulkAlbum}
+            placeholder="Album (blank = keep)"
+            aria-label="Set album on selected songs"
+          />
+          <button
+            onclick={applyBulkEdit}
+            disabled={selected.size === 0 ||
+              (!bulkArtist.trim() && !bulkAlbum.trim())}
+          >
+            Apply to {selected.size}
+          </button>
+        </div>
+      {/if}
     {/if}
   {/if}
 
@@ -345,6 +403,32 @@
   .selbar .status {
     color: var(--accent-text);
     font-size: 0.85rem;
+  }
+  .selbar button.ghost {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+  }
+  .selbar button.ghost:hover:not(:disabled) {
+    background: var(--border-strong);
+  }
+  .selbar button.ghost.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .selbar.editbar {
+    margin-top: -0.4rem;
+  }
+  .selbar.editbar input {
+    flex: 1 1 10rem;
+    min-width: 0;
+    padding: 0.45rem 0.6rem;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.4rem;
+    color: var(--text);
+    font: inherit;
   }
   .check {
     display: inline-flex;

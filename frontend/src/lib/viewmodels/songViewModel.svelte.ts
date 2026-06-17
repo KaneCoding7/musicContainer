@@ -6,6 +6,7 @@ import {
   recordPlay,
   setLiked,
   updateSongMeta,
+  updateSongsMeta,
   uploadSong,
   type SongMetadata,
 } from "$lib/services/songService";
@@ -305,6 +306,25 @@ export class SongViewModel {
       this.queue = this.queue.map((s) => (s.id === id ? updated : s));
     } catch (e) {
       this.error = e instanceof Error ? e.message : "Failed to update song";
+    }
+  }
+
+  // Updates metadata on many songs at once, reflecting the changes in the
+  // library list and queue. Returns the number of songs updated.
+  async updateMetaBulk(
+    ids: number[],
+    fields: SongMetadata
+  ): Promise<number> {
+    this.error = null;
+    try {
+      const updated = await updateSongsMeta(ids, fields);
+      const byId = new Map(updated.map((s) => [s.id, s]));
+      this.songs = this.songs.map((s) => byId.get(s.id) ?? s);
+      this.queue = this.queue.map((s) => byId.get(s.id) ?? s);
+      return updated.length;
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Failed to update songs";
+      return 0;
     }
   }
 

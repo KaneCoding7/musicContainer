@@ -14,6 +14,7 @@ import {
   setLiked,
   setSongArt,
   updateSong,
+  updateSongsBulk,
   validateUpload,
 } from "../functional/songs.js";
 import { canAccessSong } from "../functional/shares.js";
@@ -211,6 +212,31 @@ songsRouter.post("/upload", (req, res) => {
 // GET /api/songs — list all songs.
 songsRouter.get("/songs", (req, res) => {
   const result = listSongs(getDb(), req.userId!);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ songs: result.value });
+});
+
+// PATCH /api/songs/bulk — edit metadata (artist, album) on many songs at once.
+// Must be registered before "/songs/:id" so "bulk" isn't matched as an id.
+songsRouter.patch("/songs/bulk", (req, res) => {
+  const ids = Array.isArray(req.body?.ids)
+    ? req.body.ids.map(Number).filter((n: number) => Number.isFinite(n))
+    : null;
+  if (!ids) {
+    return res.status(400).json({
+      error: { code: "validation", message: "ids array is required" },
+    });
+  }
+
+  const fields: { artist?: string; album?: string } = {};
+  if (typeof req.body?.artist === "string") fields.artist = req.body.artist;
+  if (typeof req.body?.album === "string") fields.album = req.body.album;
+
+  const result = updateSongsBulk(getDb(), ids, fields, req.userId!);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
