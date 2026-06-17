@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import Icon from "$lib/components/Icon.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import { thumbUrl } from "$lib/services/songService";
@@ -11,6 +12,31 @@
   const recentlyAdded = $derived(vm.recentlyAdded.slice(0, LIMIT));
   const mostPlayed = $derived(vm.mostPlayed.slice(0, LIMIT));
   const recentlyPlayed = $derived(vm.recentlyPlayed.slice(0, LIMIT));
+
+  // Top artists by total play count (tagged artists only).
+  const mostPlayedArtists = $derived.by(() => {
+    const map = new Map<string, Song[]>();
+    for (const s of vm.songs) {
+      const name = s.artist?.trim();
+      if (!name) continue;
+      const list = map.get(name) ?? [];
+      list.push(s);
+      map.set(name, list);
+    }
+    return [...map.entries()]
+      .map(([name, songs]) => ({
+        name,
+        plays: songs.reduce((sum, s) => sum + s.playCount, 0),
+        artId: songs.find((s) => s.hasArt)?.id ?? null,
+      }))
+      .filter((a) => a.plays > 0)
+      .sort((a, b) => b.plays - a.plays)
+      .slice(0, LIMIT);
+  });
+
+  function openArtist(name: string) {
+    goto(`?view=artists&artist=${encodeURIComponent(name)}`, { noScroll: true });
+  }
 </script>
 
 {#snippet section(title: string, icon: string, list: Song[])}
@@ -45,6 +71,30 @@
 {:else}
   {@render section("Recently Added", "schedule", recentlyAdded)}
   {@render section("Most Played", "trending_up", mostPlayed)}
+
+  {#if mostPlayedArtists.length > 0}
+    <section>
+      <div class="head">
+        <h3><Icon name="artist" size={20} /> Most Played Artists</h3>
+      </div>
+      <div class="cards">
+        {#each mostPlayedArtists as a (a.name)}
+          <button class="card" onclick={() => openArtist(a.name)}>
+            <span class="cover round">
+              {#if a.artId !== null}
+                <img src={thumbUrl(a.artId, 512)} alt="" />
+              {:else}
+                <Icon name="person" size={26} />
+              {/if}
+            </span>
+            <span class="c-name">{a.name}</span>
+            <span class="c-sub">{a.plays} play{a.plays === 1 ? "" : "s"}</span>
+          </button>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
   {@render section("Recently Played", "history", recentlyPlayed)}
 {/if}
 
@@ -104,6 +154,9 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  .cover.round {
+    border-radius: 50%;
   }
   .play-overlay {
     position: absolute;

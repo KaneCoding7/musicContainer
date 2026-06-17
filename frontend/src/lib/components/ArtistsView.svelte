@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
+  import { page } from "$app/state";
   import Icon from "$lib/components/Icon.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
@@ -9,7 +11,15 @@
 
   let { vm }: { vm: SongViewModel } = $props();
 
-  let openArtist = $state<string | null>(null);
+  // The open artist is driven by the URL (?artist=…) so it's deep-linkable
+  // (e.g. from Home) and the browser back button returns to the artist list.
+  const openArtist = $derived(page.url.searchParams.get("artist"));
+  function openArtistView(name: string) {
+    goto(`?view=artists&artist=${encodeURIComponent(name)}`, { noScroll: true });
+  }
+  function closeArtist() {
+    goto("?view=artists", { noScroll: true });
+  }
 
   interface Artist {
     name: string;
@@ -78,7 +88,7 @@
 {#if vm.songs.length === 0}
   <p class="muted">No songs yet. Upload some to see artists.</p>
 {:else if current}
-  <button class="back" onclick={() => (openArtist = null)}>
+  <button class="back" onclick={closeArtist}>
     <Icon name="arrow_back" size={20} /> All artists
   </button>
   <div class="head">
@@ -143,7 +153,7 @@
 {:else}
   <div class="grid">
     {#each artists as artist (artist.name)}
-      <button class="card" onclick={() => (openArtist = artist.name)}>
+      <button class="card" onclick={() => openArtistView(artist.name)}>
         <span class="avatar">
           {#if artist.artId !== null}
             <img src={thumbUrl(artist.artId, 512)} alt="" />
