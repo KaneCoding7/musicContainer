@@ -32,14 +32,18 @@
       map.set(key, list);
     }
     return [...map.entries()]
-      .map(([name, songs]) => ({
-        name,
+      .map(([name, songs]) => {
         // Apply the user's manual order; un-ordered tracks keep library order.
-        songs: [...songs].sort(
+        const sorted = [...songs].sort(
           (a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity)
-        ),
-        artId: songs.find((s) => s.hasArt)?.id ?? null,
-      }))
+        );
+        return {
+          name,
+          songs: sorted,
+          // The artist picture follows the top track in order (first with art).
+          artId: sorted.find((s) => s.hasArt)?.id ?? null,
+        };
+      })
       .sort((a, b) => {
         // Pin the "No artist" group last; everything else alphabetical.
         if (a.name === NO_ARTIST) return 1;
