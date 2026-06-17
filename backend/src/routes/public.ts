@@ -56,5 +56,5 @@ publicRouter.get("/public/:token/songs/:id/art", async (req, res) => {
       .status(statusForError(result.error.code))
       .json({ error: result.error });
   }
-  await serveArt(res, result.value.path, result.value.contentType, req.query.size);
+  await serveArt(req, res, result.value.path, result.value.contentType, req.query.size);
 });

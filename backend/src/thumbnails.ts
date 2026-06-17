@@ -5,7 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, renameSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import sharp from "sharp";
 
 // Allowed thumbnail edge sizes (px). A requested size snaps up to the nearest
@@ -41,12 +41,22 @@ async function ensureThumbnail(artPath: string, size: number): Promise<string> {
 // Streams album art to the response, resized to a cached thumbnail when a valid
 // `sizeRaw` is given. Falls back to the original on any resize failure.
 export async function serveArt(
+  req: Request,
   res: Response,
   artPath: string,
   fullContentType: string,
   sizeRaw: unknown
 ): Promise<void> {
-  res.setHeader("Cache-Control", "public, max-age=86400");
+  // The stored art filename is unique per version, so use it as an ETag and ask
+  // the browser to revalidate — replacing a song's art shows up immediately
+  // instead of being masked by a long-lived cache.
+  const etag = `"${basename(artPath)}-${thumbSize(sizeRaw) ?? "full"}"`;
+  res.setHeader("ETag", etag);
+  res.setHeader("Cache-Control", "no-cache");
+  if (req.headers["if-none-match"] === etag) {
+    res.status(304).end();
+    return;
+  }
   const size = thumbSize(sizeRaw);
   if (size !== null) {
     try {
