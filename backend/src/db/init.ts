@@ -176,6 +176,11 @@ export function migrate(database: Database.Database): void {
   if (!columns.includes("loudness")) {
     database.exec("ALTER TABLE songs ADD COLUMN loudness REAL");
   }
+  // Manual sort order within a derived grouping (e.g. an artist's tracks).
+  // Null until the user drags to reorder.
+  if (!columns.includes("sort_order")) {
+    database.exec("ALTER TABLE songs ADD COLUMN sort_order REAL");
+  }
   const plColumns = (
     database.prepare("PRAGMA table_info(playlists)").all() as { name: string }[]
   ).map((c) => c.name);

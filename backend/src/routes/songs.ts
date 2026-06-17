@@ -15,6 +15,7 @@ import {
   setLiked,
   setSongArt,
   setSongLoudness,
+  setSongsOrder,
   updateSong,
   updateSongsBulk,
   validateUpload,
@@ -259,6 +260,26 @@ songsRouter.post("/songs/analyze-loudness", async (req, res) => {
     }
   }
   return res.json({ analyzed, remaining: pending.length - batch.length });
+});
+
+// PATCH /api/songs/order — persist a manual ordering for a set of songs
+// (e.g. the tracks within an artist). Body: { ids: number[] } in desired order.
+songsRouter.patch("/songs/order", (req, res) => {
+  const ids = Array.isArray(req.body?.ids)
+    ? req.body.ids.map(Number).filter((n: number) => Number.isFinite(n))
+    : null;
+  if (!ids) {
+    return res.status(400).json({
+      error: { code: "validation", message: "ids array is required" },
+    });
+  }
+  const result = setSongsOrder(getDb(), ids, req.userId!);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ ok: true });
 });
 
 // PATCH /api/songs/bulk — edit metadata (artist, album) on many songs at once.

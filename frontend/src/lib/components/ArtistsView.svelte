@@ -34,7 +34,10 @@
     return [...map.entries()]
       .map(([name, songs]) => ({
         name,
-        songs,
+        // Apply the user's manual order; un-ordered tracks keep library order.
+        songs: [...songs].sort(
+          (a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity)
+        ),
         artId: songs.find((s) => s.hasArt)?.id ?? null,
       }))
       .sort((a, b) => {
@@ -49,6 +52,22 @@
 
   function trackLabel(songs: Song[]): string {
     return `${songs.length} ${songs.length === 1 ? "track" : "tracks"}`;
+  }
+
+  // Drag-to-reorder the current artist's tracks (persisted via the view-model).
+  let dragIndex = $state<number | null>(null);
+  let overIndex = $state<number | null>(null);
+
+  function onDrop(i: number) {
+    const songs = current?.songs ?? [];
+    if (dragIndex !== null && dragIndex !== i && songs.length > 0) {
+      const ids = songs.map((s) => s.id);
+      const [moved] = ids.splice(dragIndex, 1);
+      ids.splice(i, 0, moved);
+      vm.reorderSongs(ids);
+    }
+    dragIndex = null;
+    overIndex = null;
   }
 </script>
 
@@ -79,8 +98,27 @@
       {@const isCurrent = song.id === vm.currentSong?.id}
       <li
         class:current={isCurrent}
+        class:dragging={i === dragIndex}
+        class:dragover={i === overIndex && i !== dragIndex}
+        draggable="true"
+        ondragstart={() => (dragIndex = i)}
+        ondragover={(e) => {
+          e.preventDefault();
+          overIndex = i;
+        }}
+        ondrop={(e) => {
+          e.preventDefault();
+          onDrop(i);
+        }}
+        ondragend={() => {
+          dragIndex = null;
+          overIndex = null;
+        }}
         use:swipeQueue={{ onQueue: () => vm.addToQueue(song) }}
       >
+        <span class="handle" title="Drag to reorder" aria-hidden="true">
+          <Icon name="drag_indicator" size={18} />
+        </span>
         <button class="track" onclick={() => vm.playQueue(current.songs, i)}>
           <span class="num">{i + 1}</span>
           <span class="t-meta">
@@ -207,6 +245,23 @@
     display: flex;
     align-items: center;
     border-bottom: 1px solid var(--surface-2);
+  }
+  li.dragging {
+    opacity: 0.4;
+  }
+  li.dragover {
+    border-top: 2px solid var(--accent);
+  }
+  .handle {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: var(--dim);
+    cursor: grab;
+    padding-left: 0.25rem;
+  }
+  .handle:active {
+    cursor: grabbing;
   }
   li.current {
     background: var(--active-bg);

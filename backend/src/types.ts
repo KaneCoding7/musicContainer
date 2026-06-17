@@ -13,6 +13,7 @@ export interface Song {
   lastPlayedAt: string | null; // ISO timestamp of last play
   liked: boolean;
   loudness: number | null; // integrated loudness in LUFS, for normalization
+  sortOrder: number | null; // manual order within a grouping (e.g. artist)
 }
 
 export interface Playlist {

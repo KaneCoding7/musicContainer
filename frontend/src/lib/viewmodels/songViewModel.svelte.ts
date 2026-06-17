@@ -5,6 +5,7 @@ import {
   deleteSong,
   fetchSongs,
   recordPlay,
+  reorderSongs as reorderSongsApi,
   setLiked,
   updateSongMeta,
   updateSongsMeta,
@@ -316,6 +317,20 @@ export class SongViewModel {
       this.queue = this.queue.map((s) => (s.id === id ? updated : s));
     } catch {
       /* play tracking is best-effort */
+    }
+  }
+
+  // Persists a manual order for the given song ids (e.g. an artist's tracks),
+  // updating sortOrder locally so derived groupings re-sort immediately.
+  async reorderSongs(ids: number[]): Promise<void> {
+    const pos = new Map(ids.map((id, i) => [id, i]));
+    this.songs = this.songs.map((s) =>
+      pos.has(s.id) ? { ...s, sortOrder: pos.get(s.id)! } : s
+    );
+    try {
+      await reorderSongsApi(ids);
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Failed to save order";
     }
   }
 

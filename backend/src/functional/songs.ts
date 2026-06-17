@@ -61,10 +61,11 @@ interface SongRow {
   last_played_at: string | null;
   liked: number;
   loudness: number | null;
+  sort_order: number | null;
 }
 
 const SONG_COLUMNS =
-  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness";
+  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness, sort_order";
 
 function rowToSong(row: SongRow): Song {
   return {
@@ -80,7 +81,33 @@ function rowToSong(row: SongRow): Song {
     lastPlayedAt: row.last_played_at,
     liked: row.liked === 1,
     loudness: row.loudness,
+    sortOrder: row.sort_order,
   };
+}
+
+// Persists a manual ordering: assigns each id a sort_order matching its index
+// in the given list (owner-scoped, in one transaction). Used to reorder the
+// tracks within a derived grouping such as an artist.
+export function setSongsOrder(
+  db: Database,
+  ids: number[],
+  userId: string
+): Result<void> {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return err("validation", "No songs to order");
+  }
+  try {
+    const stmt = db.prepare(
+      "UPDATE songs SET sort_order = ? WHERE id = ? AND user_id = ?"
+    );
+    const run = db.transaction((list: number[]) => {
+      list.forEach((id, index) => stmt.run(index, id, userId));
+    });
+    run(ids);
+    return ok(undefined);
+  } catch (e) {
+    return err("internal", `Failed to set order: ${(e as Error).message}`);
+  }
 }
 
 // Records a track's measured integrated loudness (LUFS). Best-effort; used by

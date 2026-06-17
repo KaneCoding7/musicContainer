@@ -13,6 +13,7 @@ export interface Song {
   lastPlayedAt: string | null;
   liked: boolean;
   loudness: number | null; // integrated loudness (LUFS) for normalization
+  sortOrder: number | null; // manual order within a grouping (e.g. artist)
 }
 
 export interface Playlist {

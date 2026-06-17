@@ -89,6 +89,16 @@ export async function analyzeLoudness(): Promise<{
   return (await res.json()) as { analyzed: number; remaining: number };
 }
 
+// Persists a manual ordering (sort_order) for the given song ids, in order.
+export async function reorderSongs(ids: number[]): Promise<void> {
+  const res = await fetch(`${apiBase()}/api/songs/order`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
 // Sets a song's liked flag; returns the updated song.
 export async function setLiked(songId: number, liked: boolean): Promise<Song> {
   const res = await fetch(`${apiBase()}/api/songs/${songId}/like`, {
