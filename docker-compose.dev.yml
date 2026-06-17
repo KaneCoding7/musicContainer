@@ -25,6 +25,9 @@ services:
     command: npm run dev -- --host 0.0.0.0 --port 3000
     environment:
       - NODE_ENV=development
+      # Comma-separated public hostnames allowed to reach the Vite dev server
+      # (e.g. your Cloudflare tunnel hostname). Set in .env.
+      - VITE_ALLOWED_HOSTS=${VITE_ALLOWED_HOSTS:-}
     volumes:
       - ./frontend:/app
       - /app/node_modules
