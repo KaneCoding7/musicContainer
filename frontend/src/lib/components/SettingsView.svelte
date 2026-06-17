@@ -94,150 +94,131 @@
 </script>
 
 <div class="settings">
-  <section class="card">
-    <h3>Appearance</h3>
-    <div class="setting">
-      <div class="label">
-        <span class="title">Dark mode</span>
-        <span class="sub">Use a dark color scheme</span>
-      </div>
-      <button
-        class="switch"
-        role="switch"
-        aria-checked={theme === "dark"}
-        aria-label="Dark mode"
-        onclick={onToggleTheme}><span class="knob"></span></button
-      >
-    </div>
-  </section>
+  <p class="section">Appearance</p>
+  <div class="row">
+    <span class="t">Dark mode</span>
+    <button
+      class="switch"
+      role="switch"
+      aria-checked={theme === "dark"}
+      aria-label="Dark mode"
+      onclick={onToggleTheme}><span class="knob"></span></button
+    >
+  </div>
 
-  <section class="card">
-    <h3>Playback</h3>
-    <div class="setting">
-      <div class="label">
-        <span class="title">Volume normalization</span>
-        <span class="sub">Play all tracks at a consistent loudness</span>
-      </div>
-      <button
-        class="switch"
-        role="switch"
-        aria-checked={songVm.normalize}
-        aria-label="Volume normalization"
-        onclick={onToggleNormalize}><span class="knob"></span></button
-      >
+  <p class="section">Playback</p>
+  <div class="row">
+    <div class="info">
+      <span class="t">Volume normalization</span>
+      <span class="sub">Consistent loudness across tracks</span>
     </div>
-    <div class="setting">
-      <div class="label">
-        <span class="title">Loudness analysis</span>
-        <span class="sub">
-          {#if pendingLoudness === 0}
-            All tracks analyzed
-          {:else}
-            {pendingLoudness} track{pendingLoudness === 1 ? "" : "s"} pending
-          {/if}
-        </span>
-      </div>
-      <button
-        class="btn"
-        onclick={runAnalyze}
-        disabled={analyzing || pendingLoudness === 0}
-      >
-        {analyzing ? "Analyzing…" : "Analyze"}
-      </button>
+    <button
+      class="switch"
+      role="switch"
+      aria-checked={songVm.normalize}
+      aria-label="Volume normalization"
+      onclick={onToggleNormalize}><span class="knob"></span></button
+    >
+  </div>
+  <div class="row">
+    <div class="info">
+      <span class="t">Loudness analysis</span>
+      <span class="sub">
+        {#if pendingLoudness === 0}
+          All tracks analyzed
+        {:else}
+          {pendingLoudness} pending
+        {/if}
+      </span>
     </div>
-    {#if analyzeMsg}
-      <p class="msg" class:err={!analyzeMsg.ok}>{analyzeMsg.text}</p>
-    {/if}
-  </section>
+    <button
+      class="ghost"
+      onclick={runAnalyze}
+      disabled={analyzing || pendingLoudness === 0}
+    >
+      {analyzing ? "Analyzing…" : "Analyze"}
+    </button>
+  </div>
+  {#if analyzeMsg}<p class="msg" class:err={!analyzeMsg.ok}>{analyzeMsg.text}</p>{/if}
 
-  <form class="card" onsubmit={saveName}>
-    <h3>Profile</h3>
-    <label class="field">
-      <span>Display name</span>
-      <input bind:value={name} autocomplete="name" required />
-    </label>
-    <p class="email">Signed in as {vm.user?.email}</p>
-    {#if nameMsg}<p class="msg" class:err={!nameMsg.ok}>{nameMsg.text}</p>{/if}
-    <div class="card-actions">
-      <button class="btn primary" type="submit" disabled={nameBusy}>
-        {nameBusy ? "Saving…" : "Save"}
-      </button>
-    </div>
+  <p class="section">Profile</p>
+  <form class="form" onsubmit={saveName}>
+    <input
+      class="inp"
+      bind:value={name}
+      placeholder="Display name"
+      autocomplete="name"
+      required
+    />
+    <button class="primary" type="submit" disabled={nameBusy}>
+      {nameBusy ? "Saving…" : "Save"}
+    </button>
   </form>
+  <p class="sub email">Signed in as {vm.user?.email}</p>
+  {#if nameMsg}<p class="msg" class:err={!nameMsg.ok}>{nameMsg.text}</p>{/if}
 
-  <form class="card" onsubmit={savePassword}>
-    <h3>Change password</h3>
-    <label class="field">
-      <span>Current password</span>
-      <input
-        type="password"
-        bind:value={currentPassword}
-        autocomplete="current-password"
-        required
-      />
-    </label>
-    <label class="field">
-      <span>New password</span>
-      <input
-        type="password"
-        bind:value={newPassword}
-        autocomplete="new-password"
-        minlength="8"
-        required
-      />
-    </label>
-    {#if pwMsg}<p class="msg" class:err={!pwMsg.ok}>{pwMsg.text}</p>{/if}
-    <div class="card-actions">
-      <button class="btn primary" type="submit" disabled={pwBusy}>
-        {pwBusy ? "Saving…" : "Update password"}
-      </button>
-    </div>
+  <p class="section">Password</p>
+  <form class="form col" onsubmit={savePassword}>
+    <input
+      class="inp"
+      type="password"
+      bind:value={currentPassword}
+      placeholder="Current password"
+      autocomplete="current-password"
+      required
+    />
+    <input
+      class="inp"
+      type="password"
+      bind:value={newPassword}
+      placeholder="New password"
+      autocomplete="new-password"
+      minlength="8"
+      required
+    />
+    <button class="primary" type="submit" disabled={pwBusy}>
+      {pwBusy ? "Saving…" : "Update password"}
+    </button>
   </form>
+  {#if pwMsg}<p class="msg" class:err={!pwMsg.ok}>{pwMsg.text}</p>{/if}
 </div>
 
 <style>
   .settings {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    max-width: 480px;
+    max-width: 440px;
   }
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--surface-2);
-    border-radius: 0.75rem;
-    padding: 1.1rem 1.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.9rem;
-  }
-  h3 {
-    margin: 0;
-    font-size: 0.75rem;
+  .section {
+    margin: 1.75rem 0 0.25rem;
+    font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--muted);
+    letter-spacing: 0.07em;
+    color: var(--dim);
   }
-  .setting {
+  .section:first-child {
+    margin-top: 0;
+  }
+  .row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--surface-2);
   }
-  .label {
+  .info {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
+    gap: 0.1rem;
     min-width: 0;
   }
-  .label .title {
-    font-size: 0.92rem;
+  .t {
     color: var(--text);
+    font-size: 0.92rem;
   }
-  .label .sub {
-    font-size: 0.78rem;
+  .sub {
     color: var(--dim);
+    font-size: 0.78rem;
   }
 
   /* Toggle switch */
@@ -273,15 +254,20 @@
     transform: translateX(18px);
   }
 
-  /* Form fields */
-  .field {
+  /* Forms */
+  .form {
     display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    font-size: 0.82rem;
-    color: var(--muted);
+    gap: 0.5rem;
+    margin-top: 0.6rem;
   }
-  input {
+  .form.col {
+    flex-direction: column;
+    align-items: stretch;
+    max-width: 320px;
+  }
+  .inp {
+    flex: 1;
+    min-width: 0;
     padding: 0.55rem 0.7rem;
     background: var(--bg);
     border: 1px solid var(--border-strong);
@@ -289,17 +275,15 @@
     color: var(--text);
     font: inherit;
   }
-  input:focus {
+  .inp:focus {
     outline: none;
     border-color: var(--accent);
   }
   .email {
-    margin: 0;
-    color: var(--dim);
-    font-size: 0.8rem;
+    margin: 0.5rem 0 0;
   }
   .msg {
-    margin: 0;
+    margin: 0.5rem 0 0;
     color: var(--accent-text);
     font-size: 0.85rem;
   }
@@ -307,33 +291,37 @@
     color: var(--danger-text);
   }
 
-  .card-actions {
-    display: flex;
-    justify-content: flex-end;
-  }
-  .btn {
-    padding: 0.5rem 1rem;
+  .ghost {
+    flex-shrink: 0;
+    padding: 0.4rem 0.85rem;
     background: var(--surface-2);
     color: var(--text);
     border: 1px solid var(--border-strong);
     border-radius: 0.5rem;
     font: inherit;
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     cursor: pointer;
   }
-  .btn:hover:not(:disabled) {
+  .ghost:hover:not(:disabled) {
     background: var(--hover);
   }
-  .btn.primary {
+  .primary {
+    padding: 0.55rem 1.1rem;
     background: var(--accent);
-    border-color: var(--accent);
     color: #fff;
+    border: none;
+    border-radius: 0.5rem;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
   }
-  .btn.primary:hover:not(:disabled) {
+  .primary:hover:not(:disabled) {
     background: var(--accent-hover);
   }
-  .btn:disabled {
+  .ghost:disabled,
+  .primary:disabled {
     opacity: 0.6;
     cursor: not-allowed;
   }
