@@ -65,6 +65,10 @@
 
   let linkUrl = $state("");
   let linkMsg = $state<{ ok: boolean; text: string } | null>(null);
+  let playlistUrl = $state("");
+  let playlistMsg = $state<{ ok: boolean; text: string } | null>(null);
+  // Which import is running, so the progress bar shows in the right section.
+  let activeImport = $state<"track" | "playlist" | null>(null);
 
   function stageLabel(stage: string, pct: number | null): string {
     if (stage === "download")
@@ -80,12 +84,33 @@
     const url = linkUrl.trim();
     if (!url || vm.importing) return;
     linkMsg = null;
+    activeImport = "track";
     const n = await vm.importFromLink(url);
+    activeImport = null;
     if (n > 0) {
       linkMsg = { ok: true, text: "Imported — review it below" };
       linkUrl = "";
     } else {
       linkMsg = { ok: false, text: vm.error ?? "Import failed" };
+    }
+  }
+
+  async function submitPlaylist(e: Event) {
+    e.preventDefault();
+    const url = playlistUrl.trim();
+    if (!url || vm.importing) return;
+    playlistMsg = null;
+    activeImport = "playlist";
+    const n = await vm.importFromLink(url, true);
+    activeImport = null;
+    if (n > 0) {
+      playlistMsg = {
+        ok: true,
+        text: `Imported ${n} track${n === 1 ? "" : "s"} — review below`,
+      };
+      playlistUrl = "";
+    } else {
+      playlistMsg = { ok: false, text: vm.error ?? "Import failed" };
     }
   }
 </script>
@@ -129,25 +154,7 @@
     <p class="msg err">{vm.error}</p>
   {/if}
 
-  <div class="divider"><span>or paste a link</span></div>
-
-  <form class="link-row" onsubmit={submitLink}>
-    <input
-      class="link-input"
-      type="url"
-      placeholder="Paste a YouTube, Spotify, SoundCloud… link"
-      bind:value={linkUrl}
-      disabled={vm.importing}
-    />
-    <button type="submit" class="link-btn" disabled={vm.importing || !linkUrl.trim()}>
-      {#if vm.importing}
-        <Icon name="progress_activity" size={18} /> Importing…
-      {:else}
-        <Icon name="download" size={18} /> Add
-      {/if}
-    </button>
-  </form>
-  {#if vm.importing}
+  {#snippet progressBar()}
     <div class="link-progress">
       <div class="pbar">
         <div
@@ -158,12 +165,63 @@
       </div>
       <span class="pstage">{stageLabel(vm.importStage, vm.importPercent)}</span>
     </div>
+  {/snippet}
+
+  <div class="divider"><span>or add a track from a link</span></div>
+
+  <form class="link-row" onsubmit={submitLink}>
+    <input
+      class="link-input"
+      type="url"
+      placeholder="Paste a YouTube, Spotify, SoundCloud… link"
+      bind:value={linkUrl}
+      disabled={vm.importing}
+    />
+    <button type="submit" class="link-btn" disabled={vm.importing || !linkUrl.trim()}>
+      {#if activeImport === "track"}
+        <Icon name="progress_activity" size={18} /> Importing…
+      {:else}
+        <Icon name="download" size={18} /> Add
+      {/if}
+    </button>
+  </form>
+  {#if activeImport === "track"}
+    {@render progressBar()}
   {:else}
-    <p class="link-hint">Grabs the audio as MP3 (with cover art) and adds it to your library. Spotify links match the song on YouTube.</p>
+    <p class="link-hint">Grabs one track's audio as MP3 (with cover art). Spotify links match the song on YouTube.</p>
   {/if}
   {#if linkMsg}
     <p class="msg" class:ok={linkMsg.ok} class:err={!linkMsg.ok}>
       {#if linkMsg.ok}<Icon name="check_circle" size={18} />{/if}{linkMsg.text}
+    </p>
+  {/if}
+
+  <div class="divider"><span>or import a whole playlist</span></div>
+
+  <form class="link-row" onsubmit={submitPlaylist}>
+    <input
+      class="link-input"
+      type="url"
+      placeholder="Paste a YouTube or Spotify playlist link"
+      bind:value={playlistUrl}
+      disabled={vm.importing}
+    />
+    <button type="submit" class="link-btn" disabled={vm.importing || !playlistUrl.trim()}>
+      {#if activeImport === "playlist"}
+        <Icon name="progress_activity" size={18} /> Importing…
+      {:else}
+        <Icon name="playlist_add" size={18} /> Import
+      {/if}
+    </button>
+  </form>
+  {#if activeImport === "playlist"}
+    {@render progressBar()}
+  {:else}
+    <p class="link-hint">Imports up to 50 tracks from the playlist into your review list. This can take a while.</p>
+  {/if}
+  {#if playlistMsg}
+    <p class="msg" class:ok={playlistMsg.ok} class:err={!playlistMsg.ok}>
+      {#if playlistMsg.ok}<Icon name="check_circle" size={18} />{/if}{playlistMsg.text}
     </p>
   {/if}
 

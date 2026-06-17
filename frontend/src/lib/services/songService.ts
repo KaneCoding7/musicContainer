@@ -48,12 +48,13 @@ export interface ImportProgress {
 // progress lines; onProgress is called for each. Returns the created songs.
 export async function importLink(
   url: string,
-  onProgress?: (p: ImportProgress) => void
+  onProgress?: (p: ImportProgress) => void,
+  playlist = false
 ): Promise<Song[]> {
   const res = await fetch(`${apiBase()}/api/import-link`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, playlist }),
   });
   if (!res.ok || !res.body) throw new Error(await errorMessage(res));
 

@@ -678,17 +678,21 @@ export class SongViewModel {
 
   // Imports audio from a link (server runs yt-dlp). Returns how many tracks
   // were staged for review.
-  async importFromLink(url: string): Promise<number> {
+  async importFromLink(url: string, playlist = false): Promise<number> {
     this.importing = true;
     this.error = null;
     this.importStage = "download";
     this.importPercent = null;
     try {
-      const songs = await importLink(url, (p) => {
-        this.importStage = p.stage;
-        if (typeof p.percent === "number") this.importPercent = p.percent;
-        else if (p.stage !== "download") this.importPercent = null;
-      });
+      const songs = await importLink(
+        url,
+        (p) => {
+          this.importStage = p.stage;
+          if (typeof p.percent === "number") this.importPercent = p.percent;
+          else if (p.stage !== "download") this.importPercent = null;
+        },
+        playlist
+      );
       this.staged = [...this.staged, ...songs];
       return songs.length;
     } catch (e) {

@@ -246,10 +246,13 @@ songsRouter.post("/upload", (req, res) => {
 // Runs yt-dlp to extract a link's audio as MP3 (with embedded thumbnail) into
 // `cwd`, reporting progress via onProgress. URL is passed as argv (no shell),
 // so it can't inject commands.
+const PLAYLIST_CAP = 50; // most tracks to pull from one playlist
+
 function runYtDlp(
   url: string,
   cwd: string,
-  onProgress: (stage: string, percent?: number) => void
+  onProgress: (stage: string, percent?: number) => void,
+  playlist = false
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(
@@ -259,7 +262,9 @@ function runYtDlp(
         "--audio-format",
         "mp3",
         "--embed-thumbnail",
-        "--no-playlist",
+        ...(playlist
+          ? ["--yes-playlist", "--playlist-end", String(PLAYLIST_CAP)]
+          : ["--no-playlist"]),
         "--newline",
         "--progress-template",
         "download:DLPCT %(progress._percent_str)s",
@@ -293,10 +298,13 @@ function runYtDlp(
       stderrTail = (stderrTail + d.toString()).slice(-600);
     });
 
-    const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-      reject(new Error("Timed out"));
-    }, 5 * 60 * 1000);
+    const timer = setTimeout(
+      () => {
+        child.kill("SIGKILL");
+        reject(new Error("Timed out"));
+      },
+      (playlist ? 15 : 5) * 60 * 1000
+    );
 
     child.on("error", (e) => {
       clearTimeout(timer);
@@ -322,7 +330,8 @@ function runYtDlp(
 function runSpotdl(
   url: string,
   cwd: string,
-  onProgress: (stage: string) => void
+  onProgress: (stage: string) => void,
+  playlist = false
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const args = [
@@ -353,10 +362,13 @@ function runSpotdl(
     };
     child.stdout.on("data", onData);
     child.stderr.on("data", onData);
-    const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-      reject(new Error("Timed out"));
-    }, 8 * 60 * 1000);
+    const timer = setTimeout(
+      () => {
+        child.kill("SIGKILL");
+        reject(new Error("Timed out"));
+      },
+      (playlist ? 15 : 8) * 60 * 1000
+    );
     child.on("error", (e) => {
       clearTimeout(timer);
       reject(e);
@@ -376,6 +388,7 @@ function runSpotdl(
 songsRouter.post("/import-link", async (req, res) => {
   const url =
     typeof req.body?.url === "string" ? (req.body.url as string).trim() : "";
+  const playlist = req.body?.playlist === true;
   const isSpotify =
     /open\.spotify\.com\//i.test(url) || /^spotify:/i.test(url);
   if (!/^https?:\/\/\S+$/i.test(url) && !/^spotify:/i.test(url)) {
@@ -403,9 +416,9 @@ songsRouter.post("/import-link", async (req, res) => {
       send({ type: "progress", stage, percent });
     };
     if (isSpotify) {
-      await runSpotdl(url, work, onProg);
+      await runSpotdl(url, work, onProg, playlist);
     } else {
-      await runYtDlp(url, work, onProg);
+      await runYtDlp(url, work, onProg, playlist);
     }
 
     send({ type: "progress", stage: "ingest" });
