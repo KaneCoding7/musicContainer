@@ -168,6 +168,13 @@
       <li class:current={isCurrent}>
         <button class="track" onclick={() => songVm.playQueue(songs, i)}>
           <span class="num">{i + 1}</span>
+          <span class="thumb">
+            {#if song.hasArt}
+              <img src={thumbUrl(song.id, 128)} alt="" />
+            {:else}
+              <Icon name="music_note" size={18} />
+            {/if}
+          </span>
           <span class="t-meta">
             <span class="t-name">{song.originalFilename}</span>
             {#if song.artist}<span class="t-artist">{song.artist}</span>{/if}
@@ -445,6 +452,23 @@
     width: 1.5rem;
     color: var(--dim);
     text-align: right;
+  }
+  .thumb {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    background: var(--surface-2);
+    border-radius: 0.35rem;
+    color: var(--dim);
+    overflow: hidden;
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
   .t-meta {
     display: flex;

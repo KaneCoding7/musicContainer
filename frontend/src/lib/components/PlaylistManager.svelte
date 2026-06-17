@@ -354,12 +354,19 @@
                 <Icon name="drag_indicator" size={20} />
               </span>
               <button class="play-btn" onclick={() => playFrom(i)}>
-                <span class="icon">
-                  <Icon
-                    name={isCurrent && songVm.isPlaying ? "pause" : "play_arrow"}
-                    fill
-                    size={20}
-                  />
+                <span class="thumb">
+                  {#if song.hasArt}
+                    <img src={thumbUrl(song.id, 128)} alt="" />
+                  {:else}
+                    <Icon name="music_note" size={18} />
+                  {/if}
+                  <span class="thumb-play">
+                    <Icon
+                      name={isCurrent && songVm.isPlaying ? "pause" : "play_arrow"}
+                      fill
+                      size={20}
+                    />
+                  </span>
                 </span>
                 <span class="name">{song.originalFilename}</span>
               </button>
@@ -749,9 +756,38 @@
   .handle:active {
     cursor: grabbing;
   }
-  .icon {
+  .thumb {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
     display: inline-flex;
-    color: var(--accent-text);
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-2);
+    border-radius: 0.35rem;
+    color: var(--dim);
+    overflow: hidden;
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .thumb-play {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  .play-btn:hover .thumb-play,
+  li.current .thumb-play {
+    opacity: 1;
   }
   .name {
     flex: 1;
