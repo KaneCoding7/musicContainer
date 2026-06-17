@@ -2,6 +2,7 @@
   import Icon from "$lib/components/Icon.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
+  import { swipeQueue } from "$lib/actions/swipeQueue";
   import { playlistZipUrl } from "$lib/services/playlistService";
   import { thumbUrl } from "$lib/services/songService";
   import {
@@ -332,6 +333,7 @@
               ondragover={(e) => onDragOver(e, i)}
               ondrop={() => onDrop(i)}
               ondragend={onDragEnd}
+              use:swipeQueue={{ onQueue: () => songVm.addToQueue(song) }}
             >
               <span class="handle" title="Drag to reorder" aria-hidden="true">
                 <Icon name="drag_indicator" size={20} />

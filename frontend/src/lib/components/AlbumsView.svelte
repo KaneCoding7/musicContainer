@@ -2,6 +2,7 @@
   import Icon from "$lib/components/Icon.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
+  import { swipeQueue } from "$lib/actions/swipeQueue";
   import { thumbUrl } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -64,7 +65,10 @@
   <ol>
     {#each current.songs as song, i (song.id)}
       {@const isCurrent = song.id === vm.currentSong?.id}
-      <li class:current={isCurrent}>
+      <li
+        class:current={isCurrent}
+        use:swipeQueue={{ onQueue: () => vm.addToQueue(song) }}
+      >
         <button class="track" onclick={() => vm.playQueue(current.songs, i)}>
           <span class="num">{i + 1}</span>
           <span class="t-meta">

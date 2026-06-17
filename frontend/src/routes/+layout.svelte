@@ -79,4 +79,29 @@
       Roboto,
       sans-serif;
   }
+
+  /* Transient confirmation toast (e.g. swipe-to-queue). */
+  :global(.swipe-toast) {
+    position: fixed;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 5.5rem);
+    transform: translate(-50%, 1rem);
+    z-index: 80;
+    padding: 0.55rem 1rem;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.85rem;
+    border-radius: 2rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      opacity 0.18s ease,
+      transform 0.18s ease;
+  }
+  :global(.swipe-toast.show) {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 </style>

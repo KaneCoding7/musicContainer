@@ -2,6 +2,7 @@
   import Icon from "$lib/components/Icon.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
+  import { swipeQueue } from "$lib/actions/swipeQueue";
   import { thumbUrl, type SongMetadata } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -183,7 +184,11 @@
     <ul>
       {#each vm.filteredSongs as song, i (song.id)}
         {@const isCurrent = song.id === vm.currentSong?.id}
-        <li class:current={isCurrent} class:selected={selected.has(song.id)}>
+        <li
+          class:current={isCurrent}
+          class:selected={selected.has(song.id)}
+          use:swipeQueue={{ onQueue: () => vm.addToQueue(song) }}
+        >
           {#if selecting}
             <button
               class="check"
