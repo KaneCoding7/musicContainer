@@ -210,4 +210,19 @@ export function migrate(database: Database.Database): void {
       "ALTER TABLE playlist_shares ADD COLUMN can_edit INTEGER NOT NULL DEFAULT 0"
     );
   }
+  // Who added each track to a playlist (for collaborative playlists). Existing
+  // rows are backfilled to the playlist's owner.
+  const psColumns = (
+    database
+      .prepare("PRAGMA table_info(playlist_songs)")
+      .all() as { name: string }[]
+  ).map((c) => c.name);
+  if (psColumns.length > 0 && !psColumns.includes("added_by")) {
+    database.exec("ALTER TABLE playlist_songs ADD COLUMN added_by TEXT");
+    database.exec(
+      `UPDATE playlist_songs SET added_by = (
+         SELECT p.user_id FROM playlists p WHERE p.id = playlist_songs.playlist_id
+       ) WHERE added_by IS NULL`
+    );
+  }
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
+  import PlaylistMembers from "$lib/components/PlaylistMembers.svelte";
   import { thumbUrl } from "$lib/services/songService";
   import {
     addSongToPlaylist,
@@ -99,6 +100,8 @@
     </div>
   </div>
 
+  <PlaylistMembers playlistId={open.id} />
+
   {#if open.canEdit && addable.length > 0}
     <div class="add-row">
       <select bind:value={addId}>
@@ -120,6 +123,7 @@
           <span class="t-meta">
             <span class="t-name">{song.originalFilename}</span>
             {#if song.artist}<span class="t-artist">{song.artist}</span>{/if}
+            {#if song.addedBy}<span class="t-added">Added by {song.addedBy}</span>{/if}
           </span>
         </button>
         {#if open.canEdit}
@@ -356,6 +360,10 @@
   .t-artist {
     color: var(--muted);
     font-size: 0.8rem;
+  }
+  .t-added {
+    color: var(--dim);
+    font-size: 0.72rem;
   }
   .muted {
     color: var(--muted);

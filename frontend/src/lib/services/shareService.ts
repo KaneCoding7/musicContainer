@@ -19,6 +19,25 @@ export interface UserMatch {
   name: string;
   email: string;
 }
+export interface PlaylistMember {
+  id: string;
+  name: string;
+  isOwner: boolean;
+  canEdit: boolean;
+}
+
+// Everyone with access to a playlist (owner + shared users). Works for the
+// owner and for recipients of a shared playlist.
+export async function fetchPlaylistMembers(
+  playlistId: number
+): Promise<PlaylistMember[]> {
+  const res = await fetch(
+    `${apiBase()}/api/playlists/${playlistId}/members`,
+    { headers: authHeaders() }
+  );
+  if (!res.ok) return [];
+  return (await res.json()).members as PlaylistMember[];
+}
 
 // Looks up users by name/email for the share autocomplete.
 export async function searchUsers(query: string): Promise<UserMatch[]> {

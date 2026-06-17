@@ -8,6 +8,7 @@ import {
 } from "../functional/publicShares.js";
 import {
   getSharedPlaylistSongs,
+  listPlaylistMembers,
   listPlaylistShares,
   listSharedWithMe,
   searchUsers,
@@ -22,6 +23,22 @@ sharesRouter.get("/users/search", (req, res) => {
   const q = typeof req.query.q === "string" ? req.query.q : "";
   const users = searchUsers(getDb(), q, req.userId!);
   return res.json({ users });
+});
+
+// GET /api/playlists/:id/members — everyone with access (owner + shared users).
+// Available to the owner and to anyone the playlist is shared with.
+sharesRouter.get("/playlists/:id/members", (req, res) => {
+  const result = listPlaylistMembers(
+    getDb(),
+    Number(req.params.id),
+    req.userId!
+  );
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ members: result.value });
 });
 
 // GET /api/playlists/:id/public — current public token (or null).

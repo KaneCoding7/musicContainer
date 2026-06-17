@@ -205,6 +205,54 @@ export function getSharedPlaylistSongs(
   }
 }
 
+export interface PlaylistMember {
+  id: string;
+  name: string;
+  isOwner: boolean;
+  canEdit: boolean;
+}
+
+// Lists everyone with access to a playlist — the owner first, then the users
+// it's shared with. Accessible to the owner and to anyone it's shared with.
+export function listPlaylistMembers(
+  db: Database,
+  playlistId: number,
+  userId: string
+): Result<PlaylistMember[]> {
+  const owner = db
+    .prepare(
+      `SELECT p.user_id AS id, u.name AS name
+       FROM playlists p JOIN "user" u ON u.id = p.user_id
+       WHERE p.id = ?`
+    )
+    .get(playlistId) as { id: string; name: string } | undefined;
+  if (!owner) return err("not_found", `Playlist ${playlistId} not found`);
+
+  if (owner.id !== userId && !isPlaylistSharedWith(db, playlistId, userId)) {
+    return err("not_found", `Playlist ${playlistId} not found`);
+  }
+
+  const shared = db
+    .prepare(
+      `SELECT u.id, u.name, ps.can_edit
+       FROM playlist_shares ps
+       JOIN "user" u ON u.id = ps.shared_with
+       WHERE ps.playlist_id = ?
+       ORDER BY ps.created_at ASC`
+    )
+    .all(playlistId) as { id: string; name: string; can_edit: number }[];
+
+  return ok([
+    { id: owner.id, name: owner.name, isOwner: true, canEdit: true },
+    ...shared.map((s) => ({
+      id: s.id,
+      name: s.name,
+      isOwner: false,
+      canEdit: s.can_edit === 1,
+    })),
+  ]);
+}
+
 // True if the user may access a song's media: they own it, OR it belongs to a
 // playlist that has been shared with them.
 export function canAccessSong(

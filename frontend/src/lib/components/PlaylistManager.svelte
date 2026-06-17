@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
+  import PlaylistMembers from "$lib/components/PlaylistMembers.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
   import UserAutocomplete from "$lib/components/UserAutocomplete.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
@@ -31,7 +32,10 @@
   let shareOpen = $state(false);
   let shareCanEdit = $state(false);
   let shares = $state<ShareUser[]>([]);
+  let memberRefresh = $state(0); // bump to re-fetch the members bar
   let shareError = $state<string | null>(null);
+  // The playlist is collaborative once it's shared with anyone.
+  const collaborative = $derived(shares.length > 0);
   let publicToken = $state<string | null>(null);
   let publicCopied = $state(false);
 
@@ -89,6 +93,7 @@
     try {
       await sharePlaylist(id, email, shareCanEdit);
       shares = await fetchPlaylistShares(id);
+      memberRefresh++;
     } catch (e) {
       shareError = e instanceof Error ? e.message : "Failed to share";
     }
@@ -100,6 +105,7 @@
     try {
       await unsharePlaylist(id, userId);
       shares = shares.filter((s) => s.id !== userId);
+      memberRefresh++;
     } catch (e) {
       shareError = e instanceof Error ? e.message : "Failed to revoke";
     }
@@ -258,6 +264,10 @@
         </div>
       {/if}
 
+      {#if vm.selectedId !== null}
+        <PlaylistMembers playlistId={vm.selectedId} refresh={memberRefresh} />
+      {/if}
+
       {#if shareOpen}
         <div class="share-panel">
           <label class="can-edit">
@@ -342,7 +352,12 @@
                     size={20}
                   />
                 </span>
-                <span class="name">{song.originalFilename}</span>
+                <span class="meta">
+                  <span class="name">{song.originalFilename}</span>
+                  {#if collaborative && song.addedBy}
+                    <span class="added-by">Added by {song.addedBy}</span>
+                  {/if}
+                </span>
               </button>
               <span
                 class="plays"
@@ -699,10 +714,22 @@
     display: inline-flex;
     color: var(--accent-text);
   }
+  .meta {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    text-align: left;
+  }
   .name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .added-by {
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: var(--dim);
   }
   .plays {
     display: inline-flex;

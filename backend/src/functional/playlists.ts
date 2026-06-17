@@ -209,14 +209,15 @@ export function songsInPlaylist(db: Database, playlistId: number): Song[] {
       `SELECT s.id, s.filename, s.original_filename, s.uploaded_at,
               s.artist, s.album, s.art_filename, s.duration,
               s.play_count, s.last_played_at, s.liked, s.loudness, s.sort_order,
-              s.source_url
+              s.source_url, au.name AS added_by_name
        FROM playlist_songs ps
        JOIN songs s ON s.id = ps.song_id
+       LEFT JOIN "user" au ON au.id = ps.added_by
        WHERE ps.playlist_id = ?
        ORDER BY ps.position ASC`
     )
-    .all(playlistId) as SongRow[];
-  return rows.map(rowToSong);
+    .all(playlistId) as (SongRow & { added_by_name: string | null })[];
+  return rows.map((row) => ({ ...rowToSong(row), addedBy: row.added_by_name }));
 }
 
 // Returns the songs in a playlist (owner-scoped), ordered by their position.
@@ -270,8 +271,8 @@ export function addSongToPlaylist(
       .get(playlistId) as { next: number };
 
     db.prepare(
-      "INSERT INTO playlist_songs (playlist_id, song_id, position) VALUES (?, ?, ?)"
-    ).run(playlistId, songId, next);
+      "INSERT INTO playlist_songs (playlist_id, song_id, position, added_by) VALUES (?, ?, ?, ?)"
+    ).run(playlistId, songId, next, userId);
 
     return ok(undefined);
   } catch (e) {
@@ -337,13 +338,13 @@ export function addSongsToPlaylist(
         "SELECT id FROM playlist_songs WHERE playlist_id = ? AND song_id = ?"
       );
       const insert = db.prepare(
-        "INSERT INTO playlist_songs (playlist_id, song_id, position) VALUES (?, ?, ?)"
+        "INSERT INTO playlist_songs (playlist_id, song_id, position, added_by) VALUES (?, ?, ?, ?)"
       );
       for (const songId of ids) {
         if (!Number.isInteger(songId)) continue;
         if (!songExists.get(songId, userId)) continue;
         if (already.get(playlistId, songId)) continue;
-        insert.run(playlistId, songId, next++);
+        insert.run(playlistId, songId, next++, userId);
         added++;
       }
     });

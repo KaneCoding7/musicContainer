@@ -15,6 +15,7 @@ export interface Song {
   loudness: number | null; // integrated loudness (LUFS) for normalization
   sortOrder: number | null; // manual order within a grouping (e.g. artist)
   hasSource: boolean; // imported from a video link (can offer frame artwork)
+  addedBy?: string | null; // name of who added it to a playlist (playlist views)
 }
 
 export interface Playlist {
