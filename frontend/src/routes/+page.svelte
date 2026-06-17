@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
+  import { page } from "$app/state";
   import AlbumsView from "$lib/components/AlbumsView.svelte";
   import ArtistsView from "$lib/components/ArtistsView.svelte";
   import AuthScreen from "$lib/components/AuthScreen.svelte";
@@ -46,15 +48,33 @@
     | "recent"
     | "invite"
     | "settings";
-  let view = $state<View>("home");
+  // The active view is driven by the URL (?view=…) so the browser back/forward
+  // buttons navigate between sections.
+  function toView(v: string | null): View {
+    switch (v) {
+      case "songs":
+      case "liked":
+      case "playlists":
+      case "shared":
+      case "albums":
+      case "artists":
+      case "recent":
+      case "invite":
+      case "settings":
+        return v;
+      default:
+        return "home";
+    }
+  }
+  const view = $derived(toView(page.url.searchParams.get("view")));
   let queueOpen = $state(false);
   let sidebarOpen = $state(false); // mobile nav drawer
   let theme = $state<"dark" | "light">("dark");
 
-  // Navigate, closing the mobile drawer on selection.
+  // Navigate by pushing a URL so back/forward works; close the mobile drawer.
   function goTo(v: View) {
-    view = v;
     sidebarOpen = false;
+    goto(v === "home" ? "/" : `?view=${v}`, { keepFocus: true, noScroll: true });
   }
 
   function toggleTheme() {
@@ -157,7 +177,7 @@
 
     if (e.key === "/" && !typing) {
       e.preventDefault();
-      view = "songs";
+      goTo("songs");
       requestAnimationFrame(() => document.getElementById("song-search")?.focus());
       return;
     }
