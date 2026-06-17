@@ -93,7 +93,6 @@
   const nav: { id: View; label: string; icon: string }[] = [
     { id: "home", label: "Home", icon: "home" },
     { id: "songs", label: "All Songs", icon: "library_music" },
-    { id: "upload", label: "Upload", icon: "upload" },
     { id: "liked", label: "Liked", icon: "favorite" },
     { id: "playlists", label: "Playlists", icon: "queue_music" },
     { id: "shared", label: "Shared with me", icon: "folder_shared" },
@@ -101,6 +100,7 @@
     { id: "artists", label: "Artists", icon: "artist" },
     { id: "recent", label: "Recently Played", icon: "history" },
     { id: "invite", label: "Invite", icon: "person_add" },
+    { id: "upload", label: "Upload", icon: "upload" },
     { id: "settings", label: "Settings", icon: "settings" },
   ];
 
