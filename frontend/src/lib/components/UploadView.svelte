@@ -39,13 +39,20 @@
 </script>
 
 <div class="upload-view">
-  <button
-    type="button"
+  <input
+    id="audio-file-input"
+    class="file-hidden"
+    bind:this={fileInput}
+    type="file"
+    accept=".mp3,.wav,audio/mpeg,audio/wav"
+    multiple
+    onchange={onChange}
+  />
+  <label
+    for="audio-file-input"
     class="dropzone"
     class:dragging
     class:busy={vm.uploading}
-    disabled={vm.uploading}
-    onclick={() => fileInput?.click()}
     ondragover={(e) => {
       e.preventDefault();
       if (!vm.uploading) dragging = true;
@@ -64,17 +71,7 @@
       <p class="big">Drag &amp; drop your music here</p>
       <p class="sub">or click to browse — MP3 or WAV, as many as you like</p>
     {/if}
-  </button>
-  <input
-    class="file-hidden"
-    bind:this={fileInput}
-    type="file"
-    accept=".mp3,.wav,audio/mpeg,audio/wav"
-    multiple
-    onchange={onChange}
-    tabindex="-1"
-    aria-hidden="true"
-  />
+  </label>
 
   {#if vm.error}
     <p class="msg err">{vm.error}</p>
@@ -94,19 +91,17 @@
   .upload-view {
     max-width: 640px;
   }
-  /* Hidden input opened programmatically via the dropzone's click (reliable on
-     iOS Safari). Not display:none, so the click reaches it. */
+  /* "Bulletproof" hidden file input opened by the for-associated dropzone label
+     — the pattern iOS Safari reliably honors. */
   .file-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
+    width: 0.1px;
+    height: 0.1px;
     opacity: 0;
-    pointer-events: none;
+    overflow: hidden;
+    position: absolute;
+    z-index: -1;
   }
   .dropzone {
-    width: 100%;
-    box-sizing: border-box;
-    font: inherit;
     display: flex;
     flex-direction: column;
     align-items: center;

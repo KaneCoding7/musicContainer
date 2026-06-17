@@ -133,23 +133,17 @@
         {/if}
       </span>
       <div class="art-actions">
-        <button
-          type="button"
-          class="art-btn"
-          onclick={() => fileInput?.click()}
-          disabled={artBusy}
-        >
-          {artBusy ? "Working…" : hasArt ? "Change art" : "Upload art"}
-        </button>
         <input
+          id="art-file-input"
           class="file-hidden"
           bind:this={fileInput}
           type="file"
           accept="image/*"
           onchange={onPickArt}
-          tabindex="-1"
-          aria-hidden="true"
         />
+        <label for="art-file-input" class="art-btn" class:disabled={artBusy}>
+          {artBusy ? "Working…" : hasArt ? "Change art" : "Upload art"}
+        </label>
         {#if hasArt}
           <button
             type="button"
@@ -251,31 +245,33 @@
     align-items: flex-start;
   }
   .art-btn {
+    display: inline-block;
     padding: 0.4rem 0.8rem;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
     border-radius: 0.4rem;
     color: var(--text);
-    font: inherit;
     font-size: 0.85rem;
     font-weight: 500;
     cursor: pointer;
   }
-  .art-btn:hover:not(:disabled) {
+  .art-btn:hover {
     background: var(--hover);
   }
-  .art-btn:disabled {
+  .art-btn.disabled {
     opacity: 0.6;
-    cursor: default;
-  }
-  /* Hidden input opened programmatically via the button's click (reliable on
-     iOS Safari). Not display:none, so the click reaches it. */
-  .file-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
     pointer-events: none;
+  }
+  /* "Bulletproof" hidden file input: a for-associated <label> opens it. This is
+     the pattern iOS Safari reliably honors (display:none / opacity-overlay
+     inputs don't open the picker there). */
+  .file-hidden {
+    width: 0.1px;
+    height: 0.1px;
+    opacity: 0;
+    overflow: hidden;
+    position: absolute;
+    z-index: -1;
   }
   .art-remove {
     padding: 0.3rem 0.7rem;
