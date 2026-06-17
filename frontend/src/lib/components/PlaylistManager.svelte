@@ -338,6 +338,12 @@
                 </span>
                 <span class="name">{song.originalFilename}</span>
               </button>
+              <span
+                class="plays"
+                title={`${song.playCount} play${song.playCount === 1 ? "" : "s"}`}
+              >
+                <Icon name="play_arrow" size={13} />{song.playCount}
+              </span>
               <button
                 class="remove"
                 title="Remove from playlist"
@@ -702,6 +708,15 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .plays {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
   }
   .remove {
     display: inline-flex;
