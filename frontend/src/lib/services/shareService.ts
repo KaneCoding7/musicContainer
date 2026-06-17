@@ -14,6 +14,21 @@ export interface SharedPlaylist extends Playlist {
   ownerName: string;
   canEdit: boolean;
 }
+export interface UserMatch {
+  id: string;
+  name: string;
+  email: string;
+}
+
+// Looks up users by name/email for the share autocomplete.
+export async function searchUsers(query: string): Promise<UserMatch[]> {
+  const res = await fetch(
+    `${apiBase()}/api/users/search?q=${encodeURIComponent(query)}`,
+    { headers: authHeaders() }
+  );
+  if (!res.ok) return [];
+  return (await res.json()).users as UserMatch[];
+}
 
 async function errorMessage(res: Response): Promise<string> {
   try {

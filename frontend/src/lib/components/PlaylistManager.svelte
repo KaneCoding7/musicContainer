@@ -2,6 +2,7 @@
   import Icon from "$lib/components/Icon.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
+  import UserAutocomplete from "$lib/components/UserAutocomplete.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
   import { playlistZipUrl } from "$lib/services/playlistService";
   import { thumbUrl } from "$lib/services/songService";
@@ -28,7 +29,6 @@
 
   // --- Sharing ---
   let shareOpen = $state(false);
-  let shareEmail = $state("");
   let shareCanEdit = $state(false);
   let shares = $state<ShareUser[]>([]);
   let shareError = $state<string | null>(null);
@@ -81,15 +81,14 @@
     }
   }
 
-  async function doShare() {
+  async function doShare(email: string) {
     const id = vm.selectedId;
-    const email = shareEmail.trim();
+    email = email.trim();
     if (id === null || !email) return;
     shareError = null;
     try {
       await sharePlaylist(id, email, shareCanEdit);
       shares = await fetchPlaylistShares(id);
-      shareEmail = "";
     } catch (e) {
       shareError = e instanceof Error ? e.message : "Failed to share";
     }
@@ -261,19 +260,16 @@
 
       {#if shareOpen}
         <div class="share-panel">
-          <div class="share-row">
-            <input
-              type="email"
-              placeholder="Share with email…"
-              bind:value={shareEmail}
-              onkeydown={(e) => e.key === "Enter" && doShare()}
-            />
-            <button onclick={doShare} disabled={!shareEmail.trim()}>Share</button>
-          </div>
           <label class="can-edit">
             <input type="checkbox" bind:checked={shareCanEdit} />
             Allow editing (add / remove tracks)
           </label>
+          <div class="share-row">
+            <UserAutocomplete
+              placeholder="Add people by name or email…"
+              onSelect={(u) => doShare(u.email)}
+            />
+          </div>
           {#if shareError}<p class="share-error">{shareError}</p>{/if}
           {#if shares.length > 0}
             <ul class="share-list">
@@ -527,28 +523,7 @@
   .share-row {
     display: flex;
     gap: 0.5rem;
-  }
-  .share-row input {
-    flex: 1;
-    padding: 0.45rem 0.6rem;
-    background: var(--bg);
-    border: 1px solid var(--border-strong);
-    border-radius: 0.4rem;
-    color: var(--text);
-    font: inherit;
-  }
-  .share-row button {
-    padding: 0.45rem 0.9rem;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 0.4rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .share-row button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+    margin-top: 0.6rem;
   }
   .can-edit {
     display: flex;

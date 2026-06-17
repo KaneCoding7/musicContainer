@@ -10,11 +10,19 @@ import {
   getSharedPlaylistSongs,
   listPlaylistShares,
   listSharedWithMe,
+  searchUsers,
   sharePlaylist,
   unsharePlaylist,
 } from "../functional/shares.js";
 
 export const sharesRouter = Router();
+
+// GET /api/users/search?q= — look up users by name/email (for share autocomplete).
+sharesRouter.get("/users/search", (req, res) => {
+  const q = typeof req.query.q === "string" ? req.query.q : "";
+  const users = searchUsers(getDb(), q, req.userId!);
+  return res.json({ users });
+});
 
 // GET /api/playlists/:id/public — current public token (or null).
 sharesRouter.get("/playlists/:id/public", (req, res) => {

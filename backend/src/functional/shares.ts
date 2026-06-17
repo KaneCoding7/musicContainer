@@ -28,6 +28,33 @@ function findUserByEmail(
   return row ?? null;
 }
 
+export interface UserMatch {
+  id: string;
+  name: string;
+  email: string;
+}
+
+// Searches users by name or email (case-insensitive substring), excluding the
+// caller. Used for the "share with" autocomplete.
+export function searchUsers(
+  db: Database,
+  query: string,
+  excludeUserId: string,
+  limit = 8
+): UserMatch[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  return db
+    .prepare(
+      `SELECT id, name, email FROM "user"
+       WHERE id != ?
+         AND (lower(name) LIKE ? ESCAPE '\\' OR lower(email) LIKE ? ESCAPE '\\')
+       ORDER BY name LIMIT ?`
+    )
+    .all(excludeUserId, like, like, limit) as UserMatch[];
+}
+
 // Shares a playlist (owned by ownerId) with the user at recipientEmail. Re-
 // sharing updates the edit permission.
 export function sharePlaylist(
