@@ -102,8 +102,9 @@ export async function fetchPendingSongs(): Promise<Song[]> {
 }
 
 export interface VideoFrame {
-  t: number; // timestamp in seconds
-  dataUrl: string; // data:image/jpeg;base64,...
+  t?: number; // timestamp in seconds (absent for the thumbnail option)
+  label?: string; // e.g. "Thumbnail"
+  dataUrl: string; // data:image/...;base64,...
 }
 
 // For a link-imported track, fetches candidate cover frames from the video.

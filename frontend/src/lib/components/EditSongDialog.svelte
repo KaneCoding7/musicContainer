@@ -58,6 +58,7 @@
   async function onPickArt(event: Event) {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
+    pendingFrameUrl = null;
     artBusy = true;
     artError = null;
     try {
@@ -74,6 +75,7 @@
   }
 
   async function clearArt() {
+    pendingFrameUrl = null;
     artBusy = true;
     artError = null;
     try {
@@ -89,12 +91,9 @@
   }
 
   // Pick album art from a frame of the source video (link-imported tracks).
+  // The selected frame is previewed and only applied when the dialog is saved.
   let framePicking = $state(false);
-  function onFramePicked(updated: Song) {
-    hasArt = updated.hasArt;
-    bumpArtVersion(song.id);
-    onArtChanged?.(updated);
-  }
+  let pendingFrameUrl = $state<string | null>(null);
 
   // Public link (Cycle 39).
   let publicToken = $state<string | null>(null);
@@ -131,8 +130,28 @@
     }
   }
 
-  function save() {
+  async function save() {
     if (!name.trim()) return;
+    // Apply a previewed video frame as the cover, if one was selected.
+    if (pendingFrameUrl) {
+      artBusy = true;
+      artError = null;
+      try {
+        const blob = await (await fetch(pendingFrameUrl)).blob();
+        const file = new File([blob], "cover", {
+          type: blob.type || "image/jpeg",
+        });
+        const updated = await uploadArt(song.id, file);
+        bumpArtVersion(song.id);
+        onArtChanged?.(updated);
+        pendingFrameUrl = null;
+      } catch (e) {
+        artError = e instanceof Error ? e.message : "Failed to set the cover";
+        artBusy = false;
+        return; // keep the dialog open on failure
+      }
+      artBusy = false;
+    }
     onSave(song.id, {
       originalFilename: name.trim(),
       artist: artist.trim(),
@@ -150,7 +169,9 @@
 
     <div class="art-row">
       <span class="art-thumb">
-        {#if hasArt}
+        {#if pendingFrameUrl}
+          <img src={pendingFrameUrl} alt="" />
+        {:else if hasArt}
           <img src={thumbUrl(song.id, 256)} alt="" />
         {:else}
           <Icon name="music_note" size={26} />
@@ -165,7 +186,13 @@
           onchange={onPickArt}
           disabled={artBusy}
         />
-        <span class="art-hint">{hasArt ? "Change album art" : "Add album art"}</span>
+        <span class="art-hint">
+          {pendingFrameUrl
+            ? "New cover — applied when you Save"
+            : hasArt
+              ? "Change album art"
+              : "Add album art"}
+        </span>
         <div class="art-btns">
           {#if song.hasSource}
             <button
@@ -193,7 +220,7 @@
     {#if framePicking}
       <FramePickerDialog
         {song}
-        onPicked={onFramePicked}
+        onPick={(frame) => (pendingFrameUrl = frame.dataUrl)}
         onClose={() => (framePicking = false)}
       />
     {/if}
@@ -232,7 +259,7 @@
 
     <div class="actions">
       <button class="secondary" onclick={onClose}>Cancel</button>
-      <button onclick={save} disabled={!name.trim()}>Save</button>
+      <button onclick={save} disabled={!name.trim() || artBusy}>Save</button>
     </div>
   </div>
 </div>

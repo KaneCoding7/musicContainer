@@ -480,14 +480,32 @@ songsRouter.get("/songs/:id/frames", async (req, res) => {
         "-f",
         "worst[ext=mp4]/worstvideo[ext=mp4]/worst",
         "--no-playlist",
+        "--write-thumbnail",
         "-o",
         "vid.%(ext)s",
         src.sourceUrl,
       ],
       work
     );
-    const vid = readdirSync(work).find((f) => f.startsWith("vid."));
+    const files = readdirSync(work);
+    const vid = files.find((f) => /^vid\.(mp4|mkv|webm|m4v|flv)$/i.test(f));
+    const thumb = files.find((f) => /^vid\.(webp|jpg|jpeg|png)$/i.test(f));
+
+    const frames: { t?: number; label?: string; dataUrl: string }[] = [];
+
+    // The official thumbnail, offered first.
+    if (thumb) {
+      const ext = extname(thumb).toLowerCase();
+      const mime =
+        ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
+      frames.push({
+        label: "Thumbnail",
+        dataUrl: `data:${mime};base64,${readFileSync(join(work, thumb)).toString("base64")}`,
+      });
+    }
+
     if (!vid) {
+      if (frames.length > 0) return res.json({ frames });
       return res.status(422).json({
         error: { code: "validation", message: "Couldn't fetch the video" },
       });
@@ -496,7 +514,6 @@ songsRouter.get("/songs/:id/frames", async (req, res) => {
 
     const duration = src.duration && src.duration > 1 ? src.duration : 60;
     const COUNT = 9;
-    const frames: { t: number; dataUrl: string }[] = [];
     for (let i = 1; i <= COUNT; i++) {
       const t = (duration * i) / (COUNT + 1); // evenly spaced, excluding the ends
       const out = join(work, `f${i}.jpg`);

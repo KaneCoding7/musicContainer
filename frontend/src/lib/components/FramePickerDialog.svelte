@@ -1,19 +1,15 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
-  import {
-    fetchVideoFrames,
-    uploadArt,
-    type VideoFrame,
-  } from "$lib/services/songService";
+  import { fetchVideoFrames, type VideoFrame } from "$lib/services/songService";
   import type { Song } from "$lib/types";
 
   let {
     song,
-    onPicked,
+    onPick,
     onClose,
   }: {
     song: Song;
-    onPicked: (updated: Song) => void;
+    onPick: (frame: VideoFrame) => void;
     onClose: () => void;
   } = $props();
 
@@ -32,7 +28,6 @@
   let frames = $state<VideoFrame[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let savingT = $state<number | null>(null);
 
   $effect(() => {
     let cancelled = false;
@@ -51,22 +46,15 @@
     };
   });
 
-  async function pick(frame: VideoFrame) {
-    if (savingT !== null) return;
-    savingT = frame.t;
-    error = null;
-    try {
-      const blob = await (await fetch(frame.dataUrl)).blob();
-      const file = new File([blob], `frame-${frame.t}.jpg`, {
-        type: "image/jpeg",
-      });
-      const updated = await uploadArt(song.id, file);
-      onPicked(updated);
-      onClose();
-    } catch (e) {
-      error = e instanceof Error ? e.message : "Couldn't set the cover";
-      savingT = null;
-    }
+  // Selecting just hands the frame back; the editor applies it on Save.
+  function pick(frame: VideoFrame) {
+    onPick(frame);
+    onClose();
+  }
+
+  function caption(frame: VideoFrame): string {
+    if (frame.label) return frame.label;
+    return frame.t != null ? `${frame.t}s` : "";
   }
 </script>
 
@@ -86,14 +74,12 @@
     {:else if error && frames.length === 0}
       <p class="status err">{error}</p>
     {:else}
-      <p class="hint">Tap a frame to use it as the album art.</p>
+      <p class="hint">Tap a frame to preview it. It's applied when you Save.</p>
       <div class="grid">
-        {#each frames as f (f.t)}
-          <button class="frame" onclick={() => pick(f)} disabled={savingT !== null}>
-            <img src={f.dataUrl} alt={`Frame at ${f.t}s`} />
-            {#if savingT === f.t}
-              <span class="spin"><Icon name="progress_activity" size={26} /></span>
-            {/if}
+        {#each frames as f, i (f.label ?? f.t ?? i)}
+          <button class="frame" class:thumb={!!f.label} onclick={() => pick(f)}>
+            <img src={f.dataUrl} alt={caption(f)} />
+            {#if caption(f)}<span class="cap">{caption(f)}</span>{/if}
           </button>
         {/each}
       </div>
@@ -179,11 +165,14 @@
     background: var(--surface-2);
     cursor: pointer;
   }
-  .frame:hover:not(:disabled) {
+  .frame:hover {
     border-color: var(--accent);
   }
-  .frame:disabled {
-    cursor: default;
+  .frame.thumb {
+    border-color: var(--border-strong);
+  }
+  .frame.thumb:hover {
+    border-color: var(--accent);
   }
   .frame img {
     width: 100%;
@@ -191,17 +180,15 @@
     object-fit: cover;
     display: block;
   }
-  .spin {
+  .cap {
     position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.45);
+    left: 0;
+    bottom: 0;
+    padding: 0.1rem 0.4rem;
+    background: rgba(0, 0, 0, 0.6);
     color: #fff;
-  }
-  .spin :global(.material-symbols-rounded) {
-    animation: spin 1.2s linear infinite;
+    font-size: 0.68rem;
+    border-top-right-radius: 0.35rem;
   }
   @keyframes spin {
     to {
