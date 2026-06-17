@@ -1,8 +1,12 @@
 <script lang="ts">
   import EditSongDialog from "$lib/components/EditSongDialog.svelte";
   import Icon from "$lib/components/Icon.svelte";
+  import {
+    addSongToPlaylist,
+    fetchPlaylists,
+  } from "$lib/services/playlistService";
   import { downloadUrl, type SongMetadata } from "$lib/services/songService";
-  import type { Song } from "$lib/types";
+  import type { Playlist, Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
   // Reusable per-row "⋮" menu: queue actions + edit / download / delete. Drop
@@ -30,9 +34,39 @@
   // anchored to the ⋮ button instead.
   let cursorPos = $state<{ x: number; y: number } | null>(null);
 
+  // "Add to playlist" submenu. Playlists are fetched the first time it's opened.
+  let showPlaylists = $state(false);
+  let playlists = $state<Playlist[]>([]);
+  let plBusy = $state(false);
+  let plDone = $state<string | null>(null);
+
   function close() {
     open = false;
     cursorPos = null;
+    showPlaylists = false;
+    plDone = null;
+  }
+
+  async function openPlaylists() {
+    showPlaylists = true;
+    plBusy = true;
+    try {
+      playlists = await fetchPlaylists();
+    } catch {
+      /* leave list empty */
+    } finally {
+      plBusy = false;
+    }
+  }
+
+  async function addToPlaylist(p: Playlist) {
+    try {
+      await addSongToPlaylist(p.id, song.id);
+      plDone = p.name;
+      setTimeout(close, 800); // brief confirmation, then close
+    } catch {
+      close();
+    }
   }
 
   // Right-clicking (or long-pressing) anywhere on the row opens this menu at the
@@ -91,21 +125,45 @@
       class:at-cursor={cursorPos}
       style={cursorPos ? `left:${cursorPos.x}px; top:${cursorPos.y}px;` : ""}
     >
-      <button onclick={() => { vm.playNext(song); close(); }}>
-        <Icon name="playlist_play" size={18} /> Play next
-      </button>
-      <button onclick={() => { vm.addToQueue(song); close(); }}>
-        <Icon name="queue_music" size={18} /> Add to queue
-      </button>
-      <button onclick={() => { editing = true; close(); }}>
-        <Icon name="edit" size={18} /> Edit
-      </button>
-      <a class="item" href={downloadUrl(song.id)} onclick={close}>
-        <Icon name="download" size={18} /> Download
-      </a>
-      <button class="danger" onclick={confirmDelete}>
-        <Icon name="delete" size={18} /> Delete
-      </button>
+      {#if showPlaylists}
+        <button class="back" onclick={() => (showPlaylists = false)}>
+          <Icon name="arrow_back" size={18} /> Add to playlist
+        </button>
+        {#if plDone}
+          <span class="pl-msg"><Icon name="check_circle" size={16} /> Added to {plDone}</span>
+        {:else if plBusy}
+          <span class="pl-empty">Loading…</span>
+        {:else if playlists.length === 0}
+          <span class="pl-empty">No playlists yet</span>
+        {:else}
+          <div class="pl-list">
+            {#each playlists as p (p.id)}
+              <button onclick={() => addToPlaylist(p)}>
+                <Icon name="queue_music" size={18} /> {p.name}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      {:else}
+        <button onclick={() => { vm.playNext(song); close(); }}>
+          <Icon name="playlist_play" size={18} /> Play next
+        </button>
+        <button onclick={() => { vm.addToQueue(song); close(); }}>
+          <Icon name="queue_music" size={18} /> Add to queue
+        </button>
+        <button onclick={openPlaylists}>
+          <Icon name="playlist_add" size={18} /> Add to playlist
+        </button>
+        <button onclick={() => { editing = true; close(); }}>
+          <Icon name="edit" size={18} /> Edit
+        </button>
+        <a class="item" href={downloadUrl(song.id)} onclick={close}>
+          <Icon name="download" size={18} /> Download
+        </a>
+        <button class="danger" onclick={confirmDelete}>
+          <Icon name="delete" size={18} /> Delete
+        </button>
+      {/if}
     </div>
   {/if}
 </div>
@@ -189,6 +247,33 @@
   }
   .menu .danger {
     color: var(--danger-text);
+  }
+  /* Add-to-playlist submenu */
+  .menu .back {
+    color: var(--dim);
+    font-weight: 600;
+  }
+  .pl-list {
+    display: flex;
+    flex-direction: column;
+    max-height: 220px;
+    overflow-y: auto;
+    border-top: 1px solid var(--surface-2);
+    margin-top: 0.15rem;
+    padding-top: 0.15rem;
+  }
+  .pl-empty {
+    padding: 0.5rem 0.6rem;
+    color: var(--dim);
+    font-size: 0.85rem;
+  }
+  .pl-msg {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.6rem;
+    color: var(--accent-text);
+    font-size: 0.85rem;
   }
   .backdrop {
     position: fixed;
