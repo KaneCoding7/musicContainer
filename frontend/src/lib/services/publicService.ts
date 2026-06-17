@@ -1,8 +1,7 @@
 // Service layer: unauthenticated public share access.
-import { env } from "$env/dynamic/public";
+import { apiBase } from "$lib/services/apiBase";
 import type { Song } from "$lib/types";
 
-const API_BASE = env.PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 
 export interface PublicShare {
   name: string;
@@ -12,7 +11,7 @@ export interface PublicShare {
 
 // Fetches a public share's playlist + songs by token (no auth).
 export async function fetchPublicShare(token: string): Promise<PublicShare> {
-  const res = await fetch(`${API_BASE}/api/public/${token}`);
+  const res = await fetch(`${apiBase()}/api/public/${token}`);
   if (!res.ok) {
     if (res.status === 404) throw new Error("This share link is invalid or was removed.");
     throw new Error(`Request failed (${res.status})`);
@@ -21,9 +20,9 @@ export async function fetchPublicShare(token: string): Promise<PublicShare> {
 }
 
 export function publicStreamUrl(token: string, songId: number): string {
-  return `${API_BASE}/api/public/${token}/songs/${songId}/stream`;
+  return `${apiBase()}/api/public/${token}/songs/${songId}/stream`;
 }
 
 export function publicArtUrl(token: string, songId: number): string {
-  return `${API_BASE}/api/public/${token}/songs/${songId}/art`;
+  return `${apiBase()}/api/public/${token}/songs/${songId}/art`;
 }

@@ -1,8 +1,7 @@
 // Service layer: invite codes.
-import { env } from "$env/dynamic/public";
+import { apiBase } from "$lib/services/apiBase";
 import { authHeaders } from "$lib/services/authService";
 
-const API_BASE = env.PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 
 export interface Invite {
   code: string;
@@ -21,13 +20,13 @@ async function errorMessage(res: Response): Promise<string> {
 }
 
 export async function fetchInvites(): Promise<Invite[]> {
-  const res = await fetch(`${API_BASE}/api/invites`, { headers: authHeaders() });
+  const res = await fetch(`${apiBase()}/api/invites`, { headers: authHeaders() });
   if (!res.ok) throw new Error(await errorMessage(res));
   return (await res.json()).invites as Invite[];
 }
 
 export async function createInvite(): Promise<Invite> {
-  const res = await fetch(`${API_BASE}/api/invites`, {
+  const res = await fetch(`${apiBase()}/api/invites`, {
     method: "POST",
     headers: authHeaders(),
   });

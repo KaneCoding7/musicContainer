@@ -1,9 +1,8 @@
 // Service layer: playlist sharing.
-import { env } from "$env/dynamic/public";
+import { apiBase } from "$lib/services/apiBase";
 import { authHeaders } from "$lib/services/authService";
 import type { Playlist, Song } from "$lib/types";
 
-const API_BASE = env.PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 
 export interface ShareUser {
   id: string;
@@ -33,7 +32,7 @@ export async function sharePlaylist(
   email: string,
   canEdit = false
 ): Promise<ShareUser> {
-  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}/share`, {
+  const res = await fetch(`${apiBase()}/api/playlists/${playlistId}/share`, {
     method: "POST",
     headers: jsonHeaders(),
     body: JSON.stringify({ email, canEdit }),
@@ -46,7 +45,7 @@ export async function sharePlaylist(
 export async function fetchPlaylistShares(
   playlistId: number
 ): Promise<ShareUser[]> {
-  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}/shares`, {
+  const res = await fetch(`${apiBase()}/api/playlists/${playlistId}/shares`, {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error(await errorMessage(res));
@@ -59,7 +58,7 @@ export async function unsharePlaylist(
   userId: string
 ): Promise<void> {
   const res = await fetch(
-    `${API_BASE}/api/playlists/${playlistId}/share/${userId}`,
+    `${apiBase()}/api/playlists/${playlistId}/share/${userId}`,
     { method: "DELETE", headers: authHeaders() }
   );
   if (!res.ok) throw new Error(await errorMessage(res));
@@ -67,7 +66,7 @@ export async function unsharePlaylist(
 
 // Playlists shared with me.
 export async function fetchSharedWithMe(): Promise<SharedPlaylist[]> {
-  const res = await fetch(`${API_BASE}/api/shared`, { headers: authHeaders() });
+  const res = await fetch(`${apiBase()}/api/shared`, { headers: authHeaders() });
   if (!res.ok) throw new Error(await errorMessage(res));
   return (await res.json()).playlists as SharedPlaylist[];
 }
@@ -78,7 +77,7 @@ export async function fetchSharedWithMe(): Promise<SharedPlaylist[]> {
 export async function getPublicToken(
   playlistId: number
 ): Promise<string | null> {
-  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}/public`, {
+  const res = await fetch(`${apiBase()}/api/playlists/${playlistId}/public`, {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error(await errorMessage(res));
@@ -87,7 +86,7 @@ export async function getPublicToken(
 
 // Enables a public link and returns its token.
 export async function enablePublicLink(playlistId: number): Promise<string> {
-  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}/public`, {
+  const res = await fetch(`${apiBase()}/api/playlists/${playlistId}/public`, {
     method: "POST",
     headers: authHeaders(),
   });
@@ -97,7 +96,7 @@ export async function enablePublicLink(playlistId: number): Promise<string> {
 
 // Disables the public link.
 export async function disablePublicLink(playlistId: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}/public`, {
+  const res = await fetch(`${apiBase()}/api/playlists/${playlistId}/public`, {
     method: "DELETE",
     headers: authHeaders(),
   });
@@ -114,7 +113,7 @@ export function publicLink(token: string): string {
 export async function getSongPublicToken(
   songId: number
 ): Promise<string | null> {
-  const res = await fetch(`${API_BASE}/api/songs/${songId}/public`, {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}/public`, {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error(await errorMessage(res));
@@ -122,7 +121,7 @@ export async function getSongPublicToken(
 }
 
 export async function enableSongPublicLink(songId: number): Promise<string> {
-  const res = await fetch(`${API_BASE}/api/songs/${songId}/public`, {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}/public`, {
     method: "POST",
     headers: authHeaders(),
   });
@@ -131,7 +130,7 @@ export async function enableSongPublicLink(songId: number): Promise<string> {
 }
 
 export async function disableSongPublicLink(songId: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/songs/${songId}/public`, {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}/public`, {
     method: "DELETE",
     headers: authHeaders(),
   });
@@ -142,7 +141,7 @@ export async function disableSongPublicLink(songId: number): Promise<void> {
 export async function fetchSharedPlaylistSongs(
   playlistId: number
 ): Promise<Song[]> {
-  const res = await fetch(`${API_BASE}/api/shared/${playlistId}`, {
+  const res = await fetch(`${apiBase()}/api/shared/${playlistId}`, {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error(await errorMessage(res));

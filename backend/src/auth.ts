@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { bearer } from "better-auth/plugins";
 import { getDb } from "./db/init.js";
+import { configuredOrigins, isPrivateOrigin } from "./origins.js";
 
 // The insecure development fallback secret; the server refuses to use it in
 // production (see server.ts).
@@ -11,13 +12,20 @@ export const DEV_AUTH_SECRET = "dev-secret-change-me-in-production";
 // `Authorization: Bearer <token>` header (token kept in localStorage).
 // Origins allowed to call the auth endpoints (CSRF protection). The frontend
 // runs on a different origin than the API, so it must be trusted explicitly.
-const trustedOrigins = [
+const staticTrustedOrigins = [
   process.env.FRONTEND_ORIGIN ?? "http://localhost:3000",
+  "http://localhost:3000",
   "http://localhost:5173", // SvelteKit dev server
-  ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS?.split(",")
-    .map((o) => o.trim())
-    .filter(Boolean) ?? []),
+  ...configuredOrigins,
 ];
+
+// Function form: the configured origins plus the caller's origin when it's a
+// localhost / private-LAN address, so LAN access works without per-IP config.
+const trustedOrigins = (request?: Request) => {
+  const origin = request?.headers.get("origin");
+  const lan = origin && isPrivateOrigin(origin) ? [origin] : [];
+  return Array.from(new Set([...staticTrustedOrigins, ...lan]));
+};
 
 export const auth = betterAuth({
   database: getDb(),

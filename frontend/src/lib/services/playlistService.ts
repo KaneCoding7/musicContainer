@@ -1,13 +1,12 @@
 // Service layer: wrapper around the backend playlist API.
-import { env } from "$env/dynamic/public";
+import { apiBase } from "$lib/services/apiBase";
 import { authHeaders, withToken } from "$lib/services/authService";
 import type { Playlist, Song } from "$lib/types";
 
-const API_BASE = env.PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 
 // URL to download a playlist's tracks as a zip (token in query for the link).
 export function playlistZipUrl(playlistId: number): string {
-  return withToken(`${API_BASE}/api/playlists/${playlistId}/download`);
+  return withToken(`${apiBase()}/api/playlists/${playlistId}/download`);
 }
 
 async function errorMessage(res: Response): Promise<string> {
@@ -24,14 +23,14 @@ const jsonHeaders = () => ({ "Content-Type": "application/json", ...authHeaders(
 
 // Lists all playlists.
 export async function fetchPlaylists(): Promise<Playlist[]> {
-  const res = await fetch(`${API_BASE}/api/playlists`, { headers: authHeaders() });
+  const res = await fetch(`${apiBase()}/api/playlists`, { headers: authHeaders() });
   if (!res.ok) throw new Error(await errorMessage(res));
   return (await res.json()).playlists as Playlist[];
 }
 
 // Creates a new playlist.
 export async function createPlaylist(name: string): Promise<Playlist> {
-  const res = await fetch(`${API_BASE}/api/playlists`, {
+  const res = await fetch(`${apiBase()}/api/playlists`, {
     method: "POST",
     headers: jsonHeaders(),
     body: JSON.stringify({ name }),
@@ -45,7 +44,7 @@ export async function renamePlaylist(
   playlistId: number,
   name: string
 ): Promise<Playlist> {
-  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}`, {
+  const res = await fetch(`${apiBase()}/api/playlists/${playlistId}`, {
     method: "PATCH",
     headers: jsonHeaders(),
     body: JSON.stringify({ name }),
@@ -56,7 +55,7 @@ export async function renamePlaylist(
 
 // Deletes a playlist.
 export async function deletePlaylist(playlistId: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}`, {
+  const res = await fetch(`${apiBase()}/api/playlists/${playlistId}`, {
     method: "DELETE",
     headers: authHeaders(),
   });
@@ -65,7 +64,7 @@ export async function deletePlaylist(playlistId: number): Promise<void> {
 
 // Returns the songs in a playlist, in order.
 export async function fetchPlaylistSongs(playlistId: number): Promise<Song[]> {
-  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}`, {
+  const res = await fetch(`${apiBase()}/api/playlists/${playlistId}`, {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error(await errorMessage(res));
@@ -77,7 +76,7 @@ export async function addSongToPlaylist(
   playlistId: number,
   songId: number
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}/songs`, {
+  const res = await fetch(`${apiBase()}/api/playlists/${playlistId}/songs`, {
     method: "POST",
     headers: jsonHeaders(),
     body: JSON.stringify({ songId }),
@@ -90,7 +89,7 @@ export async function reorderPlaylist(
   playlistId: number,
   songIds: number[]
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}/order`, {
+  const res = await fetch(`${apiBase()}/api/playlists/${playlistId}/order`, {
     method: "PUT",
     headers: jsonHeaders(),
     body: JSON.stringify({ songIds }),
@@ -103,7 +102,7 @@ export async function addSongsToPlaylist(
   playlistId: number,
   songIds: number[]
 ): Promise<number> {
-  const res = await fetch(`${API_BASE}/api/playlists/${playlistId}/songs/bulk`, {
+  const res = await fetch(`${apiBase()}/api/playlists/${playlistId}/songs/bulk`, {
     method: "POST",
     headers: jsonHeaders(),
     body: JSON.stringify({ songIds }),
@@ -118,7 +117,7 @@ export async function removeSongFromPlaylist(
   songId: number
 ): Promise<void> {
   const res = await fetch(
-    `${API_BASE}/api/playlists/${playlistId}/songs/${songId}`,
+    `${apiBase()}/api/playlists/${playlistId}/songs/${songId}`,
     { method: "DELETE", headers: authHeaders() }
   );
   if (!res.ok) throw new Error(await errorMessage(res));

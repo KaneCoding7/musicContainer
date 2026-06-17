@@ -1,9 +1,8 @@
 // Service layer: thin wrapper around the backend song API.
-import { env } from "$env/dynamic/public";
+import { apiBase } from "$lib/services/apiBase";
 import { authHeaders, withToken } from "$lib/services/authService";
 import type { Song } from "$lib/types";
 
-const API_BASE = env.PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 
 // Extracts a human-readable error message from a failed API response.
 async function errorMessage(res: Response): Promise<string> {
@@ -18,7 +17,7 @@ async function errorMessage(res: Response): Promise<string> {
 
 // Fetches all songs from the backend.
 export async function fetchSongs(): Promise<Song[]> {
-  const res = await fetch(`${API_BASE}/api/songs`, { headers: authHeaders() });
+  const res = await fetch(`${apiBase()}/api/songs`, { headers: authHeaders() });
   if (!res.ok) throw new Error(await errorMessage(res));
   const body = await res.json();
   return body.songs as Song[];
@@ -29,7 +28,7 @@ export async function uploadSong(file: File): Promise<Song> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch(`${API_BASE}/api/upload`, {
+  const res = await fetch(`${apiBase()}/api/upload`, {
     method: "POST",
     headers: authHeaders(),
     body: formData,
@@ -51,7 +50,7 @@ export async function updateSongMeta(
   songId: number,
   fields: SongMetadata
 ): Promise<Song> {
-  const res = await fetch(`${API_BASE}/api/songs/${songId}`, {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(fields),
@@ -67,7 +66,7 @@ export async function updateSongsMeta(
   ids: number[],
   fields: { artist?: string; album?: string }
 ): Promise<Song[]> {
-  const res = await fetch(`${API_BASE}/api/songs/bulk`, {
+  const res = await fetch(`${apiBase()}/api/songs/bulk`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ ids, ...fields }),
@@ -78,7 +77,7 @@ export async function updateSongsMeta(
 
 // Sets a song's liked flag; returns the updated song.
 export async function setLiked(songId: number, liked: boolean): Promise<Song> {
-  const res = await fetch(`${API_BASE}/api/songs/${songId}/like`, {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}/like`, {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ liked }),
@@ -89,7 +88,7 @@ export async function setLiked(songId: number, liked: boolean): Promise<Song> {
 
 // Records a play for a song; returns the updated song.
 export async function recordPlay(songId: number): Promise<Song> {
-  const res = await fetch(`${API_BASE}/api/songs/${songId}/play`, {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}/play`, {
     method: "POST",
     headers: authHeaders(),
   });
@@ -101,7 +100,7 @@ export async function recordPlay(songId: number): Promise<Song> {
 export async function uploadArt(songId: number, file: File): Promise<Song> {
   const formData = new FormData();
   formData.append("art", file);
-  const res = await fetch(`${API_BASE}/api/songs/${songId}/art`, {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}/art`, {
     method: "PUT",
     headers: authHeaders(),
     body: formData,
@@ -112,7 +111,7 @@ export async function uploadArt(songId: number, file: File): Promise<Song> {
 
 // Removes a song's album art; returns the updated song.
 export async function removeArt(songId: number): Promise<Song> {
-  const res = await fetch(`${API_BASE}/api/songs/${songId}/art`, {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}/art`, {
     method: "DELETE",
     headers: authHeaders(),
   });
@@ -122,19 +121,19 @@ export async function removeArt(songId: number): Promise<Song> {
 
 // Returns the album-art URL for a song (only meaningful when song.hasArt).
 export function artUrl(songId: number): string {
-  return withToken(`${API_BASE}/api/songs/${songId}/art`);
+  return withToken(`${apiBase()}/api/songs/${songId}/art`);
 }
 
 // Returns a resized square-thumbnail URL for a song's art. `size` is the target
 // edge in px; the server snaps it up to the nearest cached variant. Use this in
 // list/grid/mini-player views so the browser isn't downscaling the full image.
 export function thumbUrl(songId: number, size: number): string {
-  return withToken(`${API_BASE}/api/songs/${songId}/art?size=${size}`);
+  return withToken(`${apiBase()}/api/songs/${songId}/art?size=${size}`);
 }
 
 // Deletes a song from the library.
 export async function deleteSong(songId: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/songs/${songId}`, {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}`, {
     method: "DELETE",
     headers: authHeaders(),
   });
@@ -143,10 +142,10 @@ export async function deleteSong(songId: number): Promise<void> {
 
 // Returns the streaming URL for a song (used in Cycle 2).
 export function streamUrl(songId: number): string {
-  return withToken(`${API_BASE}/api/songs/${songId}/stream`);
+  return withToken(`${apiBase()}/api/songs/${songId}/stream`);
 }
 
 // Returns the download URL for a song (sets Content-Disposition: attachment).
 export function downloadUrl(songId: number): string {
-  return withToken(`${API_BASE}/api/songs/${songId}/download`);
+  return withToken(`${apiBase()}/api/songs/${songId}/download`);
 }

@@ -1,7 +1,6 @@
 // Auth service: talks to Better Auth endpoints and manages the bearer token.
-import { env } from "$env/dynamic/public";
+import { apiBase } from "$lib/services/apiBase";
 
-const API_BASE = env.PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 const TOKEN_KEY = "music_token";
 
 export interface User {
@@ -53,7 +52,7 @@ export async function signUp(
   invite?: string
 ): Promise<User> {
   // Goes through our gated wrapper so invite codes are enforced/consumed.
-  const res = await fetch(`${API_BASE}/api/register`, {
+  const res = await fetch(`${apiBase()}/api/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password, name, invite }),
@@ -65,7 +64,7 @@ export async function signUp(
 }
 
 export async function signIn(email: string, password: string): Promise<User> {
-  const res = await fetch(`${API_BASE}/api/auth/sign-in/email`, {
+  const res = await fetch(`${apiBase()}/api/auth/sign-in/email`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -78,7 +77,7 @@ export async function signIn(email: string, password: string): Promise<User> {
 
 export async function signOut(): Promise<void> {
   try {
-    await fetch(`${API_BASE}/api/auth/sign-out`, {
+    await fetch(`${apiBase()}/api/auth/sign-out`, {
       method: "POST",
       headers: authHeaders(),
     });
@@ -89,7 +88,7 @@ export async function signOut(): Promise<void> {
 
 // Updates the current user's display name.
 export async function updateName(name: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/auth/update-user`, {
+  const res = await fetch(`${apiBase()}/api/auth/update-user`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ name }),
@@ -102,7 +101,7 @@ export async function changePassword(
   currentPassword: string,
   newPassword: string
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/auth/change-password`, {
+  const res = await fetch(`${apiBase()}/api/auth/change-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ currentPassword, newPassword }),
@@ -114,7 +113,7 @@ export async function changePassword(
 export async function fetchSession(): Promise<User | null> {
   if (!getToken()) return null;
   try {
-    const res = await fetch(`${API_BASE}/api/auth/get-session`, {
+    const res = await fetch(`${apiBase()}/api/auth/get-session`, {
       headers: authHeaders(),
     });
     if (!res.ok) return null;

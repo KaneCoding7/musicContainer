@@ -4,6 +4,7 @@ import express from "express";
 import { auth, DEV_AUTH_SECRET } from "./auth.js";
 import { requireAuth } from "./auth-middleware.js";
 import { getDb } from "./db/init.js";
+import { allowAllOrigins, configuredOrigins, isPrivateOrigin } from "./origins.js";
 import { rateLimit } from "./rate-limit.js";
 import { invitesRouter } from "./routes/invites.js";
 import { playlistsRouter } from "./routes/playlists.js";
@@ -35,7 +36,15 @@ app.set("trust proxy", true);
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_ORIGIN ?? true,
+    // Allow the configured public origin(s) plus localhost / private-LAN so the
+    // app works on the local network. (Bearer-token auth is the real access
+    // control; CORS just governs which browser origins may read responses.)
+    origin: (origin, cb) => {
+      if (!origin || allowAllOrigins) return cb(null, true);
+      if (configuredOrigins.includes(origin) || isPrivateOrigin(origin))
+        return cb(null, true);
+      return cb(null, false);
+    },
     credentials: true,
   })
 );
