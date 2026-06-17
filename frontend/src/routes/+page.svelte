@@ -48,7 +48,14 @@
     | "settings";
   let view = $state<View>("home");
   let queueOpen = $state(false);
+  let sidebarOpen = $state(false); // mobile nav drawer
   let theme = $state<"dark" | "light">("dark");
+
+  // Navigate, closing the mobile drawer on selection.
+  function goTo(v: View) {
+    view = v;
+    sidebarOpen = false;
+  }
 
   function toggleTheme() {
     theme = theme === "dark" ? "light" : "dark";
@@ -151,10 +158,35 @@
   <AuthScreen vm={authVm} onAuthed={loadLibrary} />
 {:else}
   <div class="layout">
+    <header class="topbar">
+      <button
+        class="hamburger"
+        onclick={() => (sidebarOpen = true)}
+        aria-label="Open menu"
+      >
+        <Icon name="menu" size={24} />
+      </button>
+      <span class="topbar-title">{nav.find((n) => n.id === view)?.label ?? ""}</span>
+    </header>
+
     <div class="body">
-      <aside class="sidebar">
+      {#if sidebarOpen}
+        <button
+          class="scrim"
+          aria-label="Close menu"
+          onclick={() => (sidebarOpen = false)}
+        ></button>
+      {/if}
+      <aside class="sidebar" class:open={sidebarOpen}>
       <div class="brand">
         <Icon name="library_music" fill size={26} /> Music Server
+        <button
+          class="drawer-close"
+          onclick={() => (sidebarOpen = false)}
+          aria-label="Close menu"
+        >
+          <Icon name="close" size={22} />
+        </button>
       </div>
 
       <nav>
@@ -162,7 +194,7 @@
           <button
             class="nav-item"
             class:active={view === item.id}
-            onclick={() => (view = item.id)}
+            onclick={() => goTo(item.id)}
           >
             <Icon name={item.icon} size={22} />
             {item.label}
@@ -484,5 +516,84 @@
   .muted {
     color: var(--muted);
     padding: 0.5rem 0;
+  }
+
+  /* Mobile top bar + drawer affordances — hidden on desktop. */
+  .topbar {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    padding: 0.5rem 0.75rem;
+    background: var(--sidebar);
+    border-bottom: 1px solid var(--surface-2);
+  }
+  .hamburger,
+  .drawer-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 0.5rem;
+  }
+  .hamburger:hover,
+  .drawer-close:hover {
+    background: var(--hover);
+  }
+  .topbar-title {
+    font-weight: 600;
+    font-size: 1.05rem;
+  }
+  .drawer-close {
+    display: none;
+    margin-left: auto;
+  }
+  .scrim {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    padding: 0;
+  }
+
+  @media (max-width: 768px) {
+    .topbar {
+      display: flex;
+    }
+    .scrim {
+      display: block;
+    }
+    .drawer-close {
+      display: inline-flex;
+    }
+    .sidebar {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 50;
+      width: min(80vw, 280px);
+      transform: translateX(-100%);
+      transition: transform 0.22s ease;
+      box-shadow: 0 0 32px rgba(0, 0, 0, 0.4);
+    }
+    .sidebar.open {
+      transform: translateX(0);
+    }
+    .content {
+      padding: 1rem 1rem 1.5rem;
+    }
+    .content h2 {
+      font-size: 1.2rem;
+    }
+    .queue-panel {
+      max-height: 45vh;
+    }
   }
 </style>

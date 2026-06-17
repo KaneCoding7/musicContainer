@@ -328,6 +328,7 @@
   .toolbar {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 0.75rem;
   }
@@ -625,5 +626,22 @@
   .muted {
     color: var(--muted);
     padding: 1rem;
+  }
+
+  @media (max-width: 768px) {
+    .search {
+      flex-basis: 100%;
+    }
+    .row {
+      gap: 0.6rem;
+      padding: 0.6rem 0.35rem;
+    }
+    .action,
+    .delete {
+      padding: 0.45rem 0.4rem;
+    }
+    .check {
+      padding-left: 0.4rem;
+    }
   }
 </style>

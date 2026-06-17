@@ -662,10 +662,39 @@
   input[type="range"] {
     accent-color: var(--accent);
   }
-  @media (max-width: 600px) {
+  @media (max-width: 768px) {
     .player {
-      grid-template-columns: 1fr;
-      gap: 0.6rem;
+      grid-template-columns: 1fr auto auto;
+      grid-template-areas:
+        "now controls extras"
+        "progress progress progress";
+      gap: 0.35rem 0.5rem;
+      padding: 0.6rem 0.8rem;
+    }
+    .now-playing {
+      grid-area: now;
+    }
+    .controls {
+      grid-area: controls;
+    }
+    .volume {
+      grid-area: extras;
+    }
+    .progress {
+      grid-area: progress;
+    }
+    /* Shuffle/repeat live in the full-screen view on mobile to save space. */
+    .controls .toggle {
+      display: none;
+    }
+    /* System handles output volume on phones; drop the slider + its icon. */
+    .volume > input,
+    .volume > :global(.material-symbols-rounded) {
+      display: none;
+    }
+    .controls button,
+    .queue-toggle {
+      padding: 0.4rem;
     }
   }
 </style>
