@@ -136,12 +136,12 @@
         <label class="art-btn">
           {artBusy ? "Working…" : hasArt ? "Change art" : "Upload art"}
           <input
+            class="file-input"
             bind:this={fileInput}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/*"
             onchange={onPickArt}
             disabled={artBusy}
-            hidden
           />
         </label>
         {#if hasArt}
@@ -256,6 +256,19 @@
   }
   .art-btn:hover {
     background: var(--hover);
+  }
+  /* Visually hidden but still interactive — display:none/hidden file inputs
+     fail to open the picker on iOS Safari. */
+  .file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    opacity: 0;
   }
   .art-remove {
     padding: 0.3rem 0.7rem;

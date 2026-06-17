@@ -62,13 +62,13 @@
       <p class="sub">or click to browse — MP3 or WAV, as many as you like</p>
     {/if}
     <input
+      class="file-input"
       bind:this={fileInput}
       type="file"
       accept=".mp3,.wav,audio/mpeg,audio/wav"
       multiple
       onchange={onChange}
       disabled={vm.uploading}
-      hidden
     />
   </label>
 
@@ -89,6 +89,19 @@
 <style>
   .upload-view {
     max-width: 640px;
+  }
+  /* Visually hidden but still interactive — display:none/hidden file inputs
+     fail to open the picker on iOS Safari. */
+  .file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    opacity: 0;
   }
   .dropzone {
     display: flex;
