@@ -81,7 +81,7 @@
       <div class="head">
         <h3><Icon name="artist" size={20} /> Most Played Artists</h3>
       </div>
-      <div class="cards">
+      <div class="cards artists">
         {#each mostPlayedArtists as a (a.name)}
           <button class="card" onclick={() => openArtist(a.name)}>
             <span class="cover round">
@@ -121,11 +121,15 @@
   }
   .cards {
     display: grid;
-    /* auto-fit fills a full row (so the cards' right edge lines up with the
-       header's Play button), while the 200px cap stops a section with only a
-       few items from stretching into giant cards. */
-    grid-template-columns: repeat(auto-fit, minmax(140px, 200px));
+    /* Song sections fill the row (1fr) so the cards' right edge lines up with
+       the header's Play button. */
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 1rem;
+  }
+  /* The artists section has no Play button and often few items, so cap the
+     card size instead of stretching them into giant cards. */
+  .cards.artists {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 200px));
   }
   .card {
     display: flex;
