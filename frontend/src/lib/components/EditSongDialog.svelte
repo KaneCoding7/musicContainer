@@ -1,6 +1,21 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
+
+  // Move the dialog up to the app's top-level container so it isn't nested
+  // inside the scrolling content area or a swipe-handling song row — iOS Safari
+  // won't open a file input that lives inside such ancestors. We target
+  // ".layout" (not <body>) so it stays within Svelte's event-delegation root
+  // and the dialog's own buttons keep working.
+  function portal(node: HTMLElement) {
+    const target = document.querySelector(".layout") ?? document.body;
+    target.appendChild(node);
+    return {
+      destroy() {
+        node.parentNode?.removeChild(node);
+      },
+    };
+  }
   import {
     thumbUrl,
     removeArt,
@@ -120,7 +135,7 @@
 
 <svelte:window onkeydown={(e) => e.key === "Escape" && onClose()} />
 
-<div class="backdrop">
+<div class="backdrop" use:portal>
   <div class="dialog" role="dialog" aria-modal="true" aria-label="Edit song">
     <h3>Edit song</h3>
 
