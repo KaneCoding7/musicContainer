@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import type { Database } from "better-sqlite3";
-import { existsSync, statSync, unlinkSync } from "node:fs";
+import { copyFileSync, existsSync, statSync, unlinkSync } from "node:fs";
 import { extname, join } from "node:path";
 import type { Song } from "../types.js";
 import { err, ok, type AppError, type Result } from "./result.js";
@@ -226,6 +227,79 @@ export function getSongSource(
     return { sourceUrl: row.source_url, duration: row.duration };
   } catch {
     return null;
+  }
+}
+
+// Copies a song the user can access (e.g. from a shared playlist) into their
+// own library: duplicates the audio + art files and creates a new owned song
+// row, so it's a real independent copy.
+export function copySongToLibrary(
+  db: Database,
+  userId: string,
+  songId: number,
+  musicDir: string,
+  artDir: string
+): Result<Song> {
+  if (!canAccessSong(db, userId, songId)) {
+    return err("not_found", `Song ${songId} not found`);
+  }
+  const src = db
+    .prepare(
+      `SELECT user_id, filename, original_filename, artist, album, art_filename,
+              duration, loudness, source_url
+       FROM songs WHERE id = ?`
+    )
+    .get(songId) as
+    | {
+        user_id: string;
+        filename: string;
+        original_filename: string;
+        artist: string | null;
+        album: string | null;
+        art_filename: string | null;
+        duration: number | null;
+        loudness: number | null;
+        source_url: string | null;
+      }
+    | undefined;
+  if (!src) return err("not_found", `Song ${songId} not found`);
+  if (src.user_id === userId) {
+    return err("conflict", "This song is already in your library");
+  }
+
+  try {
+    const srcAudio = join(musicDir, src.filename);
+    if (!existsSync(srcAudio)) {
+      return err("not_found", "Source audio file is missing");
+    }
+    const newFile = `${randomUUID()}${extname(src.filename) || ".mp3"}`;
+    copyFileSync(srcAudio, join(musicDir, newFile));
+
+    let newArt: string | null = null;
+    if (src.art_filename) {
+      const srcArt = join(artDir, src.art_filename);
+      if (existsSync(srcArt)) {
+        newArt = `${randomUUID()}${extname(src.art_filename) || ".jpg"}`;
+        copyFileSync(srcArt, join(artDir, newArt));
+      }
+    }
+
+    const result = recordSong(db, {
+      filename: newFile,
+      originalFilename: src.original_filename,
+      userId,
+      artist: src.artist,
+      album: src.album,
+      artFilename: newArt,
+      duration: src.duration,
+      sourceUrl: src.source_url,
+    });
+    if (result.ok && src.loudness != null) {
+      setSongLoudness(db, result.value.id, src.loudness);
+    }
+    return result;
+  } catch (e) {
+    return err("internal", `Failed to copy song: ${(e as Error).message}`);
   }
 }
 

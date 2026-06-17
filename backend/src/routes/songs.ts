@@ -14,6 +14,7 @@ import { Router } from "express";
 import multer from "multer";
 import { ART_DIR, getDb, MUSIC_DIR } from "../db/init.js";
 import {
+  copySongToLibrary,
   deleteSong,
   finalizeSongs,
   getSongSource,
@@ -433,6 +434,24 @@ songsRouter.post("/songs/finalize", (req, res) => {
       .json({ error: result.error });
   }
   return res.json({ songs: result.value });
+});
+
+// POST /api/songs/:id/copy-to-library — copy an accessible song (e.g. from a
+// shared playlist) into the caller's own library.
+songsRouter.post("/songs/:id/copy-to-library", (req, res) => {
+  const result = copySongToLibrary(
+    getDb(),
+    req.userId!,
+    Number(req.params.id),
+    MUSIC_DIR,
+    ART_DIR
+  );
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.status(201).json({ song: result.value });
 });
 
 // Spawns a process, resolving on exit 0 (rejecting otherwise). Kills on timeout.

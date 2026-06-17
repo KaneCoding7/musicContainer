@@ -92,6 +92,16 @@ export async function importLink(
   return songs;
 }
 
+// Copies an accessible song (e.g. from a shared playlist) into my library.
+export async function copySongToLibrary(songId: number): Promise<Song> {
+  const res = await fetch(
+    `${apiBase()}/api/songs/${songId}/copy-to-library`,
+    { method: "POST", headers: authHeaders() }
+  );
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).song as Song;
+}
+
 // Uploaded/imported songs awaiting review (not yet in the library).
 export async function fetchPendingSongs(): Promise<Song[]> {
   const res = await fetch(`${apiBase()}/api/songs/pending`, {

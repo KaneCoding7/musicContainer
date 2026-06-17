@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
   import PlaylistMembers from "$lib/components/PlaylistMembers.svelte";
-  import { thumbUrl } from "$lib/services/songService";
+  import { copySongToLibrary, thumbUrl } from "$lib/services/songService";
   import {
     addSongToPlaylist,
     deletePlaylist,
@@ -29,6 +29,27 @@
   let saving = $state(false);
   // The id of my saved copy of the open shared playlist (null = not saved).
   let savedCopyId = $state<number | null>(null);
+
+  // Per-song "add to my library" state (keyed by the shared song's id).
+  let addedToLib = $state<Set<number>>(new Set());
+  let addingLib = $state<number | null>(null);
+  // True if I already own this song (it's in my library).
+  const ownsSong = (id: number) => songVm.songs.some((s) => s.id === id);
+
+  async function addToLibrary(songId: number) {
+    if (addingLib !== null || addedToLib.has(songId)) return;
+    addingLib = songId;
+    error = null;
+    try {
+      const copied = await copySongToLibrary(songId);
+      songVm.songs = [copied, ...songVm.songs];
+      addedToLib = new Set([...addedToLib, songId]);
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Failed to add to library";
+    } finally {
+      addingLib = null;
+    }
+  }
 
   // Toggles the open shared playlist in/out of my personal playlists.
   async function toggleSave() {
@@ -184,6 +205,26 @@
           <span class="t-added" title={`Added by ${song.addedBy}`}>
             <Icon name="person" size={13} />{song.addedBy}
           </span>
+        {/if}
+        {#if !ownsSong(song.id)}
+          <button
+            class="to-lib"
+            class:done={addedToLib.has(song.id)}
+            class:loading={addingLib === song.id}
+            title={addedToLib.has(song.id) ? "In your library" : "Add to my library"}
+            aria-label="Add to my library"
+            disabled={addingLib !== null || addedToLib.has(song.id)}
+            onclick={() => addToLibrary(song.id)}
+          >
+            <Icon
+              name={addedToLib.has(song.id)
+                ? "check_circle"
+                : addingLib === song.id
+                  ? "progress_activity"
+                  : "library_music"}
+              size={18}
+            />
+          </button>
         {/if}
         {#if open.canEdit}
           <button
@@ -394,6 +435,33 @@
   .remove:hover {
     background: var(--surface-2);
     color: var(--text);
+  }
+  .to-lib {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.35rem;
+  }
+  .to-lib:hover:not(:disabled) {
+    background: var(--surface-2);
+    color: var(--accent-text);
+  }
+  .to-lib.done {
+    color: var(--accent-text);
+    cursor: default;
+  }
+  .to-lib.loading :global(.material-symbols-rounded) {
+    animation: spin 1.2s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   .add-row {
     display: flex;
