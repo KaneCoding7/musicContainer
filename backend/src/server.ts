@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { toNodeHandler } from "better-auth/node";
 import cors from "cors";
 import express from "express";
@@ -6,6 +7,7 @@ import { requireAuth } from "./auth-middleware.js";
 import { getDb } from "./db/init.js";
 import { allowAllOrigins, configuredOrigins, isPrivateOrigin } from "./origins.js";
 import { rateLimit } from "./rate-limit.js";
+import { attachSync } from "./sync.js";
 import { invitesRouter } from "./routes/invites.js";
 import { playlistsRouter } from "./routes/playlists.js";
 import { publicRouter } from "./routes/public.js";
@@ -88,6 +90,10 @@ app.use("/api", requireAuth, sharesRouter);
 // Initialize the database (creates schema + data dirs) before serving.
 getDb();
 
-app.listen(PORT, () => {
+// Use an explicit HTTP server so the cross-device sync WebSocket can attach.
+const server = createServer(app);
+attachSync(server);
+
+server.listen(PORT, () => {
   console.log(`Music server backend listening on http://localhost:${PORT}`);
 });

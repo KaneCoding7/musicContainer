@@ -18,13 +18,16 @@
   import SongList from "$lib/components/SongList.svelte";
   import UploadView from "$lib/components/UploadView.svelte";
   import type { SongMetadata } from "$lib/services/songService";
+  import DeviceBar from "$lib/components/DeviceBar.svelte";
   import { AuthViewModel } from "$lib/viewmodels/authViewModel.svelte";
   import { PlaylistViewModel } from "$lib/viewmodels/playlistViewModel.svelte";
   import { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
+  import { SyncController } from "$lib/viewmodels/syncController.svelte";
 
   const authVm = new AuthViewModel();
   const vm = new SongViewModel();
   const playlistVm = new PlaylistViewModel();
+  const sync = new SyncController(vm);
 
   // Load the signed-in user's library.
   function loadLibrary() {
@@ -117,8 +120,29 @@
     if (authVm.isAuthed) {
       loadLibrary();
       vm.restore(); // resume playback from before a refresh
+      sync.connect(); // cross-device playback sync
     }
     restoreReady = true;
+  });
+
+  // Active device: broadcast playback state whenever the discrete state changes.
+  $effect(() => {
+    // Track the discrete playback fields (position is pushed on a timer below).
+    void [vm.currentIndex, vm.isPlaying, vm.queue, vm.shuffle, vm.repeat, vm.duration];
+    if (restoreReady && sync.isActive) sync.sendState();
+  });
+
+  // Push position periodically while active, and on remotes advance the
+  // displayed position between the active device's updates.
+  $effect(() => {
+    const id = setInterval(() => {
+      if (sync.isActive) {
+        if (vm.isPlaying) sync.sendState();
+      } else if (vm.isPlaying) {
+        vm.position = Math.min(vm.position + 1, vm.duration || vm.position + 1);
+      }
+    }, 1000);
+    return () => clearInterval(id);
   });
 
   // Persist a now-playing snapshot whenever the discrete player state changes.
@@ -354,7 +378,11 @@
     </section>
   {/if}
 
-  <Player {vm} {queueOpen} onToggleQueue={() => (queueOpen = !queueOpen)} />
+  {#if sync.isRemote}
+    <DeviceBar {sync} />
+  {/if}
+
+  <Player {vm} {queueOpen} active={sync.isActive} onToggleQueue={() => (queueOpen = !queueOpen)} />
   </div>
 {/if}
 

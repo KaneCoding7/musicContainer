@@ -8,10 +8,12 @@
   let {
     vm,
     queueOpen = false,
+    active = true,
     onToggleQueue,
   }: {
     vm: SongViewModel;
     queueOpen?: boolean;
+    active?: boolean; // false when another device is the audio output (remote)
     onToggleQueue?: () => void;
   } = $props();
 
@@ -109,6 +111,7 @@
     const el = audio;
     const id = song?.id;
     if (!el || id == null) return;
+    if (!active) return; // another device is the audio output; stay silent
     const url = streamUrl(id);
     if (el.src !== url) {
       el.src = url;
@@ -134,6 +137,11 @@
   // Mirror the requested play/pause state onto the element.
   $effect(() => {
     if (!audio || !song) return;
+    if (!active) {
+      // Remote device: never emit audio (the active device plays).
+      if (!audio.paused) audio.pause();
+      return;
+    }
     if (vm.isPlaying && audio.paused) tryResume(audio);
     if (!vm.isPlaying && !audio.paused) audio.pause();
   });
@@ -185,8 +193,12 @@
     const el = audio;
     if (!el || !hasMediaSession) return;
     const ms = navigator.mediaSession;
-    ms.setActionHandler("play", () => (vm.isPlaying = true));
-    ms.setActionHandler("pause", () => (vm.isPlaying = false));
+    ms.setActionHandler("play", () => {
+      if (!vm.isPlaying) vm.togglePlay();
+    });
+    ms.setActionHandler("pause", () => {
+      if (vm.isPlaying) vm.togglePlay();
+    });
     ms.setActionHandler("previoustrack", () => vm.prev());
     ms.setActionHandler("nexttrack", () => vm.next());
     ms.setActionHandler("seekto", (d) => {
@@ -338,7 +350,7 @@
 
   function onSeek(event: Event) {
     const value = Number((event.target as HTMLInputElement).value);
-    if (audio) audio.currentTime = value;
+    vm.seek(value); // forwards as a command when this device is a remote
   }
 
   function formatTime(seconds: number): string {

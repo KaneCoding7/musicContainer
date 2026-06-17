@@ -14,6 +14,17 @@ import {
 } from "$lib/services/songService";
 import type { Song } from "$lib/types";
 
+// The playback state synced across devices (Spotify-Connect style).
+export interface PlaybackSnapshot {
+  queue: Song[];
+  currentIndex: number | null;
+  position: number;
+  duration: number;
+  isPlaying: boolean;
+  shuffle: boolean;
+  repeat: "off" | "all" | "one";
+}
+
 export class SongViewModel {
   songs = $state<Song[]>([]);
   loading = $state(false);
@@ -97,6 +108,12 @@ export class SongViewModel {
   shuffle = $state(false);
   repeat = $state<"off" | "all" | "one">("off");
 
+  // Cross-device sync. When set, transport actions are forwarded to the active
+  // device as commands rather than changing local playback. The sink returns
+  // true when it handled the action (this is a remote device); false to act
+  // locally (this device is the active one).
+  remoteSink: ((type: string, payload?: unknown) => boolean) | null = null;
+
   // Volume 0..1 (Cycle 11; lives here so keyboard shortcuts can adjust it).
   volume = $state(1);
 
@@ -118,7 +135,16 @@ export class SongViewModel {
   private readonly NOW_PLAYING_KEY = "musicNowPlaying";
 
   togglePlay(): void {
+    if (this.remoteSink?.("togglePlay")) return;
     if (this.currentSong) this.isPlaying = !this.isPlaying;
+  }
+
+  // Seeks to a position in seconds (forwarded when remote; applied by the
+  // player's audio element when local).
+  seek(seconds: number): void {
+    if (this.remoteSink?.("seek", { position: seconds })) return;
+    this.position = seconds;
+    this.seekRequest = seconds;
   }
 
   // Adjusts volume by delta, clamped to [0, 1].
@@ -200,6 +226,7 @@ export class SongViewModel {
   // plays next. Turning it on shuffles the upcoming tracks (current + already
   // played stay put); turning it off restores the pre-shuffle order.
   toggleShuffle(): void {
+    if (this.remoteSink?.("toggleShuffle")) return;
     if (!this.shuffle) {
       this.shuffle = true;
       if (this.currentIndex === null || this.queue.length <= 1) return;
@@ -227,6 +254,7 @@ export class SongViewModel {
 
   // Cycles repeat off -> all -> one -> off.
   cycleRepeat(): void {
+    if (this.remoteSink?.("cycleRepeat")) return;
     this.repeat =
       this.repeat === "off" ? "all" : this.repeat === "all" ? "one" : "off";
   }
@@ -250,6 +278,7 @@ export class SongViewModel {
   // on, the list is shuffled (the chosen track first) so the queue order is
   // exactly what will play.
   playQueue(songs: Song[], index: number): void {
+    if (this.remoteSink?.("playQueue", { songs, index })) return;
     if (index < 0 || index >= songs.length) return;
     if (this.shuffle && songs.length > 1) {
       const picked = songs[index];
@@ -267,6 +296,7 @@ export class SongViewModel {
   // Plays a list from the top in order (turns shuffle off).
   playList(songs: Song[]): void {
     if (songs.length === 0) return;
+    if (this.remoteSink?.("playList", { songs })) return;
     this.shuffle = false;
     this.playQueue(songs, 0);
   }
@@ -274,6 +304,7 @@ export class SongViewModel {
   // Plays a list shuffled (turns shuffle on; playQueue does the shuffling).
   shufflePlay(songs: Song[]): void {
     if (songs.length === 0) return;
+    if (this.remoteSink?.("shufflePlay", { songs })) return;
     this.shuffle = true;
     this.playQueue(songs, 0);
   }
@@ -285,6 +316,7 @@ export class SongViewModel {
 
   // Appends a song to the queue. If nothing is playing, starts it.
   addToQueue(song: Song): void {
+    if (this.remoteSink?.("addToQueue", { song })) return;
     if (this.currentIndex === null) {
       this.queue = [song];
       this.currentIndex = 0;
@@ -296,6 +328,7 @@ export class SongViewModel {
 
   // Inserts a song to play right after the current track.
   playNext(song: Song): void {
+    if (this.remoteSink?.("playNext", { song })) return;
     if (this.currentIndex === null) {
       this.addToQueue(song);
       return;
@@ -310,6 +343,7 @@ export class SongViewModel {
 
   // Removes the queue entry at index, keeping the current track stable.
   removeFromQueue(index: number): void {
+    if (this.remoteSink?.("removeFromQueue", { index })) return;
     if (index < 0 || index >= this.queue.length) return;
     const removingCurrent = index === this.currentIndex;
     this.queue = this.queue.filter((_, i) => i !== index);
@@ -327,6 +361,7 @@ export class SongViewModel {
 
   // Moves a queue entry, keeping the current track pointer correct.
   moveInQueue(from: number, to: number): void {
+    if (this.remoteSink?.("moveInQueue", { from, to })) return;
     if (
       from === to ||
       from < 0 ||
@@ -391,6 +426,32 @@ export class SongViewModel {
     } catch (e) {
       this.error = e instanceof Error ? e.message : "Failed to save order";
     }
+  }
+
+  // --- Cross-device sync ---
+  // A snapshot of playback for the active device to broadcast.
+  playbackSnapshot(): PlaybackSnapshot {
+    return {
+      queue: this.queue,
+      currentIndex: this.currentIndex,
+      // Untracked so a reactive pusher doesn't re-run on every timeupdate.
+      position: untrack(() => this.position),
+      duration: this.duration,
+      isPlaying: this.isPlaying,
+      shuffle: this.shuffle,
+      repeat: this.repeat,
+    };
+  }
+
+  // Mirrors a remote device's playback state (used by non-active devices).
+  applyRemoteState(s: PlaybackSnapshot): void {
+    this.queue = s.queue;
+    this.currentIndex = s.currentIndex;
+    this.isPlaying = s.isPlaying;
+    this.shuffle = s.shuffle;
+    this.repeat = s.repeat;
+    this.position = s.position;
+    this.duration = s.duration;
   }
 
   // Replaces a song everywhere it appears (library + queue) with an updated copy.
@@ -459,6 +520,7 @@ export class SongViewModel {
 
   // Advances to the next song (honoring shuffle/repeat); false if it stops.
   next(): boolean {
+    if (this.remoteSink?.("next")) return false;
     const n = this.nextIndex();
     if (n === null) {
       this.isPlaying = false;
@@ -471,6 +533,7 @@ export class SongViewModel {
 
   // Goes back to the previous song; false if already at the start.
   prev(): boolean {
+    if (this.remoteSink?.("prev")) return false;
     if (this.currentIndex === null) return false;
     if (this.currentIndex > 0) {
       this.currentIndex -= 1;
