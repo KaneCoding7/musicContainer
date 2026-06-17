@@ -2,9 +2,16 @@ import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
+import type { Request } from "express";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { serveArt, thumbSize } from "../src/thumbnails.js";
+
+// Minimal stand-in for an Express Request (serveArt only reads its headers for
+// the If-None-Match revalidation check).
+function fakeReq(headers: Record<string, string> = {}): Request {
+  return { headers } as unknown as Request;
+}
 
 // Minimal stand-in for an Express Response: a writable stream that also records
 // the headers serveArt sets.
@@ -63,11 +70,12 @@ describe("serveArt", () => {
     res.on("data", (c: Buffer) => chunks.push(c));
     const ended = new Promise((r) => res.on("end", r));
 
-    await serveArt(res, art, "image/png", "128");
+    await serveArt(fakeReq(), res, art, "image/png", "128");
     await ended;
 
     const body = Buffer.concat(chunks);
     expect(res.headers["Content-Type"]).toBe("image/webp");
+    expect(res.headers["ETag"]).toBeDefined();
     expect(existsSync(join(dir, "thumbs"))).toBe(true);
     // The thumbnail is a real, non-empty 128px WebP, far smaller than the source.
     const meta = await sharp(body).metadata();
@@ -87,10 +95,49 @@ describe("serveArt", () => {
     const res = fakeRes();
     const ended = new Promise((r) => res.on("end", r));
     res.resume();
-    await serveArt(res, art, "image/png", undefined);
+    await serveArt(fakeReq(), res, art, "image/png", undefined);
     await ended;
 
     expect(res.headers["Content-Type"]).toBe("image/png");
     expect(existsSync(join(dir, "thumbs"))).toBe(false);
+  });
+
+  it("returns 304 when the client's ETag matches", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "art-"));
+    const art = join(dir, "cover.png");
+    await sharp({
+      create: { width: 64, height: 64, channels: 3, background: { r: 1, g: 2, b: 3 } },
+    })
+      .png()
+      .toFile(art);
+
+    // First request to learn the ETag.
+    const res1 = fakeRes();
+    res1.resume();
+    const ended1 = new Promise((r) => res1.on("end", r));
+    await serveArt(fakeReq(), res1, art, "image/png", "128");
+    await ended1;
+    const etag = res1.headers["ETag"];
+    expect(etag).toBeDefined();
+
+    // Re-request with If-None-Match → 304, no body.
+    const res2 = fakeRes() as ReturnType<typeof fakeRes> & {
+      statusCode?: number;
+      status: (n: number) => typeof res2;
+      end: () => void;
+    };
+    let status = 0;
+    res2.status = (n: number) => {
+      status = n;
+      return res2;
+    };
+    await serveArt(
+      fakeReq({ "if-none-match": etag }),
+      res2,
+      art,
+      "image/png",
+      "128"
+    );
+    expect(status).toBe(304);
   });
 });
