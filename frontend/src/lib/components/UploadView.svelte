@@ -135,7 +135,7 @@
     <input
       class="link-input"
       type="url"
-      placeholder="Paste a YouTube/SoundCloud/… link"
+      placeholder="Paste a YouTube, Spotify, SoundCloud… link"
       bind:value={linkUrl}
       disabled={vm.importing}
     />
@@ -159,7 +159,7 @@
       <span class="pstage">{stageLabel(vm.importStage, vm.importPercent)}</span>
     </div>
   {:else}
-    <p class="link-hint">Downloads the audio (as MP3, with cover art) and adds it to your library.</p>
+    <p class="link-hint">Grabs the audio as MP3 (with cover art) and adds it to your library. Spotify links match the song on YouTube.</p>
   {/if}
   {#if linkMsg}
     <p class="msg" class:ok={linkMsg.ok} class:err={!linkMsg.ok}>

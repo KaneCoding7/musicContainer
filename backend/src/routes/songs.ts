@@ -315,15 +315,72 @@ function runYtDlp(
   });
 }
 
-// POST /api/import-link — download a link's audio with yt-dlp and ingest it
-// into the library. Streams NDJSON progress lines so the client can show a
-// progress bar, ending with a {done} or {error} line.
+// Runs spotdl for a Spotify link: it reads the track/album/playlist metadata
+// from Spotify, finds the matching audio on YouTube, and downloads it as MP3
+// (with cover art). Spotify itself is DRM-protected, so this is the YouTube
+// match, not Spotify's own file.
+function runSpotdl(
+  url: string,
+  cwd: string,
+  onProgress: (stage: string) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const args = [
+      "download",
+      url,
+      "--output",
+      "{title}.{output-ext}",
+      "--format",
+      "mp3",
+    ];
+    // Optional Spotify API credentials improve reliability (avoid shared rate
+    // limits); falls back to spotdl's bundled defaults when unset.
+    if (process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET) {
+      args.push(
+        "--client-id",
+        process.env.SPOTIFY_CLIENT_ID,
+        "--client-secret",
+        process.env.SPOTIFY_CLIENT_SECRET
+      );
+    }
+    const child = spawn("spotdl", args, { cwd });
+    onProgress("download"); // spotdl doesn't report a clean %, so stay indeterminate
+    let tail = "";
+    const onData = (d: Buffer) => {
+      const s = d.toString();
+      tail = (tail + s).slice(-1500);
+      if (s.includes("Downloaded ")) onProgress("convert");
+    };
+    child.stdout.on("data", onData);
+    child.stderr.on("data", onData);
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error("Timed out"));
+    }, 8 * 60 * 1000);
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) return resolve();
+      const last = tail.split("\n").map((l) => l.trim()).filter(Boolean).pop();
+      reject(new Error(last || "Spotify import failed"));
+    });
+  });
+}
+
+// POST /api/import-link — download a link's audio (yt-dlp, or spotdl for Spotify
+// links) and ingest it into the library. Streams NDJSON progress lines so the
+// client can show a progress bar, ending with a {done} or {error} line.
 songsRouter.post("/import-link", async (req, res) => {
   const url =
     typeof req.body?.url === "string" ? (req.body.url as string).trim() : "";
-  if (!/^https?:\/\/\S+$/i.test(url)) {
+  const isSpotify =
+    /open\.spotify\.com\//i.test(url) || /^spotify:/i.test(url);
+  if (!/^https?:\/\/\S+$/i.test(url) && !/^spotify:/i.test(url)) {
     return res.status(400).json({
-      error: { code: "validation", message: "A valid http(s) link is required" },
+      error: { code: "validation", message: "A valid link is required" },
     });
   }
 
@@ -336,7 +393,7 @@ songsRouter.post("/import-link", async (req, res) => {
   const work = mkdtempSync(join(dirname(MUSIC_DIR), "import-"));
   try {
     let lastPct = -1;
-    await runYtDlp(url, work, (stage, percent) => {
+    const onProg = (stage: string, percent?: number) => {
       // Throttle download updates to whole-percent changes.
       if (stage === "download" && percent !== undefined) {
         const p = Math.floor(percent);
@@ -344,7 +401,12 @@ songsRouter.post("/import-link", async (req, res) => {
         lastPct = p;
       }
       send({ type: "progress", stage, percent });
-    });
+    };
+    if (isSpotify) {
+      await runSpotdl(url, work, onProg);
+    } else {
+      await runYtDlp(url, work, onProg);
+    }
 
     send({ type: "progress", stage: "ingest" });
     const produced = readdirSync(work).filter((f) =>
@@ -366,7 +428,8 @@ songsRouter.post("/import-link", async (req, res) => {
         artFilename: meta.artFilename,
         duration: meta.duration,
         pending: true, // awaits review before joining the library
-        sourceUrl: url, // lets the user pick alternative frames as art
+        // Only video links support the "pick frame as art" feature.
+        sourceUrl: isSpotify ? null : url,
       });
       if (!result.ok) {
         if (existsSync(dest)) {

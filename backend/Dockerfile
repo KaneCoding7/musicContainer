@@ -6,12 +6,14 @@ WORKDIR /app
 # fallback in case a native rebuild is needed. ffmpeg measures each track's
 # loudness (EBU R128) for volume normalization, and is also used by yt-dlp to
 # extract/convert audio for the "import from link" feature. yt-dlp's standalone
-# release runs on the installed python3.
+# release runs on the installed python3. spotdl handles Spotify links (it pulls
+# the matching audio from YouTube using Spotify's metadata).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 make g++ ffmpeg curl ca-certificates \
+    && apt-get install -y --no-install-recommends python3 python3-pip make g++ ffmpeg curl ca-certificates \
     && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
     && chmod a+rx /usr/local/bin/yt-dlp \
-    && rm -rf /var/lib/apt/lists/*
+    && pip install --break-system-packages --no-cache-dir spotdl \
+    && rm -rf /var/lib/apt/lists/* /root/.cache
 
 # --- deps ---
 FROM base AS deps
