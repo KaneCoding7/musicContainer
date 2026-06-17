@@ -26,7 +26,8 @@
   }: { vm: PlaylistViewModel; songVm: SongViewModel } = $props();
 
   let newName = $state("");
-  let addSongId = $state<string>("");
+  let addOpen = $state(false);
+  let addQuery = $state("");
 
   // --- Sharing ---
   let shareOpen = $state(false);
@@ -118,19 +119,27 @@
     if (ok) newName = "";
   }
 
-  async function addSelectedSong() {
-    const id = Number(addSongId);
-    if (!id) return;
-    await vm.addSong(id);
-    addSongId = "";
-  }
-
   // Songs in the library not already in the selected playlist.
   const addableSongs = $derived(
     songVm.songs.filter(
       (s) => !vm.selectedSongs.some((ps) => ps.id === s.id)
     )
   );
+
+  // Search-to-add: filter the addable library by the query (capped for speed).
+  const ADD_LIMIT = 50;
+  const addResults = $derived.by(() => {
+    const q = addQuery.trim().toLowerCase();
+    const list = q
+      ? addableSongs.filter(
+          (s) =>
+            s.originalFilename.toLowerCase().includes(q) ||
+            (s.artist ?? "").toLowerCase().includes(q) ||
+            (s.album ?? "").toLowerCase().includes(q)
+        )
+      : addableSongs;
+    return list.slice(0, ADD_LIMIT);
+  });
 
   function playFrom(index: number) {
     songVm.playQueue(vm.selectedSongs, index);
@@ -384,19 +393,50 @@
         </ol>
       {/if}
 
-      {#if addableSongs.length > 0}
-        <div class="add-row">
-          <select bind:value={addSongId}>
-            <option value="" disabled selected>Add a song…</option>
-            {#each addableSongs as song (song.id)}
-              <option value={String(song.id)}>{song.originalFilename}</option>
-            {/each}
-          </select>
-          <button onclick={addSelectedSong} disabled={!addSongId}>Add</button>
-        </div>
-      {:else}
-        <p class="muted small">All library songs are in this playlist.</p>
-      {/if}
+      <div class="add-block">
+        <button class="add-toggle" onclick={() => (addOpen = !addOpen)}>
+          <Icon name={addOpen ? "expand_more" : "playlist_add"} size={18} />
+          {addOpen ? "Done" : "Add songs"}
+        </button>
+
+        {#if addOpen}
+          {#if addableSongs.length === 0}
+            <p class="muted small">All your songs are already in this playlist.</p>
+          {:else}
+            <input
+              class="add-search"
+              type="text"
+              placeholder="Search your library to add…"
+              bind:value={addQuery}
+            />
+            {#if addResults.length === 0}
+              <p class="muted small">No songs match “{addQuery}”.</p>
+            {:else}
+              <ul class="add-results">
+                {#each addResults as song (song.id)}
+                  <li>
+                    <span class="ar-meta">
+                      <span class="ar-name">{song.originalFilename}</span>
+                      {#if song.artist}<span class="ar-artist">{song.artist}</span>{/if}
+                    </span>
+                    <button
+                      class="ar-add"
+                      title="Add to playlist"
+                      aria-label="Add to playlist"
+                      onclick={() => vm.addSong(song.id)}
+                    >
+                      <Icon name="playlist_add" size={18} />
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+              {#if addResults.length === ADD_LIMIT}
+                <p class="muted small">Showing the first {ADD_LIMIT} — keep typing to narrow it down.</p>
+              {/if}
+            {/if}
+          {/if}
+        {/if}
+      </div>
     </div>
   {/if}
 </div>
@@ -407,8 +447,7 @@
     gap: 0.5rem;
     margin-bottom: 1rem;
   }
-  input[type="text"],
-  select {
+  input[type="text"] {
     flex: 1;
     padding: 0.5rem 0.7rem;
     background: var(--surface);
@@ -757,9 +796,85 @@
     background: var(--danger-bg);
     color: var(--danger-text);
   }
-  .add-row {
+  .add-block {
+    margin-top: 1rem;
+  }
+  .add-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.9rem;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 2rem;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .add-toggle:hover {
+    background: var(--hover);
+  }
+  .add-search {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 0.6rem;
+    padding: 0.5rem 0.7rem;
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    color: var(--text);
+    font: inherit;
+  }
+  .add-search:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .add-results {
+    list-style: none;
+    margin: 0.4rem 0 0;
+    padding: 0;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .add-results li {
     display: flex;
+    align-items: center;
     gap: 0.5rem;
+    padding: 0.4rem 0.25rem;
+    border-bottom: 1px solid var(--surface-2);
+  }
+  .ar-meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .ar-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ar-artist {
+    font-size: 0.78rem;
+    color: var(--dim);
+  }
+  .ar-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0.35rem;
+    background: transparent;
+    border: none;
+    color: var(--accent-text);
+    border-radius: 0.35rem;
+    cursor: pointer;
+  }
+  .ar-add:hover {
+    background: var(--active-bg);
+    color: var(--accent);
   }
   .muted {
     color: var(--muted);
