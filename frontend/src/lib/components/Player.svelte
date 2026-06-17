@@ -19,6 +19,11 @@
 
   const song = $derived(vm.currentSong);
 
+  // True from the moment we try to resume a restored track until it actually
+  // starts playing. While true, pause events are treated as "autoplay blocked"
+  // (keep the intent + wait for a gesture) rather than "user paused".
+  let awaitingFirstPlay = false;
+
   // When the browser blocks autoplay (e.g. resuming on refresh before any user
   // interaction), resume playback on the first interaction so a track that was
   // playing keeps playing. Idempotent: only one listener is ever armed.
@@ -26,14 +31,13 @@
   function armAutoResume() {
     if (resumeArmed) return;
     resumeArmed = true;
+    const events = ["pointerdown", "touchstart", "keydown", "click"] as const;
     const resume = () => {
-      window.removeEventListener("pointerdown", resume);
-      window.removeEventListener("keydown", resume);
+      for (const e of events) window.removeEventListener(e, resume);
       resumeArmed = false;
       if (vm.isPlaying && audio?.paused) audio.play().catch(() => {});
     };
-    window.addEventListener("pointerdown", resume);
-    window.addEventListener("keydown", resume);
+    for (const e of events) window.addEventListener(e, resume);
   }
 
   // Start (or resume) playback, working around autoplay restrictions. Tries a
@@ -66,12 +70,21 @@
     if (el.src !== url) {
       el.src = url;
       el.load();
-      if (vm.suppressPlayRecord) {
+      const restored = vm.suppressPlayRecord;
+      if (restored) {
         vm.suppressPlayRecord = false;
       } else {
         vm.recordPlay(id);
       }
-      if (vm.isPlaying) tryResume(el);
+      if (vm.isPlaying) {
+        if (restored) {
+          // Resuming after a refresh: guard against autoplay being blocked or
+          // silently paused, and pre-arm a gesture fallback.
+          awaitingFirstPlay = true;
+          armAutoResume();
+        }
+        tryResume(el);
+      }
     }
   });
 
@@ -209,8 +222,21 @@
   bind:this={audio}
   ontimeupdate={onTimeUpdate}
   onloadedmetadata={onLoadedMetadata}
-  onplay={() => (vm.isPlaying = true)}
-  onpause={() => (vm.isPlaying = false)}
+  onplay={() => {
+    vm.isPlaying = true;
+    awaitingFirstPlay = false; // playback really started; stop guarding pauses
+  }}
+  onpause={() => {
+    // While resuming after a refresh, a pause means autoplay was blocked, not a
+    // user action — keep the intent and wait for a gesture instead of flipping
+    // the UI to paused. User pauses (buttons/lock-screen) set isPlaying=false
+    // themselves before the element pauses, so those still work.
+    if (awaitingFirstPlay) {
+      armAutoResume();
+      return;
+    }
+    vm.isPlaying = false;
+  }}
   onended={() => {
     if (vm.sleepAtTrackEnd) {
       vm.isPlaying = false;
