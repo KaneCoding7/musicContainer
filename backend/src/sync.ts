@@ -98,7 +98,7 @@ export function attachSync(server: Server): void {
         type?: string;
         deviceId?: string;
         name?: string;
-        state?: { song?: unknown } | null;
+        state?: { currentIndex?: number | null } | null;
         command?: unknown;
       };
       try {
@@ -122,8 +122,8 @@ export function attachSync(server: Server): void {
         }
         case "state": {
           if (!deviceId) return;
-          // The first device to report a real playing track claims "active".
-          if (s.activeDeviceId === null && msg.state?.song) {
+          // The first device to report a loaded track claims "active".
+          if (s.activeDeviceId === null && msg.state?.currentIndex != null) {
             s.activeDeviceId = deviceId;
           }
           if (s.activeDeviceId !== deviceId) return; // only the active device sets state
