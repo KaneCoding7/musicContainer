@@ -133,17 +133,23 @@
         {/if}
       </span>
       <div class="art-actions">
-        <label class="art-btn">
-          <span>{artBusy ? "Working…" : hasArt ? "Change art" : "Upload art"}</span>
-          <input
-            class="file-overlay"
-            bind:this={fileInput}
-            type="file"
-            accept="image/*"
-            onchange={onPickArt}
-            disabled={artBusy}
-          />
-        </label>
+        <button
+          type="button"
+          class="art-btn"
+          onclick={() => fileInput?.click()}
+          disabled={artBusy}
+        >
+          {artBusy ? "Working…" : hasArt ? "Change art" : "Upload art"}
+        </button>
+        <input
+          class="file-hidden"
+          bind:this={fileInput}
+          type="file"
+          accept="image/*"
+          onchange={onPickArt}
+          tabindex="-1"
+          aria-hidden="true"
+        />
         {#if hasArt}
           <button
             type="button"
@@ -245,30 +251,31 @@
     align-items: flex-start;
   }
   .art-btn {
-    position: relative;
-    overflow: hidden;
     padding: 0.4rem 0.8rem;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
     border-radius: 0.4rem;
     color: var(--text);
+    font: inherit;
     font-size: 0.85rem;
     font-weight: 500;
     cursor: pointer;
   }
-  .art-btn:hover {
+  .art-btn:hover:not(:disabled) {
     background: var(--hover);
   }
-  /* The file input sits transparently on top of the button, so tapping the
-     button taps the input directly — the only reliable way to open the picker
-     on iOS Safari. */
-  .file-overlay {
+  .art-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  /* Hidden input opened programmatically via the button's click (reliable on
+     iOS Safari). Not display:none, so the click reaches it. */
+  .file-hidden {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    width: 1px;
+    height: 1px;
     opacity: 0;
-    cursor: pointer;
+    pointer-events: none;
   }
   .art-remove {
     padding: 0.3rem 0.7rem;
