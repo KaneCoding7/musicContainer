@@ -118,6 +118,9 @@
           <button class="play-all" onclick={() => songVm.playQueue(songs, 0)}>
             <Icon name="play_arrow" fill size={20} /> Play
           </button>
+          <button class="shuffle-all" onclick={() => songVm.shufflePlay(songs)}>
+            <Icon name="shuffle" size={18} /> Shuffle
+          </button>
         {/if}
         <button class="save-btn" onclick={saveToMine} disabled={saving || saved}>
           <Icon name={saved ? "check_circle" : "playlist_add"} size={18} />
@@ -293,6 +296,22 @@
   }
   .play-all:hover {
     background: var(--accent-hover);
+  }
+  .shuffle-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 1rem;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 2rem;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .shuffle-all:hover {
+    background: var(--hover);
   }
   .save-btn {
     display: inline-flex;
