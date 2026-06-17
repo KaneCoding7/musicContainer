@@ -19,8 +19,45 @@
 
   const song = $derived(vm.currentSong);
 
-  // Load (and autoplay) a new source whenever the selected song changes,
-  // recording a play for each newly loaded track.
+  // When the browser blocks autoplay (e.g. resuming on refresh before any user
+  // interaction), resume playback on the first interaction so a track that was
+  // playing keeps playing. Idempotent: only one listener is ever armed.
+  let resumeArmed = false;
+  function armAutoResume() {
+    if (resumeArmed) return;
+    resumeArmed = true;
+    const resume = () => {
+      window.removeEventListener("pointerdown", resume);
+      window.removeEventListener("keydown", resume);
+      resumeArmed = false;
+      if (vm.isPlaying && audio?.paused) audio.play().catch(() => {});
+    };
+    window.addEventListener("pointerdown", resume);
+    window.addEventListener("keydown", resume);
+  }
+
+  // Start (or resume) playback, working around autoplay restrictions. Tries a
+  // normal play; if blocked, tries muted autoplay then unmutes (Chromium allows
+  // this — gives a true no-tap resume); if still blocked (e.g. iOS), waits for
+  // the first interaction. We keep vm.isPlaying = true throughout so the UI and
+  // lock-screen reflect the intent to play.
+  function tryResume(el: HTMLAudioElement) {
+    el.play().catch(() => {
+      el.muted = true;
+      el
+        .play()
+        .then(() => {
+          el.muted = false;
+        })
+        .catch(() => {
+          el.muted = false;
+          armAutoResume();
+        });
+    });
+  }
+
+  // Load a new source whenever the selected song changes, recording a play for
+  // each newly loaded track (but not for one merely restored after a refresh).
   $effect(() => {
     const el = audio;
     const id = song?.id;
@@ -29,24 +66,19 @@
     if (el.src !== url) {
       el.src = url;
       el.load();
-      // A track restored after a refresh was already counted; don't re-log it.
       if (vm.suppressPlayRecord) {
         vm.suppressPlayRecord = false;
       } else {
         vm.recordPlay(id);
       }
-      // Only auto-start if we're meant to be playing. If the browser blocks
-      // autoplay (e.g. resuming on refresh before any interaction), reflect the
-      // paused reality so one tap resumes from the restored position.
-      if (vm.isPlaying) el.play().catch(() => (vm.isPlaying = false));
+      if (vm.isPlaying) tryResume(el);
     }
   });
 
   // Mirror the requested play/pause state onto the element.
   $effect(() => {
     if (!audio || !song) return;
-    if (vm.isPlaying && audio.paused)
-      audio.play().catch(() => (vm.isPlaying = false));
+    if (vm.isPlaying && audio.paused) tryResume(audio);
     if (!vm.isPlaying && !audio.paused) audio.pause();
   });
 
