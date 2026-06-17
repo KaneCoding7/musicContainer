@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
   import { playlistZipUrl } from "$lib/services/playlistService";
-  import { artUrl } from "$lib/services/songService";
+  import { thumbUrl } from "$lib/services/songService";
   import {
     disablePublicLink,
     enablePublicLink,
@@ -199,7 +199,7 @@
         >
           <span class="cover">
             {#if playlist.coverSongId != null}
-              <img src={artUrl(playlist.coverSongId)} alt="" />
+              <img src={thumbUrl(playlist.coverSongId, 512)} alt="" />
             {:else}
               <Icon name="queue_music" size={26} />
             {/if}

@@ -125,6 +125,13 @@ export function artUrl(songId: number): string {
   return withToken(`${API_BASE}/api/songs/${songId}/art`);
 }
 
+// Returns a resized square-thumbnail URL for a song's art. `size` is the target
+// edge in px; the server snaps it up to the nearest cached variant. Use this in
+// list/grid/mini-player views so the browser isn't downscaling the full image.
+export function thumbUrl(songId: number, size: number): string {
+  return withToken(`${API_BASE}/api/songs/${songId}/art?size=${size}`);
+}
+
 // Deletes a song from the library.
 export async function deleteSong(songId: number): Promise<void> {
   const res = await fetch(`${API_BASE}/api/songs/${songId}`, {

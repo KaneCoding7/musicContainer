@@ -1,7 +1,7 @@
 <script lang="ts">
   import EditSongDialog from "$lib/components/EditSongDialog.svelte";
   import Icon from "$lib/components/Icon.svelte";
-  import { artUrl, downloadUrl, type SongMetadata } from "$lib/services/songService";
+  import { thumbUrl, downloadUrl, type SongMetadata } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -214,7 +214,7 @@
           >
             <span class="thumb">
               {#if song.hasArt}
-                <img src={artUrl(song.id)} alt="" />
+                <img src={thumbUrl(song.id, 128)} alt="" />
               {:else}
                 <Icon name="music_note" size={20} />
               {/if}

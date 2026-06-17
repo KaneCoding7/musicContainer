@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
-  import { artUrl } from "$lib/services/songService";
+  import { thumbUrl } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -48,7 +48,7 @@
   <div class="album-head">
     <span class="big-art">
       {#if current.artId !== null}
-        <img src={artUrl(current.artId)} alt="" />
+        <img src={thumbUrl(current.artId, 512)} alt="" />
       {:else}
         <Icon name="album" size={48} />
       {/if}
@@ -81,7 +81,7 @@
       <button class="card" onclick={() => (openAlbum = album.name)}>
         <span class="cover">
           {#if album.artId !== null}
-            <img src={artUrl(album.artId)} alt="" />
+            <img src={thumbUrl(album.artId, 512)} alt="" />
           {:else}
             <Icon name="album" size={42} />
           {/if}

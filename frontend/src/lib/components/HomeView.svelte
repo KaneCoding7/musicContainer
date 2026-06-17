@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
-  import { artUrl } from "$lib/services/songService";
+  import { thumbUrl } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -26,7 +26,7 @@
           <button class="card" onclick={() => vm.playQueue(list, i)}>
             <span class="cover">
               {#if song.hasArt}
-                <img src={artUrl(song.id)} alt="" />
+                <img src={thumbUrl(song.id, 128)} alt="" />
               {:else}
                 <Icon name="music_note" size={26} />
               {/if}

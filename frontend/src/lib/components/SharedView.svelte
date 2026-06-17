@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
-  import { artUrl } from "$lib/services/songService";
+  import { thumbUrl } from "$lib/services/songService";
   import {
     addSongToPlaylist,
     removeSongFromPlaylist,
@@ -83,7 +83,7 @@
   <div class="head">
     <span class="big-art">
       {#if open.coverSongId != null}
-        <img src={artUrl(open.coverSongId)} alt="" />
+        <img src={thumbUrl(open.coverSongId, 512)} alt="" />
       {:else}
         <Icon name="queue_music" size={48} />
       {/if}
@@ -141,7 +141,7 @@
       <button class="card" onclick={() => openPlaylist(p)}>
         <span class="cover">
           {#if p.coverSongId != null}
-            <img src={artUrl(p.coverSongId)} alt="" />
+            <img src={thumbUrl(p.coverSongId, 512)} alt="" />
           {:else}
             <Icon name="queue_music" size={26} />
           {/if}

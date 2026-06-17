@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createReadStream, existsSync, unlinkSync } from "node:fs";
+import { existsSync, unlinkSync } from "node:fs";
 import { extname, join } from "node:path";
 import { Router } from "express";
 import multer from "multer";
@@ -26,6 +26,7 @@ import {
 import { statusForError } from "../functional/result.js";
 import { extractMetadata } from "../metadata.js";
 import { streamSongFile } from "../stream.js";
+import { serveArt } from "../thumbnails.js";
 
 export const songsRouter = Router();
 
@@ -309,8 +310,9 @@ songsRouter.delete("/songs/:id", (req, res) => {
   return res.status(204).end();
 });
 
-// GET /api/songs/:id/art — serve the song's embedded album art, if any.
-songsRouter.get("/songs/:id/art", (req, res) => {
+// GET /api/songs/:id/art — serve the song's album art. Pass ?size=N for a
+// cached square thumbnail (used by list/mini-player views).
+songsRouter.get("/songs/:id/art", async (req, res) => {
   const id = Number(req.params.id);
   if (!canAccessSong(getDb(), req.userId!, id)) {
     return res
@@ -323,9 +325,7 @@ songsRouter.get("/songs/:id/art", (req, res) => {
       .status(statusForError(result.error.code))
       .json({ error: result.error });
   }
-  res.setHeader("Content-Type", result.value.contentType);
-  res.setHeader("Cache-Control", "public, max-age=86400");
-  return createReadStream(result.value.path).pipe(res);
+  await serveArt(res, result.value.path, result.value.contentType, req.query.size);
 });
 
 // GET /api/songs/:id/download — download the original audio file.

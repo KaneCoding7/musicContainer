@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
-  import { artUrl, streamUrl } from "$lib/services/songService";
+  import { artUrl, streamUrl, thumbUrl } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
   let {
@@ -255,7 +255,7 @@
     >
       <span class="np-art">
         {#if song.hasArt}
-          <img src={artUrl(song.id)} alt="" />
+          <img src={thumbUrl(song.id, 128)} alt="" />
         {:else}
           <Icon name="music_note" size={20} />
         {/if}

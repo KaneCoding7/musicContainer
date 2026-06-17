@@ -1,4 +1,3 @@
-import { createReadStream } from "node:fs";
 import { Router } from "express";
 import { ART_DIR, getDb, MUSIC_DIR } from "../db/init.js";
 import { statusForError } from "../functional/result.js";
@@ -8,6 +7,7 @@ import {
 } from "../functional/publicShares.js";
 import { resolveSongArtById, resolveSongFileById } from "../functional/songs.js";
 import { streamSongFile } from "../stream.js";
+import { serveArt } from "../thumbnails.js";
 
 // Public, UNAUTHENTICATED routes for listening via a share link. Access is
 // gated entirely by possession of the opaque token.
@@ -42,7 +42,8 @@ publicRouter.get("/public/:token/songs/:id/stream", (req, res) => {
 });
 
 // GET /api/public/:token/songs/:id/art — album art for a song in the list.
-publicRouter.get("/public/:token/songs/:id/art", (req, res) => {
+// Pass ?size=N for a cached square thumbnail.
+publicRouter.get("/public/:token/songs/:id/art", async (req, res) => {
   const id = Number(req.params.id);
   if (!publicTokenAllowsSong(getDb(), req.params.token, id)) {
     return res
@@ -55,7 +56,5 @@ publicRouter.get("/public/:token/songs/:id/art", (req, res) => {
       .status(statusForError(result.error.code))
       .json({ error: result.error });
   }
-  res.setHeader("Content-Type", result.value.contentType);
-  res.setHeader("Cache-Control", "public, max-age=86400");
-  return createReadStream(result.value.path).pipe(res);
+  await serveArt(res, result.value.path, result.value.contentType, req.query.size);
 });

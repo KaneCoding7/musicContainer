@@ -2,7 +2,7 @@
   import { untrack } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
   import {
-    artUrl,
+    thumbUrl,
     removeArt,
     uploadArt,
     type SongMetadata,
@@ -127,7 +127,7 @@
     <div class="art-row">
       <span class="art-thumb">
         {#if hasArt}
-          <img src={`${artUrl(song.id)}&v=${artVersion}`} alt="" />
+          <img src={`${thumbUrl(song.id, 256)}&v=${artVersion}`} alt="" />
         {:else}
           <Icon name="music_note" size={26} />
         {/if}
