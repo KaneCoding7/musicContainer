@@ -27,7 +27,11 @@
       .map(([name, songs]) => ({
         name,
         plays: songs.reduce((sum, s) => sum + s.playCount, 0),
-        artId: songs.find((s) => s.hasArt)?.id ?? null,
+        // Match the artist view: picture = first track in manual order with art.
+        artId:
+          [...songs]
+            .sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity))
+            .find((s) => s.hasArt)?.id ?? null,
       }))
       .filter((a) => a.plays > 0)
       .sort((a, b) => b.plays - a.plays)
@@ -117,10 +121,10 @@
   }
   .cards {
     display: grid;
-    /* auto-fit (not auto-fill) collapses empty trailing tracks so the cards
-       fill the row and their right edge lines up with the header's Play
-       button on wide screens. */
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    /* auto-fit fills a full row (so the cards' right edge lines up with the
+       header's Play button), while the 200px cap stops a section with only a
+       few items from stretching into giant cards. */
+    grid-template-columns: repeat(auto-fit, minmax(140px, 200px));
     gap: 1rem;
   }
   .card {
