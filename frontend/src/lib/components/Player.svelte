@@ -40,24 +40,14 @@
     for (const e of events) window.addEventListener(e, resume);
   }
 
-  // Start (or resume) playback, working around autoplay restrictions. Tries a
-  // normal play; if blocked, tries muted autoplay then unmutes (Chromium allows
-  // this — gives a true no-tap resume); if still blocked (e.g. iOS), waits for
-  // the first interaction. We keep vm.isPlaying = true throughout so the UI and
-  // lock-screen reflect the intent to play.
+  // Start (or resume) playback. A normal play() succeeds when there's been a
+  // user gesture or the browser already trusts the site (Chrome's Media
+  // Engagement Index). When it's blocked — e.g. resuming on refresh before any
+  // interaction — there is no reliable way to force unmuted audio, so we fall
+  // back to resuming on the first interaction. vm.isPlaying stays true so the UI
+  // and lock-screen reflect the intent to play.
   function tryResume(el: HTMLAudioElement) {
-    el.play().catch(() => {
-      el.muted = true;
-      el
-        .play()
-        .then(() => {
-          el.muted = false;
-        })
-        .catch(() => {
-          el.muted = false;
-          armAutoResume();
-        });
-    });
+    el.play().catch(() => armAutoResume());
   }
 
   // Load a new source whenever the selected song changes, recording a play for
