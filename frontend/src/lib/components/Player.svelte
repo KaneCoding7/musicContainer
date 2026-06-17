@@ -237,6 +237,11 @@
   // Full-screen now-playing overlay (Cycle 36).
   let expanded = $state(false);
 
+  // Esc closes the full-screen now-playing view.
+  function onWindowKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape" && expanded) expanded = false;
+  }
+
   // --- Pop-out mini player (Document Picture-in-Picture) ---
   // A small always-on-top window with our own controls, available on Chromium
   // desktop. We render the mini UI into a hidden element and physically move
@@ -327,6 +332,8 @@
     return `${m}:${s.toString().padStart(2, "0")}`;
   }
 </script>
+
+<svelte:window onkeydown={onWindowKeydown} />
 
 <audio
   bind:this={audio}
