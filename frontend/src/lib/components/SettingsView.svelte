@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Icon from "$lib/components/Icon.svelte";
   import { analyzeLoudness } from "$lib/services/songService";
   import type { AuthViewModel } from "$lib/viewmodels/authViewModel.svelte";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -55,7 +54,6 @@
 
   let name = $state("");
   let nameInited = false;
-  // Seed the field from the loaded user once (avoids capturing reactive state).
   $effect(() => {
     if (!nameInited && vm.user) {
       name = vm.user.name;
@@ -96,77 +94,81 @@
 </script>
 
 <div class="settings">
-  <div class="card">
+  <section class="card">
     <h3>Appearance</h3>
-    <div class="row">
-      <span class="row-label">Theme</span>
-      <button class="theme-btn" onclick={onToggleTheme}>
-        <Icon name={theme === "dark" ? "light_mode" : "dark_mode"} size={18} />
-        {theme === "dark" ? "Switch to light" : "Switch to dark"}
-      </button>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>Playback</h3>
-    <div class="row">
-      <span class="row-label">
-        Volume normalization
-        <span class="hint">Play all tracks at a consistent loudness</span>
-      </span>
+    <div class="setting">
+      <div class="label">
+        <span class="title">Dark mode</span>
+        <span class="sub">Use a dark color scheme</span>
+      </div>
       <button
-        class="theme-btn"
-        class:on={songVm.normalize}
-        onclick={onToggleNormalize}
+        class="switch"
+        role="switch"
+        aria-checked={theme === "dark"}
+        aria-label="Dark mode"
+        onclick={onToggleTheme}><span class="knob"></span></button
       >
-        <Icon name={songVm.normalize ? "graphic_eq" : "volume_off"} size={18} />
-        {songVm.normalize ? "On" : "Off"}
-      </button>
     </div>
-    <div class="row">
-      <span class="row-label">
-        Loudness analysis
-        <span class="hint">
+  </section>
+
+  <section class="card">
+    <h3>Playback</h3>
+    <div class="setting">
+      <div class="label">
+        <span class="title">Volume normalization</span>
+        <span class="sub">Play all tracks at a consistent loudness</span>
+      </div>
+      <button
+        class="switch"
+        role="switch"
+        aria-checked={songVm.normalize}
+        aria-label="Volume normalization"
+        onclick={onToggleNormalize}><span class="knob"></span></button
+      >
+    </div>
+    <div class="setting">
+      <div class="label">
+        <span class="title">Loudness analysis</span>
+        <span class="sub">
           {#if pendingLoudness === 0}
             All tracks analyzed
           {:else}
-            {pendingLoudness} track{pendingLoudness === 1 ? "" : "s"} not analyzed yet
+            {pendingLoudness} track{pendingLoudness === 1 ? "" : "s"} pending
           {/if}
         </span>
-      </span>
+      </div>
       <button
-        class="theme-btn"
+        class="btn"
         onclick={runAnalyze}
         disabled={analyzing || pendingLoudness === 0}
       >
-        <Icon name="equalizer" size={18} />
-        {analyzing ? "Analyzing…" : "Analyze library"}
+        {analyzing ? "Analyzing…" : "Analyze"}
       </button>
     </div>
     {#if analyzeMsg}
       <p class="msg" class:err={!analyzeMsg.ok}>{analyzeMsg.text}</p>
     {/if}
-  </div>
+  </section>
 
   <form class="card" onsubmit={saveName}>
     <h3>Profile</h3>
-    <label>
-      Display name
+    <label class="field">
+      <span>Display name</span>
       <input bind:value={name} autocomplete="name" required />
     </label>
     <p class="email">Signed in as {vm.user?.email}</p>
-    {#if nameMsg}
-      <p class="msg" class:err={!nameMsg.ok}>{nameMsg.text}</p>
-    {/if}
-    <button type="submit" disabled={nameBusy}>
-      {nameBusy ? "Saving…" : "Save name"}
-    </button>
+    {#if nameMsg}<p class="msg" class:err={!nameMsg.ok}>{nameMsg.text}</p>{/if}
+    <div class="card-actions">
+      <button class="btn primary" type="submit" disabled={nameBusy}>
+        {nameBusy ? "Saving…" : "Save"}
+      </button>
+    </div>
   </form>
 
   <form class="card" onsubmit={savePassword}>
     <h3>Change password</h3>
-    <label>
-      Current password
+    <label class="field">
+      <span>Current password</span>
       <input
         type="password"
         bind:value={currentPassword}
@@ -174,8 +176,8 @@
         required
       />
     </label>
-    <label>
-      New password
+    <label class="field">
+      <span>New password</span>
       <input
         type="password"
         bind:value={newPassword}
@@ -184,12 +186,12 @@
         required
       />
     </label>
-    {#if pwMsg}
-      <p class="msg" class:err={!pwMsg.ok}>{pwMsg.text}</p>
-    {/if}
-    <button type="submit" disabled={pwBusy}>
-      {pwBusy ? "Saving…" : "Change password"}
-    </button>
+    {#if pwMsg}<p class="msg" class:err={!pwMsg.ok}>{pwMsg.text}</p>{/if}
+    <div class="card-actions">
+      <button class="btn primary" type="submit" disabled={pwBusy}>
+        {pwBusy ? "Saving…" : "Update password"}
+      </button>
+    </div>
   </form>
 </div>
 
@@ -197,69 +199,86 @@
   .settings {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
-    max-width: 440px;
+    gap: 1rem;
+    max-width: 480px;
   }
   .card {
     background: var(--surface);
     border: 1px solid var(--surface-2);
-    border-radius: 0.6rem;
-    padding: 1.25rem;
+    border-radius: 0.75rem;
+    padding: 1.1rem 1.25rem;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.9rem;
   }
   h3 {
     margin: 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
   }
-  .row {
+  .setting {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
   }
-  .row-label {
-    color: var(--text);
-    font-size: 0.9rem;
+  .label {
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
+    min-width: 0;
   }
-  .hint {
-    color: var(--dim);
-    font-size: 0.78rem;
-  }
-  .theme-btn.on {
-    background: var(--active-bg);
-    border-color: var(--accent);
-    color: var(--accent-text);
-  }
-  .theme-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-  .theme-btn {
-    align-self: auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.5rem 0.9rem;
-    background: var(--surface-2);
+  .label .title {
+    font-size: 0.92rem;
     color: var(--text);
+  }
+  .label .sub {
+    font-size: 0.78rem;
+    color: var(--dim);
+  }
+
+  /* Toggle switch */
+  .switch {
+    flex-shrink: 0;
+    width: 44px;
+    height: 26px;
+    padding: 0;
+    border-radius: 13px;
+    background: var(--surface-2);
     border: 1px solid var(--border-strong);
-    border-radius: 0.5rem;
-    font: inherit;
-    font-weight: 500;
+    position: relative;
     cursor: pointer;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease;
   }
-  .theme-btn:hover {
-    background: var(--hover);
+  .switch[aria-checked="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
   }
-  label {
+  .knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.15s ease;
+  }
+  .switch[aria-checked="true"] .knob {
+    transform: translateX(18px);
+  }
+
+  /* Form fields */
+  .field {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
-    font-size: 0.85rem;
+    gap: 0.35rem;
+    font-size: 0.82rem;
     color: var(--muted);
   }
   input {
@@ -270,9 +289,13 @@
     color: var(--text);
     font: inherit;
   }
+  input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
   .email {
     margin: 0;
-    color: var(--muted);
+    color: var(--dim);
     font-size: 0.8rem;
   }
   .msg {
@@ -283,20 +306,34 @@
   .msg.err {
     color: var(--danger-text);
   }
-  button {
-    align-self: flex-start;
-    padding: 0.55rem 1.1rem;
-    background: var(--accent);
-    color: #fff;
-    border: none;
+
+  .card-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .btn {
+    padding: 0.5rem 1rem;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
     border-radius: 0.5rem;
+    font: inherit;
     font-weight: 600;
+    font-size: 0.85rem;
     cursor: pointer;
   }
-  button:hover:not(:disabled) {
+  .btn:hover:not(:disabled) {
+    background: var(--hover);
+  }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .btn.primary:hover:not(:disabled) {
     background: var(--accent-hover);
   }
-  button:disabled {
+  .btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
   }
