@@ -40,6 +40,15 @@
   let linkUrl = $state("");
   let linkMsg = $state<{ ok: boolean; text: string } | null>(null);
 
+  function stageLabel(stage: string, pct: number | null): string {
+    if (stage === "download")
+      return pct != null ? `Downloading… ${Math.floor(pct)}%` : "Downloading…";
+    if (stage === "convert") return "Converting to MP3…";
+    if (stage === "art") return "Adding cover art…";
+    if (stage === "ingest") return "Finishing up…";
+    return "Working…";
+  }
+
   async function submitLink(e: Event) {
     e.preventDefault();
     const url = linkUrl.trim();
@@ -120,7 +129,20 @@
       {/if}
     </button>
   </form>
-  <p class="link-hint">Downloads the audio (as MP3, with cover art) and adds it to your library.</p>
+  {#if vm.importing}
+    <div class="link-progress">
+      <div class="pbar">
+        <div
+          class="pfill"
+          class:indeterminate={vm.importPercent == null}
+          style={vm.importPercent != null ? `width:${vm.importPercent}%` : ""}
+        ></div>
+      </div>
+      <span class="pstage">{stageLabel(vm.importStage, vm.importPercent)}</span>
+    </div>
+  {:else}
+    <p class="link-hint">Downloads the audio (as MP3, with cover art) and adds it to your library.</p>
+  {/if}
   {#if linkMsg}
     <p class="msg" class:ok={linkMsg.ok} class:err={!linkMsg.ok}>
       {#if linkMsg.ok}<Icon name="check_circle" size={18} />{/if}{linkMsg.text}
@@ -292,5 +314,41 @@
     margin: 0.5rem 0 0;
     color: var(--dim);
     font-size: 0.8rem;
+  }
+  .link-progress {
+    margin-top: 0.85rem;
+  }
+  .pbar {
+    width: 100%;
+    height: 8px;
+    background: var(--surface-2);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .pfill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 0.2s ease;
+  }
+  /* Sliding bar while a stage has no measurable percent (convert/art/ingest). */
+  .pfill.indeterminate {
+    width: 40%;
+    animation: slide 1.1s ease-in-out infinite;
+  }
+  @keyframes slide {
+    0% {
+      margin-left: -40%;
+    }
+    100% {
+      margin-left: 100%;
+    }
+  }
+  .pstage {
+    display: block;
+    margin-top: 0.4rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
   }
 </style>

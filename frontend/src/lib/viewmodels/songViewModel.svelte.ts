@@ -35,6 +35,8 @@ export class SongViewModel {
   uploadTotal = $state(0);
   // Importing audio from a link (yt-dlp on the server).
   importing = $state(false);
+  importStage = $state<string>("");
+  importPercent = $state<number | null>(null);
   error = $state<string | null>(null);
 
   // Search query for filtering the library (Cycle 5).
@@ -632,8 +634,14 @@ export class SongViewModel {
   async importFromLink(url: string): Promise<number> {
     this.importing = true;
     this.error = null;
+    this.importStage = "download";
+    this.importPercent = null;
     try {
-      const songs = await importLink(url);
+      const songs = await importLink(url, (p) => {
+        this.importStage = p.stage;
+        if (typeof p.percent === "number") this.importPercent = p.percent;
+        else if (p.stage !== "download") this.importPercent = null;
+      });
       this.songs = [...songs, ...this.songs];
       return songs.length;
     } catch (e) {
@@ -641,6 +649,8 @@ export class SongViewModel {
       return 0;
     } finally {
       this.importing = false;
+      this.importStage = "";
+      this.importPercent = null;
     }
   }
 

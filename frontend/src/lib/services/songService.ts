@@ -38,16 +38,57 @@ export async function uploadSong(file: File): Promise<Song> {
   return body.song as Song;
 }
 
-// Imports audio from a link (yt-dlp on the server); returns the created songs.
-export async function importLink(url: string): Promise<Song[]> {
+export interface ImportProgress {
+  stage: string; // "download" | "convert" | "art" | "ingest"
+  percent?: number;
+}
+
+// Imports audio from a link (yt-dlp on the server). The server streams NDJSON
+// progress lines; onProgress is called for each. Returns the created songs.
+export async function importLink(
+  url: string,
+  onProgress?: (p: ImportProgress) => void
+): Promise<Song[]> {
   const res = await fetch(`${apiBase()}/api/import-link`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify({ url }),
   });
-  if (!res.ok) throw new Error(await errorMessage(res));
-  const body = await res.json();
-  return body.songs as Song[];
+  if (!res.ok || !res.body) throw new Error(await errorMessage(res));
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let songs: Song[] = [];
+  let error: string | null = null;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let i: number;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (!line) continue;
+      let msg: { type: string; stage?: string; percent?: number; songs?: Song[]; message?: string };
+      try {
+        msg = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (msg.type === "progress" && msg.stage) {
+        onProgress?.({ stage: msg.stage, percent: msg.percent });
+      } else if (msg.type === "done") {
+        songs = msg.songs ?? [];
+      } else if (msg.type === "error") {
+        error = msg.message ?? "Import failed";
+      }
+    }
+  }
+
+  if (error) throw new Error(error);
+  return songs;
 }
 
 // Editable song metadata fields.

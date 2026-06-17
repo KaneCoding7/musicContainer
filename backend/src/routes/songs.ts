@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   copyFileSync,
@@ -238,10 +238,15 @@ songsRouter.post("/upload", (req, res) => {
 });
 
 // Runs yt-dlp to extract a link's audio as MP3 (with embedded thumbnail) into
-// `cwd`. URL is passed as an argv (no shell), so it can't inject commands.
-function runYtDlp(url: string, cwd: string): Promise<void> {
+// `cwd`, reporting progress via onProgress. URL is passed as argv (no shell),
+// so it can't inject commands.
+function runYtDlp(
+  url: string,
+  cwd: string,
+  onProgress: (stage: string, percent?: number) => void
+): Promise<void> {
   return new Promise((resolve, reject) => {
-    execFile(
+    const child = spawn(
       "yt-dlp",
       [
         "-x",
@@ -249,27 +254,64 @@ function runYtDlp(url: string, cwd: string): Promise<void> {
         "mp3",
         "--embed-thumbnail",
         "--no-playlist",
-        "--no-progress",
+        "--newline",
+        "--progress-template",
+        "download:DLPCT %(progress._percent_str)s",
         "-o",
         "%(title)s.%(ext)s",
         url,
       ],
-      { cwd, timeout: 5 * 60 * 1000, maxBuffer: 16 * 1024 * 1024 },
-      (err, _stdout, stderr) => {
-        if (!err) return resolve();
-        const last = (stderr || "")
-          .split("\n")
-          .map((l) => l.trim())
-          .filter(Boolean)
-          .pop();
-        reject(new Error(last || "Download failed"));
-      }
+      { cwd }
     );
+
+    let stderrTail = "";
+    let stdoutBuf = "";
+    const handleLine = (raw: string) => {
+      const line = raw.trim();
+      if (!line) return;
+      const pct = line.match(/DLPCT\s+([\d.]+)%/);
+      if (pct) onProgress("download", parseFloat(pct[1]));
+      else if (line.includes("[ExtractAudio]")) onProgress("convert");
+      else if (line.includes("[EmbedThumbnail]") || line.includes("[Metadata]"))
+        onProgress("art");
+    };
+    child.stdout.on("data", (d: Buffer) => {
+      stdoutBuf += d.toString();
+      let i: number;
+      while ((i = stdoutBuf.indexOf("\n")) >= 0) {
+        handleLine(stdoutBuf.slice(0, i));
+        stdoutBuf = stdoutBuf.slice(i + 1);
+      }
+    });
+    child.stderr.on("data", (d: Buffer) => {
+      stderrTail = (stderrTail + d.toString()).slice(-600);
+    });
+
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error("Timed out"));
+    }, 5 * 60 * 1000);
+
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) return resolve();
+      const last = stderrTail
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .pop();
+      reject(new Error(last || "Download failed"));
+    });
   });
 }
 
 // POST /api/import-link — download a link's audio with yt-dlp and ingest it
-// into the library, exactly like a file upload.
+// into the library. Streams NDJSON progress lines so the client can show a
+// progress bar, ending with a {done} or {error} line.
 songsRouter.post("/import-link", async (req, res) => {
   const url =
     typeof req.body?.url === "string" ? (req.body.url as string).trim() : "";
@@ -279,21 +321,29 @@ songsRouter.post("/import-link", async (req, res) => {
     });
   }
 
+  res.setHeader("Content-Type", "application/x-ndjson");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("X-Accel-Buffering", "no"); // don't let a proxy buffer it
+  const send = (obj: unknown) => res.write(`${JSON.stringify(obj)}\n`);
+
   // Download into a temp dir on the same volume as the music dir.
   const work = mkdtempSync(join(dirname(MUSIC_DIR), "import-"));
   try {
-    await runYtDlp(url, work);
+    let lastPct = -1;
+    await runYtDlp(url, work, (stage, percent) => {
+      // Throttle download updates to whole-percent changes.
+      if (stage === "download" && percent !== undefined) {
+        const p = Math.floor(percent);
+        if (p === lastPct) return;
+        lastPct = p;
+      }
+      send({ type: "progress", stage, percent });
+    });
+
+    send({ type: "progress", stage: "ingest" });
     const produced = readdirSync(work).filter((f) =>
       f.toLowerCase().endsWith(".mp3")
     );
-    if (produced.length === 0) {
-      return res.status(422).json({
-        error: {
-          code: "validation",
-          message: "No audio could be extracted from that link",
-        },
-      });
-    }
 
     const songs = [];
     for (const name of produced) {
@@ -330,16 +380,15 @@ songsRouter.post("/import-link", async (req, res) => {
     }
 
     if (songs.length === 0) {
-      return res.status(500).json({
-        error: { code: "internal", message: "Could not save the imported audio" },
-      });
+      send({ type: "error", message: "No audio could be extracted from that link" });
+    } else {
+      send({ type: "done", songs });
     }
-    return res.status(201).json({ songs });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Import failed";
-    return res.status(422).json({ error: { code: "validation", message } });
+    send({ type: "error", message: e instanceof Error ? e.message : "Import failed" });
   } finally {
     rmSync(work, { recursive: true, force: true });
+    res.end();
   }
 });
 
