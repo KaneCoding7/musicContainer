@@ -267,9 +267,6 @@
             <Icon name="account_circle" size={20} />
             {authVm.user?.name}
           </span>
-          <button class="logout" onclick={handleLogout} title="Sign out" aria-label="Sign out">
-            <Icon name="logout" size={18} />
-          </button>
         </div>
 
         <details class="shortcuts">
@@ -338,6 +335,7 @@
           {theme}
           onToggleTheme={toggleTheme}
           onToggleNormalize={toggleNormalize}
+          onSignOut={handleLogout}
         />
       {/if}
     </main>
@@ -455,19 +453,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .logout {
-    display: inline-flex;
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    padding: 0.35rem;
-    border-radius: 0.4rem;
-  }
-  .logout:hover {
-    background: var(--hover);
-    color: var(--text);
-  }
   .shortcuts {
     font-size: 0.78rem;
     color: var(--muted);
@@ -476,7 +461,7 @@
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    padding: 0.4rem 0.5rem;
+    padding: 0.4rem 0.5rem 0.1rem;
     border-radius: 0.4rem;
     cursor: pointer;
     list-style: none;

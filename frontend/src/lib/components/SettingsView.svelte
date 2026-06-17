@@ -10,12 +10,14 @@
     theme,
     onToggleTheme,
     onToggleNormalize,
+    onSignOut,
   }: {
     vm: AuthViewModel;
     songVm: SongViewModel;
     theme: "dark" | "light";
     onToggleTheme: () => void;
     onToggleNormalize: () => void;
+    onSignOut: () => void;
   } = $props();
 
   // How many tracks still need loudness analysis for normalization.
@@ -198,6 +200,11 @@
     </div>
   </form>
   {#if pwMsg}<p class="msg" class:err={!pwMsg.ok}>{pwMsg.text}</p>{/if}
+
+  <p class="section">Account</p>
+  <button class="signout" onclick={onSignOut}>
+    <Icon name="logout" size={18} /> Sign out
+  </button>
 </div>
 
 <style>
@@ -356,5 +363,24 @@
   .ghost:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+  .signout {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+    padding: 0.5rem 0.9rem;
+    background: transparent;
+    color: var(--danger-text);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .signout:hover {
+    background: var(--danger-bg);
+    border-color: var(--danger-bg);
   }
 </style>
