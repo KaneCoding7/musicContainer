@@ -24,131 +24,165 @@
   }
 </script>
 
-<div class="pip-mini">
-  <div class="pip-art">
-    {#if song?.hasArt}
-      <img src={thumbUrl(song.id, 256)} alt="" />
-    {:else}
-      <Icon name="music_note" size={48} />
-    {/if}
-  </div>
-  <div class="pip-meta">
-    <span class="pip-title">{song?.originalFilename ?? "Nothing playing"}</span>
-    {#if song?.artist}<span class="pip-artist">{song.artist}</span>{/if}
-  </div>
-  <div class="pip-seek">
-    <span class="time">{formatTime(vm.position)}</span>
-    <input
-      type="range"
-      min="0"
-      max={vm.duration || 0}
-      step="0.1"
-      value={vm.position}
-      oninput={onSeek}
-      aria-label="Seek"
-    />
-    <span class="time">{formatTime(vm.duration)}</span>
-  </div>
-  <div class="pip-controls">
-    <button onclick={() => vm.prev()} aria-label="Previous"
-      ><Icon name="skip_previous" fill size={30} /></button
-    >
-    <button class="pip-play" onclick={() => vm.togglePlay()} aria-label="Play/Pause">
-      <Icon name={vm.isPlaying ? "pause" : "play_arrow"} fill size={40} />
-    </button>
-    <button onclick={() => vm.next()} aria-label="Next"
-      ><Icon name="skip_next" fill size={30} /></button
-    >
+<div class="pip" class:noart={!song?.hasArt}>
+  {#if song?.hasArt}
+    <img class="bg" src={thumbUrl(song.id, 512)} alt="" />
+  {:else}
+    <div class="bg-fallback"><Icon name="music_note" size={80} /></div>
+  {/if}
+  <div class="scrim"></div>
+
+  <div class="overlay">
+    <div class="meta">
+      <span class="title">{song?.originalFilename ?? "Nothing playing"}</span>
+      {#if song?.artist}<span class="artist">{song.artist}</span>{/if}
+    </div>
+
+    <div class="seek">
+      <input
+        type="range"
+        min="0"
+        max={vm.duration || 0}
+        step="0.1"
+        value={vm.position}
+        oninput={onSeek}
+        aria-label="Seek"
+      />
+      <div class="times">
+        <span>{formatTime(vm.position)}</span>
+        <span>{formatTime(vm.duration)}</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button onclick={() => vm.prev()} aria-label="Previous">
+        <Icon name="skip_previous" fill size={30} />
+      </button>
+      <button class="play" onclick={() => vm.togglePlay()} aria-label="Play/Pause">
+        <Icon name={vm.isPlaying ? "pause" : "play_arrow"} fill size={32} />
+      </button>
+      <button onclick={() => vm.next()} aria-label="Next">
+        <Icon name="skip_next" fill size={30} />
+      </button>
+    </div>
   </div>
 </div>
 
 <style>
-  .pip-mini {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.7rem;
+  .pip {
+    position: relative;
+    width: 100%;
     height: 100vh;
-    box-sizing: border-box;
-    padding: 0.9rem;
-    background: var(--bg);
-    color: var(--text);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  }
-  .pip-art {
-    width: 128px;
-    height: 128px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--surface-2);
-    border-radius: 0.6rem;
-    color: var(--dim);
     overflow: hidden;
+    background: #000;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    user-select: none;
   }
-  .pip-art img {
+  .bg {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
-  .pip-meta {
-    width: 100%;
-    text-align: center;
+  .bg-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--surface-2), var(--bg));
+    color: var(--dim);
+  }
+  /* Darken top + bottom so white controls stay legible over any artwork. */
+  .scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.45) 0%,
+      rgba(0, 0, 0, 0) 35%,
+      rgba(0, 0, 0, 0.35) 60%,
+      rgba(0, 0, 0, 0.85) 100%
+    );
+  }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    padding: 0.85rem 0.95rem 1rem;
+    color: #fff;
+  }
+  .meta {
     min-width: 0;
   }
-  .pip-title {
+  .title {
     display: block;
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 1rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
   }
-  .pip-artist {
+  .artist {
     display: block;
-    color: var(--muted);
-    font-size: 0.85rem;
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.82);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
   }
-  .pip-seek {
+  .seek {
     display: flex;
-    align-items: center;
-    gap: 0.4rem;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .seek input {
     width: 100%;
+    margin: 0;
+    accent-color: #fff;
   }
-  .pip-seek input {
-    flex: 1;
-    min-width: 0;
-    accent-color: var(--accent);
+  .times {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.68rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   }
-  .time {
-    color: var(--muted);
-    font-size: 0.75rem;
-    min-width: 2.5rem;
-    text-align: center;
-  }
-  .pip-controls {
+  .controls {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    justify-content: center;
+    gap: 0.9rem;
   }
-  .pip-controls button {
+  .controls button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     background: transparent;
     border: none;
-    color: var(--text);
+    color: #fff;
     cursor: pointer;
     padding: 0.3rem;
     border-radius: 50%;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
   }
-  .pip-controls button:hover {
-    background: var(--surface-2);
+  .controls button:hover {
+    background: rgba(255, 255, 255, 0.18);
   }
-  .pip-controls .pip-play {
-    color: var(--accent-text);
+  .controls .play {
+    background: rgba(255, 255, 255, 0.95);
+    color: #000;
+    width: 48px;
+    height: 48px;
+  }
+  .controls .play:hover {
+    background: #fff;
   }
 </style>
