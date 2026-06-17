@@ -276,6 +276,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    max-width: 320px;
   }
   .field-wrap {
     position: relative;
