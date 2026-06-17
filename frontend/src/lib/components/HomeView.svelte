@@ -85,7 +85,10 @@
   }
   .cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    /* auto-fit (not auto-fill) collapses empty trailing tracks so the cards
+       fill the row and their right edge lines up with the header's Play
+       button on wide screens. */
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 1rem;
   }
   .card {
