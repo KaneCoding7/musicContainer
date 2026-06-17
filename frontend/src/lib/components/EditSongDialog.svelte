@@ -134,16 +134,14 @@
       </span>
       <div class="art-actions">
         <input
-          id="art-file-input"
-          class="file-hidden"
+          class="art-file"
           bind:this={fileInput}
           type="file"
           accept="image/*"
           onchange={onPickArt}
+          disabled={artBusy}
         />
-        <label for="art-file-input" class="art-btn" class:disabled={artBusy}>
-          {artBusy ? "Working…" : hasArt ? "Change art" : "Upload art"}
-        </label>
+        <span class="art-hint">{hasArt ? "Change album art" : "Add album art"}</span>
         {#if hasArt}
           <button
             type="button"
@@ -244,8 +242,16 @@
     gap: 0.4rem;
     align-items: flex-start;
   }
-  .art-btn {
-    display: inline-block;
+  /* Native file input (its own button opens the picker — the most reliable on
+     iOS Safari). We hide the "no file chosen" text and style the button. */
+  .art-file {
+    font-size: 0;
+    color: transparent;
+    max-width: 130px;
+  }
+  .art-file::file-selector-button,
+  .art-file::-webkit-file-upload-button {
+    margin: 0;
     padding: 0.4rem 0.8rem;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
@@ -255,23 +261,12 @@
     font-weight: 500;
     cursor: pointer;
   }
-  .art-btn:hover {
+  .art-file::file-selector-button:hover {
     background: var(--hover);
   }
-  .art-btn.disabled {
-    opacity: 0.6;
-    pointer-events: none;
-  }
-  /* "Bulletproof" hidden file input: a for-associated <label> opens it. This is
-     the pattern iOS Safari reliably honors (display:none / opacity-overlay
-     inputs don't open the picker there). */
-  .file-hidden {
-    width: 0.1px;
-    height: 0.1px;
-    opacity: 0;
-    overflow: hidden;
-    position: absolute;
-    z-index: -1;
+  .art-hint {
+    font-size: 0.72rem;
+    color: var(--dim);
   }
   .art-remove {
     padding: 0.3rem 0.7rem;
