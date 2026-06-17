@@ -717,6 +717,7 @@
   .name {
     flex: 1;
     min-width: 0;
+    text-align: left;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

@@ -3,6 +3,7 @@ import { existsSync, statSync, unlinkSync } from "node:fs";
 import { extname, join } from "node:path";
 import type { Song } from "../types.js";
 import { err, ok, type AppError, type Result } from "./result.js";
+import { canAccessSong } from "./shares.js";
 
 // Maps a stored art file's extension to the MIME type used when serving it.
 export function artContentType(path: string): string {
@@ -458,13 +459,20 @@ export function recordPlay(
   id: number,
   userId: string
 ): Result<Song> {
-  const existing = getSong(db, id, userId);
-  if (!existing.ok) return existing;
+  // Anyone who can access the song (owner, collaborator, or someone it's shared
+  // with) counts a play, so the play count reflects everyone with access.
+  if (!canAccessSong(db, userId, id)) {
+    return err("not_found", `Song ${id} not found`);
+  }
   try {
     db.prepare(
-      "UPDATE songs SET play_count = play_count + 1, last_played_at = datetime('now') WHERE id = ? AND user_id = ?"
-    ).run(id, userId);
-    return getSong(db, id, userId);
+      "UPDATE songs SET play_count = play_count + 1, last_played_at = datetime('now') WHERE id = ?"
+    ).run(id);
+    const row = db
+      .prepare(`SELECT ${SONG_COLUMNS} FROM songs WHERE id = ?`)
+      .get(id) as SongRow | undefined;
+    if (!row) return err("not_found", `Song ${id} not found`);
+    return ok(rowToSong(row));
   } catch (e) {
     return err("internal", `Failed to record play: ${(e as Error).message}`);
   }
