@@ -5,6 +5,12 @@
   import PlayActions from "$lib/components/PlayActions.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
+  import {
+    disableArtistPublicLink,
+    enableArtistPublicLink,
+    getArtistPublicToken,
+    publicLink,
+  } from "$lib/services/shareService";
   import { thumbUrl } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -67,6 +73,56 @@
 
   const current = $derived(artists.find((a) => a.name === openArtist) ?? null);
 
+  // Public "listen to this artist" link.
+  let shareToken = $state<string | null>(null);
+  let shareBusy = $state(false);
+  let shareCopied = $state(false);
+
+  // Load the artist's public token when a (real) artist is opened.
+  $effect(() => {
+    const name = current?.name;
+    shareToken = null;
+    shareCopied = false;
+    if (!name || name === NO_ARTIST) return;
+    let cancelled = false;
+    getArtistPublicToken(name)
+      .then((t) => {
+        if (!cancelled) shareToken = t;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  async function toggleArtistShare() {
+    if (!current || shareBusy) return;
+    shareBusy = true;
+    try {
+      if (shareToken) {
+        await disableArtistPublicLink(current.name);
+        shareToken = null;
+      } else {
+        shareToken = await enableArtistPublicLink(current.name);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      shareBusy = false;
+    }
+  }
+
+  async function copyArtistLink() {
+    if (!shareToken) return;
+    try {
+      await navigator.clipboard.writeText(publicLink(shareToken));
+      shareCopied = true;
+      setTimeout(() => (shareCopied = false), 1500);
+    } catch {
+      /* ignore */
+    }
+  }
+
   function trackLabel(songs: Song[]): string {
     return `${songs.length} ${songs.length === 1 ? "track" : "tracks"}`;
   }
@@ -107,9 +163,28 @@
     <div>
       <h3>{current.name}</h3>
       <p class="muted">{trackLabel(current.songs)}</p>
-      <PlayActions {vm} songs={current.songs} />
+      <div class="head-actions">
+        <PlayActions {vm} songs={current.songs} />
+        {#if current.name !== NO_ARTIST}
+          <button class="share-artist" onclick={toggleArtistShare} disabled={shareBusy}>
+            <Icon name="public" size={16} />
+            {shareToken ? "Public · turn off" : "Share artist"}
+          </button>
+        {/if}
+      </div>
     </div>
   </div>
+
+  {#if shareToken}
+    <div class="share-url">
+      <span class="url">{publicLink(shareToken)}</span>
+      <button class="copy" onclick={copyArtistLink}>
+        <Icon name={shareCopied ? "check" : "content_copy"} size={16} />
+        {shareCopied ? "Copied" : "Copy"}
+      </button>
+    </div>
+    <p class="muted small">Anyone with this link can listen to {current.name} — no account needed.</p>
+  {/if}
   <ol>
     {#each current.songs as song, i (song.id)}
       {@const isCurrent = song.id === vm.currentSong?.id}
@@ -243,6 +318,66 @@
     gap: 1.25rem;
     align-items: center;
     margin-bottom: 1.5rem;
+  }
+  .head-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .share-artist {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.9rem;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 2rem;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .share-artist:hover:not(:disabled) {
+    background: var(--hover);
+  }
+  .share-url {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.5rem;
+    padding: 0.5rem 0.7rem;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+  }
+  .share-url .url {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .share-url .copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+    padding: 0.3rem 0.6rem;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.4rem;
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .muted.small {
+    font-size: 0.82rem;
+    margin-top: 0;
   }
   .head .avatar {
     width: 120px;

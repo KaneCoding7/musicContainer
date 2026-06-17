@@ -136,6 +136,14 @@ export function migrate(database: Database.Database): void {
       created_by TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS artist_public_shares (
+      token      TEXT PRIMARY KEY,
+      user_id    TEXT NOT NULL,
+      artist     TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(user_id, artist)
+    );
   `);
 
   // Metadata columns added post-MVP (Cycle 9). Added conditionally so existing

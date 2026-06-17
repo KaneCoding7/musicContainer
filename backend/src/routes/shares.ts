@@ -2,8 +2,11 @@ import { Router } from "express";
 import { getDb } from "../db/init.js";
 import { statusForError } from "../functional/result.js";
 import {
+  disableArtistPublicLink,
   disablePublicLink,
+  enableArtistPublicLink,
   enablePublicLink,
+  getArtistPublicToken,
   getPublicToken,
 } from "../functional/publicShares.js";
 import {
@@ -18,6 +21,35 @@ import {
 } from "../functional/shares.js";
 
 export const sharesRouter = Router();
+
+// --- Artist public links (listen to all of a user's songs by an artist) ---
+// GET /api/artist-public?artist=NAME — current token (or null).
+sharesRouter.get("/artist-public", (req, res) => {
+  const artist = typeof req.query.artist === "string" ? req.query.artist : "";
+  const result = getArtistPublicToken(getDb(), req.userId!, artist);
+  if (!result.ok) {
+    return res.status(statusForError(result.error.code)).json({ error: result.error });
+  }
+  return res.json({ token: result.value });
+});
+// POST /api/artist-public { artist } — enable + return the token.
+sharesRouter.post("/artist-public", (req, res) => {
+  const artist = typeof req.body?.artist === "string" ? req.body.artist : "";
+  const result = enableArtistPublicLink(getDb(), req.userId!, artist);
+  if (!result.ok) {
+    return res.status(statusForError(result.error.code)).json({ error: result.error });
+  }
+  return res.status(201).json({ token: result.value });
+});
+// DELETE /api/artist-public?artist=NAME — disable the link.
+sharesRouter.delete("/artist-public", (req, res) => {
+  const artist = typeof req.query.artist === "string" ? req.query.artist : "";
+  const result = disableArtistPublicLink(getDb(), req.userId!, artist);
+  if (!result.ok) {
+    return res.status(statusForError(result.error.code)).json({ error: result.error });
+  }
+  return res.status(204).end();
+});
 
 // GET /api/users/search?q= — look up users by name/email (for share autocomplete).
 sharesRouter.get("/users/search", (req, res) => {

@@ -2,8 +2,62 @@ import { randomBytes } from "node:crypto";
 import type { Database } from "better-sqlite3";
 import { getPlaylist, songsInPlaylist } from "./playlists.js";
 import { err, ok, type Result } from "./result.js";
-import { getSong } from "./songs.js";
+import { getSong, listSongsByArtist } from "./songs.js";
 import type { Song } from "../types.js";
+
+// --- Artist public links (all of a user's songs by an artist) ---
+
+export function getArtistPublicToken(
+  db: Database,
+  ownerId: string,
+  artist: string
+): Result<string | null> {
+  const row = db
+    .prepare(
+      "SELECT token FROM artist_public_shares WHERE user_id = ? AND artist = ?"
+    )
+    .get(ownerId, artist.trim()) as { token: string } | undefined;
+  return ok(row?.token ?? null);
+}
+
+export function enableArtistPublicLink(
+  db: Database,
+  ownerId: string,
+  artist: string
+): Result<string> {
+  const a = artist.trim();
+  if (!a) return err("validation", "Artist is required");
+  try {
+    const existing = db
+      .prepare(
+        "SELECT token FROM artist_public_shares WHERE user_id = ? AND artist = ?"
+      )
+      .get(ownerId, a) as { token: string } | undefined;
+    if (existing) return ok(existing.token);
+    const token = randomBytes(12).toString("base64url");
+    db.prepare(
+      "INSERT INTO artist_public_shares (token, user_id, artist, created_by) VALUES (?, ?, ?, ?)"
+    ).run(token, ownerId, a, ownerId);
+    return ok(token);
+  } catch (e) {
+    return err("internal", `Failed to create public link: ${(e as Error).message}`);
+  }
+}
+
+export function disableArtistPublicLink(
+  db: Database,
+  ownerId: string,
+  artist: string
+): Result<void> {
+  try {
+    db.prepare(
+      "DELETE FROM artist_public_shares WHERE user_id = ? AND artist = ?"
+    ).run(ownerId, artist.trim());
+    return ok(undefined);
+  } catch (e) {
+    return err("internal", `Failed to disable public link: ${(e as Error).message}`);
+  }
+}
 
 // Returns the public token for a playlist (owner only), or null if none.
 export function getPublicToken(
@@ -153,6 +207,26 @@ export function resolvePublicShare(
       songs: [songRow.song],
     });
   }
+
+  // Fall back to an artist link (all the owner's songs by that artist).
+  const artistRow = db
+    .prepare(
+      `SELECT aps.user_id, aps.artist, u.name AS owner_name
+       FROM artist_public_shares aps
+       JOIN "user" u ON u.id = aps.user_id
+       WHERE aps.token = ?`
+    )
+    .get(token) as
+    | { user_id: string; artist: string; owner_name: string }
+    | undefined;
+  if (artistRow) {
+    const songs = listSongsByArtist(db, artistRow.user_id, artistRow.artist);
+    return ok({
+      name: artistRow.artist,
+      ownerName: artistRow.owner_name,
+      songs: songs.ok ? songs.value : [],
+    });
+  }
   return err("not_found", "Share link not found");
 }
 
@@ -202,5 +276,16 @@ export function publicTokenAllowsSong(
       "SELECT 1 AS x FROM song_public_shares WHERE token = ? AND song_id = ? LIMIT 1"
     )
     .get(token, songId);
-  return !!viaSong;
+  if (viaSong) return true;
+  const viaArtist = db
+    .prepare(
+      `SELECT 1 AS x
+       FROM artist_public_shares aps
+       JOIN songs s ON s.user_id = aps.user_id
+         AND TRIM(COALESCE(s.artist, '')) = aps.artist
+       WHERE aps.token = ? AND s.id = ? AND s.pending = 0
+       LIMIT 1`
+    )
+    .get(token, songId);
+  return !!viaArtist;
 }

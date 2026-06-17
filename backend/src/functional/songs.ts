@@ -229,6 +229,26 @@ export function getSongSource(
   }
 }
 
+// Returns a user's (confirmed) songs by a given artist, newest first.
+export function listSongsByArtist(
+  db: Database,
+  userId: string,
+  artist: string
+): Result<Song[]> {
+  try {
+    const rows = db
+      .prepare(
+        `SELECT ${SONG_COLUMNS} FROM songs
+         WHERE user_id = ? AND pending = 0 AND TRIM(COALESCE(artist, '')) = ?
+         ORDER BY datetime(uploaded_at) DESC, id DESC`
+      )
+      .all(userId, artist.trim()) as SongRow[];
+    return ok(rows.map(rowToSong));
+  } catch (e) {
+    return err("internal", `Failed to list artist songs: ${(e as Error).message}`);
+  }
+}
+
 // Returns a user's pending (uploaded-but-not-yet-confirmed) songs for review.
 export function listPendingSongs(db: Database, userId: string): Result<Song[]> {
   try {

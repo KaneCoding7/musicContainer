@@ -156,6 +156,34 @@ export function publicLink(token: string): string {
   return `${origin}/share/${token}`;
 }
 
+// --- Artist public links (listen to all of a user's songs by an artist) ---
+export async function getArtistPublicToken(
+  artist: string
+): Promise<string | null> {
+  const res = await fetch(
+    `${apiBase()}/api/artist-public?artist=${encodeURIComponent(artist)}`,
+    { headers: authHeaders() }
+  );
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).token as string | null;
+}
+export async function enableArtistPublicLink(artist: string): Promise<string> {
+  const res = await fetch(`${apiBase()}/api/artist-public`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ artist }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).token as string;
+}
+export async function disableArtistPublicLink(artist: string): Promise<void> {
+  const res = await fetch(
+    `${apiBase()}/api/artist-public?artist=${encodeURIComponent(artist)}`,
+    { method: "DELETE", headers: authHeaders() }
+  );
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
 // --- Single-song public links ---
 export async function getSongPublicToken(
   songId: number
