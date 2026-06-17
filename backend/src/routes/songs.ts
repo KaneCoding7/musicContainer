@@ -1,6 +1,14 @@
+import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, unlinkSync } from "node:fs";
-import { extname, join } from "node:path";
+import {
+  copyFileSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  unlinkSync,
+} from "node:fs";
+import { dirname, extname, join } from "node:path";
 import { Router } from "express";
 import multer from "multer";
 import { ART_DIR, getDb, MUSIC_DIR } from "../db/init.js";
@@ -227,6 +235,112 @@ songsRouter.post("/upload", (req, res) => {
 
     return res.status(201).json({ song: result.value });
   });
+});
+
+// Runs yt-dlp to extract a link's audio as MP3 (with embedded thumbnail) into
+// `cwd`. URL is passed as an argv (no shell), so it can't inject commands.
+function runYtDlp(url: string, cwd: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      "yt-dlp",
+      [
+        "-x",
+        "--audio-format",
+        "mp3",
+        "--embed-thumbnail",
+        "--no-playlist",
+        "--no-progress",
+        "-o",
+        "%(title)s.%(ext)s",
+        url,
+      ],
+      { cwd, timeout: 5 * 60 * 1000, maxBuffer: 16 * 1024 * 1024 },
+      (err, _stdout, stderr) => {
+        if (!err) return resolve();
+        const last = (stderr || "")
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .pop();
+        reject(new Error(last || "Download failed"));
+      }
+    );
+  });
+}
+
+// POST /api/import-link — download a link's audio with yt-dlp and ingest it
+// into the library, exactly like a file upload.
+songsRouter.post("/import-link", async (req, res) => {
+  const url =
+    typeof req.body?.url === "string" ? (req.body.url as string).trim() : "";
+  if (!/^https?:\/\/\S+$/i.test(url)) {
+    return res.status(400).json({
+      error: { code: "validation", message: "A valid http(s) link is required" },
+    });
+  }
+
+  // Download into a temp dir on the same volume as the music dir.
+  const work = mkdtempSync(join(dirname(MUSIC_DIR), "import-"));
+  try {
+    await runYtDlp(url, work);
+    const produced = readdirSync(work).filter((f) =>
+      f.toLowerCase().endsWith(".mp3")
+    );
+    if (produced.length === 0) {
+      return res.status(422).json({
+        error: {
+          code: "validation",
+          message: "No audio could be extracted from that link",
+        },
+      });
+    }
+
+    const songs = [];
+    for (const name of produced) {
+      const stored = `${randomUUID()}.mp3`;
+      const dest = join(MUSIC_DIR, stored);
+      copyFileSync(join(work, name), dest);
+      const meta = await extractMetadata(dest, ART_DIR);
+      const result = recordSong(getDb(), {
+        filename: stored,
+        originalFilename: name, // the video title + .mp3
+        userId: req.userId!,
+        artist: meta.artist,
+        album: meta.album,
+        artFilename: meta.artFilename,
+        duration: meta.duration,
+      });
+      if (!result.ok) {
+        if (existsSync(dest)) {
+          try {
+            unlinkSync(dest);
+          } catch {
+            /* best-effort */
+          }
+        }
+        continue;
+      }
+      const songId = result.value.id;
+      measureLoudness(dest)
+        .then((lufs) => {
+          if (lufs !== null) setSongLoudness(getDb(), songId, lufs);
+        })
+        .catch(() => {});
+      songs.push(result.value);
+    }
+
+    if (songs.length === 0) {
+      return res.status(500).json({
+        error: { code: "internal", message: "Could not save the imported audio" },
+      });
+    }
+    return res.status(201).json({ songs });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Import failed";
+    return res.status(422).json({ error: { code: "validation", message } });
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
 });
 
 // GET /api/songs — list all songs.

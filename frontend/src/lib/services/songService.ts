@@ -38,6 +38,18 @@ export async function uploadSong(file: File): Promise<Song> {
   return body.song as Song;
 }
 
+// Imports audio from a link (yt-dlp on the server); returns the created songs.
+export async function importLink(url: string): Promise<Song[]> {
+  const res = await fetch(`${apiBase()}/api/import-link`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  const body = await res.json();
+  return body.songs as Song[];
+}
+
 // Editable song metadata fields.
 export interface SongMetadata {
   originalFilename?: string;

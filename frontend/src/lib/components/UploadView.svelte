@@ -36,6 +36,26 @@
   const pct = $derived(
     vm.uploadTotal ? Math.round((vm.uploadDone / vm.uploadTotal) * 100) : 0
   );
+
+  let linkUrl = $state("");
+  let linkMsg = $state<{ ok: boolean; text: string } | null>(null);
+
+  async function submitLink(e: Event) {
+    e.preventDefault();
+    const url = linkUrl.trim();
+    if (!url || vm.importing) return;
+    linkMsg = null;
+    const n = await vm.importFromLink(url);
+    if (n > 0) {
+      linkMsg = {
+        ok: true,
+        text: `Added ${n} track${n === 1 ? "" : "s"} from link`,
+      };
+      linkUrl = "";
+    } else {
+      linkMsg = { ok: false, text: vm.error ?? "Import failed" };
+    }
+  }
 </script>
 
 <div class="upload-view">
@@ -79,6 +99,31 @@
     <p class="msg ok">
       <Icon name="check_circle" size={18} />
       Added {justUploaded} track{justUploaded === 1 ? "" : "s"} to your library.
+    </p>
+  {/if}
+
+  <div class="divider"><span>or paste a link</span></div>
+
+  <form class="link-row" onsubmit={submitLink}>
+    <input
+      class="link-input"
+      type="url"
+      placeholder="Paste a YouTube/SoundCloud/… link"
+      bind:value={linkUrl}
+      disabled={vm.importing}
+    />
+    <button type="submit" class="link-btn" disabled={vm.importing || !linkUrl.trim()}>
+      {#if vm.importing}
+        <Icon name="progress_activity" size={18} /> Importing…
+      {:else}
+        <Icon name="download" size={18} /> Add
+      {/if}
+    </button>
+  </form>
+  <p class="link-hint">Downloads the audio (as MP3, with cover art) and adds it to your library.</p>
+  {#if linkMsg}
+    <p class="msg" class:ok={linkMsg.ok} class:err={!linkMsg.ok}>
+      {#if linkMsg.ok}<Icon name="check_circle" size={18} />{/if}{linkMsg.text}
     </p>
   {/if}
 
@@ -180,5 +225,72 @@
     margin: 1rem 0 0;
     color: var(--dim);
     font-size: 0.85rem;
+  }
+
+  /* Import from link */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 1.5rem 0 1rem;
+    color: var(--dim);
+    font-size: 0.8rem;
+  }
+  .divider::before,
+  .divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--surface-2);
+  }
+  .link-row {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .link-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.6rem 0.8rem;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    color: var(--text);
+    font: inherit;
+  }
+  .link-input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .link-input::placeholder {
+    color: var(--dim);
+  }
+  .link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+    padding: 0.6rem 1rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 0.5rem;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .link-btn:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+  .link-btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+  .link-btn :global(.material-symbols-rounded) {
+    color: #fff;
+  }
+  .link-hint {
+    margin: 0.5rem 0 0;
+    color: var(--dim);
+    font-size: 0.8rem;
   }
 </style>

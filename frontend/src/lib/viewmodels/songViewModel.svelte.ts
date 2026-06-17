@@ -4,6 +4,7 @@ import { untrack } from "svelte";
 import {
   deleteSong,
   fetchSongs,
+  importLink,
   recordPlay,
   reorderSongs as reorderSongsApi,
   setLiked,
@@ -32,6 +33,8 @@ export class SongViewModel {
   // Batch upload progress (Cycle 28).
   uploadDone = $state(0);
   uploadTotal = $state(0);
+  // Importing audio from a link (yt-dlp on the server).
+  importing = $state(false);
   error = $state<string | null>(null);
 
   // Search query for filtering the library (Cycle 5).
@@ -621,6 +624,23 @@ export class SongViewModel {
       this.error = e instanceof Error ? e.message : "Failed to load songs";
     } finally {
       this.loading = false;
+    }
+  }
+
+  // Imports audio from a link (server runs yt-dlp). Returns how many tracks
+  // were added; prepends them to the library.
+  async importFromLink(url: string): Promise<number> {
+    this.importing = true;
+    this.error = null;
+    try {
+      const songs = await importLink(url);
+      this.songs = [...songs, ...this.songs];
+      return songs.length;
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Import failed";
+      return 0;
+    } finally {
+      this.importing = false;
     }
   }
 
