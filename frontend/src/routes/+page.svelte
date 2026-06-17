@@ -374,7 +374,7 @@
     flex-shrink: 0;
     background: var(--sidebar);
     border-right: 1px solid var(--surface-2);
-    padding: 1.25rem 1rem 0.25rem;
+    padding: 1.25rem 1rem 0.45rem;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
