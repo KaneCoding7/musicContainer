@@ -262,13 +262,6 @@
       </nav>
 
       <div class="sidebar-foot">
-        <div class="account">
-          <span class="who" title={authVm.user?.email}>
-            <Icon name="account_circle" size={20} />
-            {authVm.user?.name}
-          </span>
-        </div>
-
         <details class="shortcuts">
           <summary>
             <Icon name="keyboard" size={18} />
@@ -434,24 +427,6 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-  }
-  .account {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .who {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    color: var(--text);
-    font-size: 0.85rem;
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .shortcuts {
     font-size: 0.78rem;
