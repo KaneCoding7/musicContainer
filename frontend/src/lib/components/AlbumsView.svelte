@@ -71,6 +71,12 @@
             <span class="t-name">{song.originalFilename}</span>
             {#if song.artist}<span class="t-artist">{song.artist}</span>{/if}
           </span>
+          <span
+            class="plays"
+            title={`${song.playCount} play${song.playCount === 1 ? "" : "s"}`}
+          >
+            <Icon name="play_arrow" size={13} />{song.playCount}
+          </span>
         </button>
       </li>
     {/each}
@@ -234,6 +240,16 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+    flex: 1;
+  }
+  .plays {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
   }
   .t-name {
     overflow: hidden;
