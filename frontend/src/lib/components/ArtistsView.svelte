@@ -43,10 +43,13 @@
     }
     return [...map.entries()]
       .map(([name, songs]) => {
-        // Apply the user's manual order; un-ordered tracks keep library order.
-        const sorted = [...songs].sort(
-          (a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity)
-        );
+        // Apply the user's manual order; un-ordered tracks default to oldest
+        // first (ascending id = order added).
+        const sorted = [...songs].sort((a, b) => {
+          const ao = a.sortOrder ?? Infinity;
+          const bo = b.sortOrder ?? Infinity;
+          return ao !== bo ? ao - bo : a.id - b.id;
+        });
         return {
           name,
           songs: sorted,
