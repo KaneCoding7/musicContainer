@@ -3,7 +3,9 @@
 import { untrack } from "svelte";
 import {
   deleteSong,
+  fetchPendingSongs,
   fetchSongs,
+  finalizeSongs,
   importLink,
   recordPlay,
   reorderSongs as reorderSongsApi,
@@ -37,6 +39,9 @@ export class SongViewModel {
   importing = $state(false);
   importStage = $state<string>("");
   importPercent = $state<number | null>(null);
+  // Uploaded/imported tracks awaiting the user's review before joining the
+  // library (hidden from the library until confirmed).
+  staged = $state<Song[]>([]);
   error = $state<string | null>(null);
 
   // Search query for filtering the library (Cycle 5).
@@ -629,8 +634,50 @@ export class SongViewModel {
     }
   }
 
+  // --- Upload staging (review before adding to the library) ---
+
+  // Loads any pending uploads from a previous session into the review list.
+  async loadStaged(): Promise<void> {
+    try {
+      this.staged = await fetchPendingSongs();
+    } catch {
+      /* non-fatal */
+    }
+  }
+
+  // Updates a staged song in place after an edit.
+  replaceStaged(updated: Song): void {
+    this.staged = this.staged.map((s) => (s.id === updated.id ? updated : s));
+  }
+
+  // Discards a staged upload (deletes the file + record).
+  async removeStaged(id: number): Promise<void> {
+    try {
+      await deleteSong(id);
+    } catch {
+      /* best-effort; still drop it from the list */
+    }
+    this.staged = this.staged.filter((s) => s.id !== id);
+  }
+
+  // Confirms all staged uploads into the library. Returns how many were added.
+  async finalizeStaged(): Promise<number> {
+    const ids = this.staged.map((s) => s.id);
+    if (ids.length === 0) return 0;
+    this.error = null;
+    try {
+      const confirmed = await finalizeSongs(ids);
+      this.songs = [...confirmed, ...this.songs];
+      this.staged = [];
+      return confirmed.length;
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Failed to add to library";
+      return 0;
+    }
+  }
+
   // Imports audio from a link (server runs yt-dlp). Returns how many tracks
-  // were added; prepends them to the library.
+  // were staged for review.
   async importFromLink(url: string): Promise<number> {
     this.importing = true;
     this.error = null;
@@ -642,7 +689,7 @@ export class SongViewModel {
         if (typeof p.percent === "number") this.importPercent = p.percent;
         else if (p.stage !== "download") this.importPercent = null;
       });
-      this.songs = [...songs, ...this.songs];
+      this.staged = [...this.staged, ...songs];
       return songs.length;
     } catch (e) {
       this.error = e instanceof Error ? e.message : "Import failed";
@@ -670,8 +717,8 @@ export class SongViewModel {
     }
   }
 
-  // Uploads multiple files sequentially, tracking progress. Successful uploads
-  // are prepended as they complete; failures are summarized in `error`.
+  // Uploads multiple files sequentially, tracking progress. Each lands in the
+  // staging list for review; failures are summarized in `error`.
   async uploadMany(files: File[]): Promise<void> {
     if (files.length === 0) return;
     this.uploading = true;
@@ -682,7 +729,7 @@ export class SongViewModel {
     for (const file of files) {
       try {
         const song = await uploadSong(file);
-        this.songs = [song, ...this.songs];
+        this.staged = [...this.staged, song];
       } catch {
         failed.push(file.name);
       }

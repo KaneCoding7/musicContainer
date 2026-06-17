@@ -14,6 +14,8 @@ import multer from "multer";
 import { ART_DIR, getDb, MUSIC_DIR } from "../db/init.js";
 import {
   deleteSong,
+  finalizeSongs,
+  listPendingSongs,
   listSongs,
   listSongsNeedingLoudness,
   recordPlay,
@@ -204,6 +206,7 @@ songsRouter.post("/upload", (req, res) => {
       album: meta.album,
       artFilename: meta.artFilename,
       duration: meta.duration,
+      pending: true, // awaits review before joining the library
     });
 
     if (!result.ok) {
@@ -359,6 +362,7 @@ songsRouter.post("/import-link", async (req, res) => {
         album: meta.album,
         artFilename: meta.artFilename,
         duration: meta.duration,
+        pending: true, // awaits review before joining the library
       });
       if (!result.ok) {
         if (existsSync(dest)) {
@@ -395,6 +399,31 @@ songsRouter.post("/import-link", async (req, res) => {
 // GET /api/songs — list all songs.
 songsRouter.get("/songs", (req, res) => {
   const result = listSongs(getDb(), req.userId!);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ songs: result.value });
+});
+
+// GET /api/songs/pending — uploaded/imported songs awaiting review.
+songsRouter.get("/songs/pending", (req, res) => {
+  const result = listPendingSongs(getDb(), req.userId!);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ songs: result.value });
+});
+
+// POST /api/songs/finalize — confirm pending songs into the library.
+songsRouter.post("/songs/finalize", (req, res) => {
+  const ids = Array.isArray(req.body?.ids)
+    ? (req.body.ids as unknown[]).filter((x): x is number => typeof x === "number")
+    : [];
+  const result = finalizeSongs(getDb(), ids, req.userId!);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))

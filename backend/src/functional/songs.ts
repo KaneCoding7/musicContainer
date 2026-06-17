@@ -133,7 +133,7 @@ export function listSongsNeedingLoudness(
   try {
     return db
       .prepare(
-        "SELECT id, filename FROM songs WHERE user_id = ? AND loudness IS NULL"
+        "SELECT id, filename FROM songs WHERE user_id = ? AND loudness IS NULL AND pending = 0"
       )
       .all(userId) as { id: number; filename: string }[];
   } catch {
@@ -153,6 +153,7 @@ export function recordSong(
     album?: string | null;
     artFilename?: string | null;
     duration?: number | null;
+    pending?: boolean;
   }
 ): Result<Song> {
   const filename = params.filename.trim();
@@ -164,7 +165,7 @@ export function recordSong(
   try {
     const info = db
       .prepare(
-        "INSERT INTO songs (filename, original_filename, artist, album, art_filename, duration, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO songs (filename, original_filename, artist, album, art_filename, duration, user_id, pending) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         filename,
@@ -173,7 +174,8 @@ export function recordSong(
         params.album ?? null,
         params.artFilename ?? null,
         params.duration ?? null,
-        params.userId
+        params.userId,
+        params.pending ? 1 : 0
       );
 
     const row = db
@@ -189,17 +191,59 @@ export function recordSong(
   }
 }
 
-// Returns all of a user's songs, newest first.
+// Returns all of a user's confirmed (non-pending) songs, newest first.
 export function listSongs(db: Database, userId: string): Result<Song[]> {
   try {
     const rows = db
       .prepare(
-        `SELECT ${SONG_COLUMNS} FROM songs WHERE user_id = ? ORDER BY datetime(uploaded_at) DESC, id DESC`
+        `SELECT ${SONG_COLUMNS} FROM songs WHERE user_id = ? AND pending = 0 ORDER BY datetime(uploaded_at) DESC, id DESC`
       )
       .all(userId) as SongRow[];
     return ok(rows.map(rowToSong));
   } catch (e) {
     return err("internal", `Failed to list songs: ${(e as Error).message}`);
+  }
+}
+
+// Returns a user's pending (uploaded-but-not-yet-confirmed) songs for review.
+export function listPendingSongs(db: Database, userId: string): Result<Song[]> {
+  try {
+    const rows = db
+      .prepare(
+        `SELECT ${SONG_COLUMNS} FROM songs WHERE user_id = ? AND pending = 1 ORDER BY id ASC`
+      )
+      .all(userId) as SongRow[];
+    return ok(rows.map(rowToSong));
+  } catch (e) {
+    return err("internal", `Failed to list pending songs: ${(e as Error).message}`);
+  }
+}
+
+// Confirms pending songs into the library (clears their pending flag).
+export function finalizeSongs(
+  db: Database,
+  ids: number[],
+  userId: string
+): Result<Song[]> {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return err("validation", "No songs to confirm");
+  }
+  try {
+    const stmt = db.prepare(
+      "UPDATE songs SET pending = 0 WHERE id = ? AND user_id = ?"
+    );
+    db.transaction((list: number[]) => {
+      for (const id of list) stmt.run(id, userId);
+    })(ids);
+    const placeholders = ids.map(() => "?").join(", ");
+    const rows = db
+      .prepare(
+        `SELECT ${SONG_COLUMNS} FROM songs WHERE user_id = ? AND id IN (${placeholders}) ORDER BY datetime(uploaded_at) DESC, id DESC`
+      )
+      .all(userId, ...ids) as SongRow[];
+    return ok(rows.map(rowToSong));
+  } catch (e) {
+    return err("internal", `Failed to confirm songs: ${(e as Error).message}`);
   }
 }
 

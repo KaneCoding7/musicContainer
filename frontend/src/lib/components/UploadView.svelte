@@ -1,12 +1,21 @@
 <script lang="ts">
+  import EditSongDialog from "$lib/components/EditSongDialog.svelte";
   import Icon from "$lib/components/Icon.svelte";
+  import { thumbUrl, updateSongMeta } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
   let { vm }: { vm: SongViewModel } = $props();
 
   let fileInput = $state<HTMLInputElement | null>(null);
   let dragging = $state(false);
-  let justUploaded = $state(0);
+
+  // Review state for staged uploads.
+  let editingId = $state<number | null>(null);
+  const editingItem = $derived(
+    vm.staged.find((s) => s.id === editingId) ?? null
+  );
+  let finalizing = $state(false);
+  let reviewMsg = $state<{ ok: boolean; text: string } | null>(null);
 
   const audioRe = /\.(mp3|wav)$/i;
 
@@ -16,11 +25,28 @@
       (f) => audioRe.test(f.name) || f.type.startsWith("audio/")
     );
     if (files.length === 0) return;
-    justUploaded = 0;
-    const before = vm.songs.length;
+    reviewMsg = null;
     await vm.uploadMany(files);
-    justUploaded = vm.songs.length - before;
     if (fileInput) fileInput.value = ""; // allow re-uploading the same files
+  }
+
+  async function confirmAll() {
+    finalizing = true;
+    const n = await vm.finalizeStaged();
+    finalizing = false;
+    reviewMsg =
+      n > 0
+        ? { ok: true, text: `Added ${n} track${n === 1 ? "" : "s"} to your library` }
+        : { ok: false, text: vm.error ?? "Couldn't add to library" };
+  }
+
+  async function discardAll() {
+    if (!confirm(`Discard all ${vm.staged.length} pending upload(s)?`)) return;
+    for (const s of [...vm.staged]) await vm.removeStaged(s.id);
+  }
+
+  function subtitle(artist: string | null, album: string | null): string {
+    return [artist, album].filter(Boolean).join(" · ") || "No artist / album";
   }
 
   function onChange(event: Event) {
@@ -56,10 +82,7 @@
     linkMsg = null;
     const n = await vm.importFromLink(url);
     if (n > 0) {
-      linkMsg = {
-        ok: true,
-        text: `Added ${n} track${n === 1 ? "" : "s"} from link`,
-      };
+      linkMsg = { ok: true, text: "Imported — review it below" };
       linkUrl = "";
     } else {
       linkMsg = { ok: false, text: vm.error ?? "Import failed" };
@@ -102,13 +125,8 @@
     {/if}
   </label>
 
-  {#if vm.error}
+  {#if vm.error && !vm.staged.length}
     <p class="msg err">{vm.error}</p>
-  {:else if justUploaded > 0 && !vm.uploading}
-    <p class="msg ok">
-      <Icon name="check_circle" size={18} />
-      Added {justUploaded} track{justUploaded === 1 ? "" : "s"} to your library.
-    </p>
   {/if}
 
   <div class="divider"><span>or paste a link</span></div>
@@ -149,10 +167,68 @@
     </p>
   {/if}
 
+  {#if vm.staged.length > 0}
+    <section class="review">
+      <div class="review-head">
+        <h3>Review {vm.staged.length} upload{vm.staged.length === 1 ? "" : "s"}</h3>
+        <p class="review-sub">Edit or remove, then add them to your library.</p>
+      </div>
+      <ul class="staged-list">
+        {#each vm.staged as s (s.id)}
+          <li class="staged">
+            <span class="sthumb">
+              {#if s.hasArt}
+                <img src={thumbUrl(s.id, 96)} alt="" />
+              {:else}
+                <Icon name="music_note" size={22} />
+              {/if}
+            </span>
+            <div class="smeta">
+              <span class="stitle">{s.originalFilename}</span>
+              <span class="ssub">{subtitle(s.artist, s.album)}</span>
+            </div>
+            <button class="sbtn" title="Edit" aria-label="Edit" onclick={() => (editingId = s.id)}>
+              <Icon name="edit" size={18} />
+            </button>
+            <button class="sbtn danger" title="Remove" aria-label="Remove" onclick={() => vm.removeStaged(s.id)}>
+              <Icon name="close" size={18} />
+            </button>
+          </li>
+        {/each}
+      </ul>
+      <div class="review-foot">
+        <button class="discard-btn" onclick={discardAll} disabled={finalizing}>
+          Discard all
+        </button>
+        <button class="confirm-btn" onclick={confirmAll} disabled={finalizing}>
+          <Icon name="check_circle" size={18} />
+          {finalizing ? "Adding…" : `Add ${vm.staged.length} to library`}
+        </button>
+      </div>
+    </section>
+  {/if}
+  {#if reviewMsg}
+    <p class="msg" class:ok={reviewMsg.ok} class:err={!reviewMsg.ok}>
+      {#if reviewMsg.ok}<Icon name="check_circle" size={18} />{/if}{reviewMsg.text}
+    </p>
+  {/if}
+
   <p class="hint">
     {vm.songs.length} track{vm.songs.length === 1 ? "" : "s"} in your library
   </p>
 </div>
+
+{#if editingItem}
+  <EditSongDialog
+    song={editingItem}
+    onSave={async (id, fields) => {
+      const updated = await updateSongMeta(id, fields);
+      vm.replaceStaged(updated);
+    }}
+    onArtChanged={(s) => vm.replaceStaged(s)}
+    onClose={() => (editingId = null)}
+  />
+{/if}
 
 <style>
   .upload-view {
@@ -350,5 +426,141 @@
     color: var(--muted);
     font-size: 0.82rem;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Review / staging */
+  .review {
+    margin-top: 1.75rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 0.75rem;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .review-head {
+    padding: 0.9rem 1rem 0.6rem;
+  }
+  .review-head h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+  .review-sub {
+    margin: 0.15rem 0 0;
+    color: var(--dim);
+    font-size: 0.82rem;
+  }
+  .staged-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .staged {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.5rem 1rem;
+    border-top: 1px solid var(--surface-2);
+  }
+  .sthumb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 0.35rem;
+    background: var(--surface-2);
+    color: var(--dim);
+    overflow: hidden;
+  }
+  .sthumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .smeta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .stitle {
+    color: var(--text);
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ssub {
+    color: var(--dim);
+    font-size: 0.78rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sbtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0.4rem;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    border-radius: 0.35rem;
+    cursor: pointer;
+  }
+  .sbtn:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  .sbtn.danger:hover {
+    color: var(--danger-text);
+  }
+  .review-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--surface-2);
+  }
+  .discard-btn {
+    padding: 0.5rem 0.9rem;
+    background: transparent;
+    color: var(--danger-text);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .discard-btn:hover:not(:disabled) {
+    background: var(--danger-bg);
+    border-color: var(--danger-bg);
+  }
+  .confirm-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 1rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 0.5rem;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .confirm-btn:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+  .confirm-btn:disabled,
+  .discard-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  .confirm-btn :global(.material-symbols-rounded) {
+    color: #fff;
   }
 </style>

@@ -32,6 +32,7 @@
   // Load the signed-in user's library.
   function loadLibrary() {
     vm.load();
+    vm.loadStaged(); // resurface any uploads still awaiting review
     playlistVm.load();
   }
 

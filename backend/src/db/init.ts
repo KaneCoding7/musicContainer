@@ -181,6 +181,13 @@ export function migrate(database: Database.Database): void {
   if (!columns.includes("sort_order")) {
     database.exec("ALTER TABLE songs ADD COLUMN sort_order REAL");
   }
+  // Uploaded/imported tracks awaiting review; hidden from the library until the
+  // user confirms them. Existing rows default to 0 (already in the library).
+  if (!columns.includes("pending")) {
+    database.exec(
+      "ALTER TABLE songs ADD COLUMN pending INTEGER NOT NULL DEFAULT 0"
+    );
+  }
   const plColumns = (
     database.prepare("PRAGMA table_info(playlists)").all() as { name: string }[]
   ).map((c) => c.name);

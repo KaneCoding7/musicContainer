@@ -91,6 +91,26 @@ export async function importLink(
   return songs;
 }
 
+// Uploaded/imported songs awaiting review (not yet in the library).
+export async function fetchPendingSongs(): Promise<Song[]> {
+  const res = await fetch(`${apiBase()}/api/songs/pending`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).songs as Song[];
+}
+
+// Confirms pending songs into the library; returns the confirmed songs.
+export async function finalizeSongs(ids: number[]): Promise<Song[]> {
+  const res = await fetch(`${apiBase()}/api/songs/finalize`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).songs as Song[];
+}
+
 // Editable song metadata fields.
 export interface SongMetadata {
   originalFilename?: string;
