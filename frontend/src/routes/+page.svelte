@@ -16,7 +16,7 @@
   import SettingsView from "$lib/components/SettingsView.svelte";
   import SharedView from "$lib/components/SharedView.svelte";
   import SongList from "$lib/components/SongList.svelte";
-  import UploadForm from "$lib/components/UploadForm.svelte";
+  import UploadView from "$lib/components/UploadView.svelte";
   import type { SongMetadata } from "$lib/services/songService";
   import { AuthViewModel } from "$lib/viewmodels/authViewModel.svelte";
   import { PlaylistViewModel } from "$lib/viewmodels/playlistViewModel.svelte";
@@ -40,6 +40,7 @@
   type View =
     | "home"
     | "songs"
+    | "upload"
     | "liked"
     | "playlists"
     | "shared"
@@ -53,6 +54,7 @@
   function toView(v: string | null): View {
     switch (v) {
       case "songs":
+      case "upload":
       case "liked":
       case "playlists":
       case "shared":
@@ -91,6 +93,7 @@
   const nav: { id: View; label: string; icon: string }[] = [
     { id: "home", label: "Home", icon: "home" },
     { id: "songs", label: "All Songs", icon: "library_music" },
+    { id: "upload", label: "Upload", icon: "upload" },
     { id: "liked", label: "Liked", icon: "favorite" },
     { id: "playlists", label: "Playlists", icon: "queue_music" },
     { id: "shared", label: "Shared with me", icon: "folder_shared" },
@@ -259,8 +262,6 @@
       </nav>
 
       <div class="sidebar-foot">
-        <UploadForm {vm} />
-
         <div class="account">
           <span class="who" title={authVm.user?.email}>
             <Icon name="account_circle" size={20} />
@@ -305,6 +306,9 @@
           onBulkAdd={(id, songIds) => playlistVm.addSongs(id, songIds)}
           onBulkEdit={handleBulkUpdate}
         />
+      {:else if view === "upload"}
+        <h2>Upload</h2>
+        <UploadView {vm} />
       {:else if view === "liked"}
         <h2>Liked</h2>
         <LikedView {vm} />
