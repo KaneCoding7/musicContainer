@@ -268,16 +268,21 @@
   .inp {
     flex: 1;
     min-width: 0;
-    padding: 0.55rem 0.7rem;
-    background: var(--bg);
-    border: 1px solid var(--border-strong);
-    border-radius: 0.5rem;
+    padding: 0.45rem 0.15rem;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--border-strong);
+    border-radius: 0;
     color: var(--text);
     font: inherit;
+    transition: border-color 0.15s ease;
   }
   .inp:focus {
     outline: none;
-    border-color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .inp::placeholder {
+    color: var(--dim);
   }
   .email {
     margin: 0.5rem 0 0;
