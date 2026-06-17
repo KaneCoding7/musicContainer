@@ -515,7 +515,9 @@
     background: var(--panel);
     max-height: 38vh;
     overflow-y: auto;
-    padding: 0.5rem 1rem 1rem;
+    /* No top padding: it would let scrolled list items bleed into the strip
+       above the sticky header. The header supplies the top spacing instead. */
+    padding: 0 1rem 1rem;
   }
   .queue-head {
     display: flex;
@@ -523,8 +525,9 @@
     justify-content: space-between;
     position: sticky;
     top: 0;
+    z-index: 1;
     background: var(--panel);
-    padding: 0.5rem 0;
+    padding: 0.6rem 0 0.5rem;
   }
   .queue-head h3 {
     margin: 0;
