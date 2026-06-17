@@ -17,6 +17,7 @@
       },
     };
   }
+  import { bumpArtVersion } from "$lib/services/artVersion.svelte";
   import {
     thumbUrl,
     removeArt,
@@ -50,7 +51,6 @@
 
   // Album art state (Cycle 32). `hasArt` + a cache-buster track changes locally.
   let hasArt = $state(untrack(() => song.hasArt));
-  let artVersion = $state(0);
   let artBusy = $state(false);
   let artError = $state<string | null>(null);
   let fileInput = $state<HTMLInputElement | null>(null);
@@ -63,7 +63,7 @@
     try {
       const updated = await uploadArt(song.id, file);
       hasArt = updated.hasArt;
-      artVersion += 1;
+      bumpArtVersion(song.id);
       onArtChanged?.(updated);
     } catch (e) {
       artError = e instanceof Error ? e.message : "Failed to upload art";
@@ -79,7 +79,7 @@
     try {
       const updated = await removeArt(song.id);
       hasArt = updated.hasArt;
-      artVersion += 1;
+      bumpArtVersion(song.id);
       onArtChanged?.(updated);
     } catch (e) {
       artError = e instanceof Error ? e.message : "Failed to remove art";
@@ -92,7 +92,7 @@
   let framePicking = $state(false);
   function onFramePicked(updated: Song) {
     hasArt = updated.hasArt;
-    artVersion += 1;
+    bumpArtVersion(song.id);
     onArtChanged?.(updated);
   }
 
@@ -151,7 +151,7 @@
     <div class="art-row">
       <span class="art-thumb">
         {#if hasArt}
-          <img src={`${thumbUrl(song.id, 256)}&v=${artVersion}`} alt="" />
+          <img src={thumbUrl(song.id, 256)} alt="" />
         {:else}
           <Icon name="music_note" size={26} />
         {/if}

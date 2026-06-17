@@ -16,8 +16,6 @@
   );
   let finalizing = $state(false);
   let reviewMsg = $state<{ ok: boolean; text: string } | null>(null);
-  // Per-song cache-buster so a freshly-picked cover refreshes in the list.
-  let artVersions = $state<Record<number, number>>({});
 
   const audioRe = /\.(mp3|wav)$/i;
 
@@ -180,7 +178,7 @@
           <li class="staged">
             <span class="sthumb">
               {#if s.hasArt}
-                <img src={`${thumbUrl(s.id, 96)}&v=${artVersions[s.id] ?? 0}`} alt="" />
+                <img src={thumbUrl(s.id, 96)} alt="" />
               {:else}
                 <Icon name="music_note" size={22} />
               {/if}
@@ -227,10 +225,7 @@
       const updated = await updateSongMeta(id, fields);
       vm.replaceStaged(updated);
     }}
-    onArtChanged={(s) => {
-      artVersions[s.id] = (artVersions[s.id] ?? 0) + 1;
-      vm.replaceStaged(s);
-    }}
+    onArtChanged={(s) => vm.replaceStaged(s)}
     onClose={() => (editingId = null)}
   />
 {/if}

@@ -1,5 +1,6 @@
 // Service layer: thin wrapper around the backend song API.
 import { apiBase } from "$lib/services/apiBase";
+import { artVersion } from "$lib/services/artVersion.svelte";
 import { authHeaders, withToken } from "$lib/services/authService";
 import type { Song } from "$lib/types";
 
@@ -232,14 +233,16 @@ export async function removeArt(songId: number): Promise<Song> {
 
 // Returns the album-art URL for a song (only meaningful when song.hasArt).
 export function artUrl(songId: number): string {
-  return withToken(`${apiBase()}/api/songs/${songId}/art`);
+  return `${withToken(`${apiBase()}/api/songs/${songId}/art`)}&v=${artVersion(songId)}`;
 }
 
 // Returns a resized square-thumbnail URL for a song's art. `size` is the target
 // edge in px; the server snaps it up to the nearest cached variant. Use this in
 // list/grid/mini-player views so the browser isn't downscaling the full image.
 export function thumbUrl(songId: number, size: number): string {
-  return withToken(`${apiBase()}/api/songs/${songId}/art?size=${size}`);
+  return `${withToken(
+    `${apiBase()}/api/songs/${songId}/art?size=${size}`
+  )}&v=${artVersion(songId)}`;
 }
 
 // Deletes a song from the library.
