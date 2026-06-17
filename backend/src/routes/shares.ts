@@ -7,6 +7,7 @@ import {
   getPublicToken,
 } from "../functional/publicShares.js";
 import {
+  copySharedPlaylist,
   getSharedPlaylistSongs,
   listPlaylistMembers,
   listPlaylistShares,
@@ -149,4 +150,19 @@ sharesRouter.get("/shared/:id", (req, res) => {
       .json({ error: result.error });
   }
   return res.json({ songs: result.value });
+});
+
+// POST /api/shared/:id/copy — save a shared playlist into my own playlists.
+sharesRouter.post("/shared/:id/copy", (req, res) => {
+  const result = copySharedPlaylist(
+    getDb(),
+    req.userId!,
+    Number(req.params.id)
+  );
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.status(201).json({ playlist: result.value });
 });

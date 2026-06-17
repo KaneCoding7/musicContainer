@@ -105,6 +105,18 @@ export async function fetchSharedWithMe(): Promise<SharedPlaylist[]> {
   return (await res.json()).playlists as SharedPlaylist[];
 }
 
+// Saves a shared playlist into my own playlists (a copy I own).
+export async function copySharedPlaylist(
+  playlistId: number
+): Promise<Playlist> {
+  const res = await fetch(`${apiBase()}/api/shared/${playlistId}/copy`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).playlist as Playlist;
+}
+
 // --- Public links ---
 
 // Current public token for a playlist (null if disabled).

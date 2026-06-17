@@ -332,7 +332,7 @@
         <PlaylistManager vm={playlistVm} songVm={vm} />
       {:else if view === "shared"}
         <h2>Shared with me</h2>
-        <SharedView songVm={vm} />
+        <SharedView songVm={vm} onCopied={() => playlistVm.load()} />
       {:else if view === "albums"}
         <h2>Albums</h2>
         <AlbumsView {vm} />

@@ -205,6 +205,64 @@ export function getSharedPlaylistSongs(
   }
 }
 
+// Copies a playlist shared with the user into a new playlist they own. The new
+// playlist references the same (owner's) song rows; the user can play them
+// because they're now in a playlist the user owns (see canAccessSong).
+export function copySharedPlaylist(
+  db: Database,
+  userId: string,
+  playlistId: number
+): Result<Playlist> {
+  if (!isPlaylistSharedWith(db, playlistId, userId)) {
+    return err("not_found", `Playlist ${playlistId} not found`);
+  }
+  const src = db
+    .prepare("SELECT name FROM playlists WHERE id = ?")
+    .get(playlistId) as { name: string } | undefined;
+  if (!src) return err("not_found", `Playlist ${playlistId} not found`);
+  try {
+    let newId = 0;
+    db.transaction(() => {
+      const info = db
+        .prepare("INSERT INTO playlists (name, user_id) VALUES (?, ?)")
+        .run(src.name, userId);
+      newId = info.lastInsertRowid as number;
+      db.prepare(
+        `INSERT INTO playlist_songs (playlist_id, song_id, position, added_by)
+         SELECT ?, song_id, position, added_by
+         FROM playlist_songs WHERE playlist_id = ?`
+      ).run(newId, playlistId);
+    })();
+    const row = db
+      .prepare(
+        `SELECT p.id, p.name, p.created_at,
+                (SELECT COUNT(*) FROM playlist_songs ps WHERE ps.playlist_id = p.id)
+                  AS track_count,
+                (SELECT ps.song_id FROM playlist_songs ps
+                   JOIN songs s ON s.id = ps.song_id
+                   WHERE ps.playlist_id = p.id AND s.art_filename IS NOT NULL
+                   ORDER BY ps.position ASC LIMIT 1) AS cover_song_id
+         FROM playlists p WHERE p.id = ?`
+      )
+      .get(newId) as {
+      id: number;
+      name: string;
+      created_at: string;
+      track_count: number;
+      cover_song_id: number | null;
+    };
+    return ok({
+      id: row.id,
+      name: row.name,
+      createdAt: row.created_at,
+      trackCount: row.track_count,
+      coverSongId: row.cover_song_id,
+    });
+  } catch (e) {
+    return err("internal", `Failed to copy playlist: ${(e as Error).message}`);
+  }
+}
+
 export interface PlaylistMember {
   id: string;
   name: string;

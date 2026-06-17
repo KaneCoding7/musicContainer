@@ -8,6 +8,7 @@
     removeSongFromPlaylist,
   } from "$lib/services/playlistService";
   import {
+    copySharedPlaylist,
     fetchSharedPlaylistSongs,
     fetchSharedWithMe,
     type SharedPlaylist,
@@ -15,13 +16,32 @@
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
-  let { songVm }: { songVm: SongViewModel } = $props();
+  // onCopied lets the page refresh the personal playlist list after saving.
+  let { songVm, onCopied }: { songVm: SongViewModel; onCopied?: () => void } =
+    $props();
 
   let playlists = $state<SharedPlaylist[]>([]);
   let open = $state<SharedPlaylist | null>(null);
   let songs = $state<Song[]>([]);
   let error = $state<string | null>(null);
   let addId = $state<string>("");
+  let saving = $state(false);
+  let saved = $state(false);
+
+  async function saveToMine() {
+    if (!open || saving) return;
+    saving = true;
+    error = null;
+    try {
+      await copySharedPlaylist(open.id);
+      saved = true;
+      onCopied?.();
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Failed to save playlist";
+    } finally {
+      saving = false;
+    }
+  }
 
   // Songs in my library not already in the open shared playlist (for adding).
   const addable = $derived(
@@ -66,6 +86,7 @@
 
   async function openPlaylist(p: SharedPlaylist) {
     error = null;
+    saved = false;
     try {
       songs = await fetchSharedPlaylistSongs(p.id);
       open = p;
@@ -92,11 +113,17 @@
     <div>
       <h3>{open.name} {#if open.canEdit}<span class="edit-tag">collaborative</span>{/if}</h3>
       <p class="muted">Shared by {open.ownerName} · {songs.length} tracks</p>
-      {#if songs.length > 0}
-        <button class="play-all" onclick={() => songVm.playQueue(songs, 0)}>
-          <Icon name="play_arrow" fill size={20} /> Play
+      <div class="head-btns">
+        {#if songs.length > 0}
+          <button class="play-all" onclick={() => songVm.playQueue(songs, 0)}>
+            <Icon name="play_arrow" fill size={20} /> Play
+          </button>
+        {/if}
+        <button class="save-btn" onclick={saveToMine} disabled={saving || saved}>
+          <Icon name={saved ? "check_circle" : "playlist_add"} size={18} />
+          {saved ? "Saved to your playlists" : saving ? "Saving…" : "Add to my playlists"}
         </button>
-      {/if}
+      </div>
     </div>
   </div>
 
@@ -245,11 +272,17 @@
     margin: 0 0 0.25rem;
     font-size: 1.6rem;
   }
+  .head-btns {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
   .play-all {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    margin-top: 0.75rem;
     padding: 0.5rem 1rem;
     background: var(--accent);
     color: #fff;
@@ -260,6 +293,26 @@
   }
   .play-all:hover {
     background: var(--accent-hover);
+  }
+  .save-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 1rem;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 2rem;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .save-btn:hover:not(:disabled) {
+    background: var(--hover);
+  }
+  .save-btn:disabled {
+    opacity: 0.7;
+    cursor: default;
   }
   ol {
     list-style: none;
