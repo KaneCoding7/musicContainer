@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from "$lib/components/Icon.svelte";
   import { analyzeLoudness } from "$lib/services/songService";
   import type { AuthViewModel } from "$lib/viewmodels/authViewModel.svelte";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -142,23 +143,31 @@
   {#if analyzeMsg}<p class="msg" class:err={!analyzeMsg.ok}>{analyzeMsg.text}</p>{/if}
 
   <p class="section">Profile</p>
-  <form class="form" onsubmit={saveName}>
-    <input
-      class="inp"
-      bind:value={name}
-      placeholder="Display name"
-      autocomplete="name"
-      required
-    />
-    <button class="primary" type="submit" disabled={nameBusy}>
-      {nameBusy ? "Saving…" : "Save"}
-    </button>
+  <form onsubmit={saveName}>
+    <div class="field-wrap">
+      <input
+        class="inp"
+        bind:value={name}
+        placeholder="Display name"
+        autocomplete="name"
+        required
+      />
+      <button
+        class="in-btn"
+        type="submit"
+        disabled={nameBusy}
+        title="Save"
+        aria-label="Save name"
+      >
+        <Icon name={nameBusy ? "progress_activity" : "check"} size={18} />
+      </button>
+    </div>
   </form>
   <p class="sub email">Signed in as {vm.user?.email}</p>
   {#if nameMsg}<p class="msg" class:err={!nameMsg.ok}>{nameMsg.text}</p>{/if}
 
   <p class="section">Password</p>
-  <form class="form col" onsubmit={savePassword}>
+  <form class="pw-form" onsubmit={savePassword}>
     <input
       class="inp"
       type="password"
@@ -167,18 +176,26 @@
       autocomplete="current-password"
       required
     />
-    <input
-      class="inp"
-      type="password"
-      bind:value={newPassword}
-      placeholder="New password"
-      autocomplete="new-password"
-      minlength="8"
-      required
-    />
-    <button class="primary" type="submit" disabled={pwBusy}>
-      {pwBusy ? "Saving…" : "Update password"}
-    </button>
+    <div class="field-wrap">
+      <input
+        class="inp"
+        type="password"
+        bind:value={newPassword}
+        placeholder="New password"
+        autocomplete="new-password"
+        minlength="8"
+        required
+      />
+      <button
+        class="in-btn"
+        type="submit"
+        disabled={pwBusy}
+        title="Update password"
+        aria-label="Update password"
+      >
+        <Icon name={pwBusy ? "progress_activity" : "check"} size={18} />
+      </button>
+    </div>
   </form>
   {#if pwMsg}<p class="msg" class:err={!pwMsg.ok}>{pwMsg.text}</p>{/if}
 </div>
@@ -255,15 +272,20 @@
   }
 
   /* Forms */
-  .form {
+  .pw-form {
     display: flex;
-    gap: 0.5rem;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .field-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    max-width: 320px;
     margin-top: 0.6rem;
   }
-  .form.col {
-    flex-direction: column;
-    align-items: stretch;
-    max-width: 320px;
+  .pw-form .field-wrap {
+    margin-top: 0;
   }
   .inp {
     flex: 1;
@@ -277,12 +299,33 @@
     font: inherit;
     transition: border-color 0.15s ease;
   }
+  .field-wrap .inp {
+    padding-right: 2rem;
+  }
   .inp:focus {
     outline: none;
     border-bottom-color: var(--accent);
   }
   .inp::placeholder {
     color: var(--dim);
+  }
+  .in-btn {
+    position: absolute;
+    right: 0;
+    display: inline-flex;
+    align-items: center;
+    background: transparent;
+    border: none;
+    color: var(--accent-text);
+    cursor: pointer;
+    padding: 0.2rem;
+  }
+  .in-btn:hover:not(:disabled) {
+    color: var(--accent);
+  }
+  .in-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
   .email {
     margin: 0.5rem 0 0;
@@ -311,22 +354,7 @@
   .ghost:hover:not(:disabled) {
     background: var(--hover);
   }
-  .primary {
-    padding: 0.55rem 1.1rem;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 0.5rem;
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .primary:hover:not(:disabled) {
-    background: var(--accent-hover);
-  }
-  .ghost:disabled,
-  .primary:disabled {
+  .ghost:disabled {
     opacity: 0.6;
     cursor: not-allowed;
   }
