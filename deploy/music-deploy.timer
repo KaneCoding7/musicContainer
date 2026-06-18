@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the music-server nightly deploy at midnight (host local time)
+
+[Timer]
+# Midnight, every day, in the HOST's local timezone.
+OnCalendar=*-*-* 00:00:00
+# If the machine was off/asleep at midnight, run as soon as it's back.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

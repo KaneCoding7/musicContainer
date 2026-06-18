@@ -19,6 +19,9 @@ data/*.db-shm
 data/import-*/
 data/frames-*/
 
+# Preview/staging stack's isolated data dir (see docker-compose.preview.yml)
+data-preview/
+
 # Logs
 *.log
 npm-debug.log*

@@ -1,0 +1,48 @@
+# Preview / staging stack
+#
+# Build and run a copy of ANY branch ALONGSIDE the live server, fully isolated:
+#   - its own ports:      3100 (frontend) / 3101 (backend)
+#   - its own data dir:   ./data-preview   (the real ./data library is untouched)
+#   - its own containers: music-preview-*
+#
+# So you can develop and preview freely while everyone keeps listening on the
+# live server (3000/3001). Nothing here is shared with production.
+#
+#   ./scripts/preview.sh
+#   # ...or directly:
+#   docker compose -p music-preview -f docker-compose.preview.yml up -d --build
+#
+# Then open http://localhost:3100. Tear it down with:
+#   docker compose -p music-preview -f docker-compose.preview.yml down
+#
+# Note: because the preview has its own database (./data-preview), the first
+# account you register on it becomes that sandbox's owner — separate from live.
+services:
+  backend:
+    build: ./backend
+    container_name: music-preview-backend
+    restart: unless-stopped
+    ports:
+      - "3101:3001"
+    environment:
+      - PORT=3001
+      - DATA_DIR=/data
+      # Reuses BETTER_AUTH_SECRET from your .env unless you set a preview-only one.
+      - BETTER_AUTH_SECRET=${PREVIEW_BETTER_AUTH_SECRET:-${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET (e.g. `openssl rand -base64 48`)}}
+      - BETTER_AUTH_URL=${PREVIEW_BETTER_AUTH_URL:-http://localhost:3101}
+      - FRONTEND_ORIGIN=${PREVIEW_FRONTEND_ORIGIN:-http://localhost:3100}
+      - INVITE_ONLY=${PREVIEW_INVITE_ONLY:-false}
+    volumes:
+      - ./data-preview:/data
+
+  frontend:
+    build: ./frontend
+    container_name: music-preview-frontend
+    restart: unless-stopped
+    ports:
+      - "3100:3000"
+    environment:
+      - PORT=3000
+      - PUBLIC_API_BASE_URL=${PREVIEW_PUBLIC_API_BASE_URL:-http://localhost:3101}
+    depends_on:
+      - backend

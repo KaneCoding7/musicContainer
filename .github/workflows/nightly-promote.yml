@@ -1,0 +1,34 @@
+name: Nightly promote (main → production)
+
+# OPTIONAL — only needed if your live server auto-deploys from a branch.
+#
+# It lets `main` collect merges all day, but advances the `production` branch
+# (what the live server deploys) only once, at midnight. Point your live
+# server's auto-deploy at `production` instead of `main` and daytime merges
+# will stop triggering rebuilds.
+#
+# NOTE: GitHub Actions cron is always UTC. "0 0" below is 00:00 UTC — change it
+# to whatever UTC offset matches your local midnight.
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch: {} # also lets you promote on demand from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fast-forward production to main
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          # Fast-forward only: production never diverges from main, so this is
+          # always a clean forward move (and a no-op when nothing new merged).
+          git push origin origin/main:refs/heads/production

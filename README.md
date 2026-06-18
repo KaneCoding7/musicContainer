@@ -36,6 +36,17 @@ npm run dev
 The frontend talks to the backend via `PUBLIC_API_BASE_URL`
 (defaults to `http://localhost:3001`).
 
+## Preview & nightly deploy
+
+To try a branch without touching the live library, and to hold the live
+rebuild until midnight so daytime listening isn't interrupted, see
+[`DEPLOY.md`](./DEPLOY.md). Quick preview of the current branch (isolated on
+ports 3100/3101 with its own `data-preview/`):
+
+```bash
+./scripts/preview.sh   # then open http://localhost:3100
+```
+
 ## Status
 
 - ✅ **Cycle 1** — Upload & list songs
