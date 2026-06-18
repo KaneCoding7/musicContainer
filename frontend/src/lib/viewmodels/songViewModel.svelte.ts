@@ -541,10 +541,23 @@ export class SongViewModel {
     return true;
   }
 
-  // Goes back to the previous song; false if already at the start.
+  // How many seconds into a track the "previous" button restarts it instead of
+  // skipping to the earlier track (standard music-player behavior).
+  private readonly PREV_RESTART_SECONDS = 3;
+
+  // Handles the "previous" button. Like every common player, this restarts the
+  // current track when we're more than a few seconds in; only near the very
+  // start does it skip to the earlier track. At the start of the first track it
+  // restarts rather than doing nothing, so the button always responds.
   prev(): boolean {
     if (this.remoteSink?.("prev")) return false;
     if (this.currentIndex === null) return false;
+    // Past the lead-in: restart the current track.
+    if (this.position > this.PREV_RESTART_SECONDS) {
+      this.seek(0);
+      this.isPlaying = true;
+      return true;
+    }
     if (this.currentIndex > 0) {
       this.currentIndex -= 1;
       this.isPlaying = true;
@@ -555,7 +568,10 @@ export class SongViewModel {
       this.isPlaying = true;
       return true;
     }
-    return false;
+    // First track, at the start: restart it so the button still gives feedback.
+    this.seek(0);
+    this.isPlaying = true;
+    return true;
   }
 
   // Writes a snapshot of the player to sessionStorage so playback survives a
