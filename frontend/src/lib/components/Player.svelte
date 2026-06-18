@@ -27,6 +27,11 @@
   const NORM_TARGET_LUFS = -14;
   let audioCtx: AudioContext | null = null;
   let gainNode: GainNode | null = null;
+  // Reactive flag flipped once the graph is built. audioCtx/gainNode are plain
+  // (non-reactive) refs — wrapping Web Audio nodes in $state proxies breaks
+  // them — so the gain effect below tracks this flag to re-run when the graph
+  // becomes available.
+  let graphReady = $state(false);
 
   // Linear gain for the current track so it plays near the target loudness.
   // 1 when normalization is off or the track hasn't been analyzed.
@@ -62,6 +67,11 @@
       source.connect(gainNode);
       gainNode.connect(limiter);
       limiter.connect(audioCtx.destination);
+      // Apply the current gain immediately (the element now runs at unity and
+      // the gain node carries volume × normalization).
+      audio.volume = 1;
+      gainNode.gain.value = vm.volume * normGain;
+      graphReady = true; // notify the gain effect the graph is live
     } catch {
       audioCtx = null;
       gainNode = null;
@@ -151,6 +161,7 @@
   // (so quiet tracks can be boosted past 1). Without it, use element volume.
   $effect(() => {
     if (!audio) return;
+    void graphReady; // re-run as soon as the Web Audio graph is built
     if (gainNode && audioCtx) {
       audio.volume = 1;
       gainNode.gain.value = vm.volume * normGain;
