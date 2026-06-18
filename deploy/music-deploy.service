@@ -6,11 +6,11 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-# --- EDIT these for your host -------------------------------------------------
-# Absolute path to the cloned repo on the live server:
+# Prefer `sudo ./scripts/install-nightly-deploy.sh`, which writes this unit with
+# the repo's real path filled in automatically. If you install by hand instead,
+# EDIT the two paths below to your clone, then `systemctl daemon-reload`.
 WorkingDirectory=/opt/musicContainer
 ExecStart=/opt/musicContainer/scripts/deploy.sh
 # If your live server deploys from a branch other than main, uncomment:
 # Environment=DEPLOY_BRANCH=production
-# -----------------------------------------------------------------------------
 # deploy.sh logs to the journal; view with:  journalctl -u music-deploy.service

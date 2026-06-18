@@ -54,14 +54,13 @@ playback. Instead, let `main` collect work all day and rebuild the live server
 The live server rebuilds itself at local midnight via a systemd timer. Merges
 during the day change nothing on the server until then.
 
-On the live host (adjust the path in the unit file to where the repo is cloned):
+On the live host, from the cloned repo, run the installer once. It writes the
+systemd units pointed at this repo (no manual path editing) and enables the
+timer:
 
 ```bash
-# from the repo root on the live server
-sudo cp deploy/music-deploy.service deploy/music-deploy.timer /etc/systemd/system/
-sudo "$EDITOR" /etc/systemd/system/music-deploy.service   # set WorkingDirectory + ExecStart paths
-sudo systemctl daemon-reload
-sudo systemctl enable --now music-deploy.timer
+sudo ./scripts/install-nightly-deploy.sh
+# deploying a different branch? sudo DEPLOY_BRANCH=production ./scripts/install-nightly-deploy.sh
 ```
 
 Check it:
