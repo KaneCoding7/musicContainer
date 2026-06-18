@@ -212,7 +212,20 @@
           <Icon name="drag_indicator" size={18} />
         </span>
         <button class="track" onclick={() => vm.playQueue(current.songs, i)}>
-          <span class="num">{i + 1}</span>
+          <span class="thumb">
+            {#if song.hasArt}
+              <img src={thumbUrl(song.id, 128)} alt="" />
+            {:else}
+              <Icon name="album" size={18} />
+            {/if}
+            <span class="thumb-play">
+              <Icon
+                name={isCurrent && vm.isPlaying ? "pause" : "play_arrow"}
+                fill
+                size={22}
+              />
+            </span>
+          </span>
           <span class="t-meta">
             <span class="t-name">{song.originalFilename}</span>
             {#if song.album}<span class="t-sub">{song.album}</span>{/if}
@@ -435,10 +448,38 @@
   .track:hover {
     background: var(--hover);
   }
-  .num {
-    width: 1.5rem;
+  .thumb {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-2);
+    border-radius: 0.35rem;
     color: var(--dim);
-    text-align: right;
+    overflow: hidden;
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .thumb-play {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  .track:hover .thumb-play,
+  li.current .thumb-play {
+    opacity: 1;
   }
   .t-meta {
     display: flex;

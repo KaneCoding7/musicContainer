@@ -8,7 +8,13 @@
     vm,
     songs,
     compact = false,
-  }: { vm: SongViewModel; songs: Song[]; compact?: boolean } = $props();
+    shuffle = true,
+  }: {
+    vm: SongViewModel;
+    songs: Song[];
+    compact?: boolean;
+    shuffle?: boolean;
+  } = $props();
 </script>
 
 {#if songs.length > 0}
@@ -17,15 +23,17 @@
       <Icon name="play_arrow" fill size={compact ? 18 : 20} />
       {#if !compact}Play{/if}
     </button>
-    <button
-      class="shuffle"
-      onclick={() => vm.shufflePlay(songs)}
-      title="Shuffle"
-      aria-label="Shuffle"
-    >
-      <Icon name="shuffle" size={compact ? 18 : 20} />
-      {#if !compact}Shuffle{/if}
-    </button>
+    {#if shuffle}
+      <button
+        class="shuffle"
+        onclick={() => vm.shufflePlay(songs)}
+        title="Shuffle"
+        aria-label="Shuffle"
+      >
+        <Icon name="shuffle" size={compact ? 18 : 20} />
+        {#if !compact}Shuffle{/if}
+      </button>
+    {/if}
   </div>
 {/if}
 
@@ -40,7 +48,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    padding: 0.45rem 0.95rem;
+    padding: 0.28rem 0.95rem;
     border: none;
     border-radius: 2rem;
     font: inherit;
