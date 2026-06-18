@@ -212,7 +212,6 @@
           <Icon name="drag_indicator" size={18} />
         </span>
         <button class="track" onclick={() => vm.playQueue(current.songs, i)}>
-          <span class="num">{i + 1}</span>
           <span class="thumb">
             {#if song.hasArt}
               <img src={thumbUrl(song.id, 128)} alt="" />
@@ -448,11 +447,6 @@
   }
   .track:hover {
     background: var(--hover);
-  }
-  .num {
-    width: 1.5rem;
-    color: var(--dim);
-    text-align: right;
   }
   .thumb {
     position: relative;
