@@ -12,7 +12,9 @@ set -euo pipefail
 
 # Absolute path to the repo root (parent of this script's dir).
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
+# Default to the branch this checkout is already on (the live branch), unless
+# overridden — this repo's default branch isn't literally named `main`.
+DEPLOY_BRANCH="${DEPLOY_BRANCH:-$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD)}"
 UNIT_DIR=/etc/systemd/system
 
 if [ "$(id -u)" -ne 0 ]; then

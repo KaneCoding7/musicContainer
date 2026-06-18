@@ -7,11 +7,14 @@
 # Run it by hand any time you DO want to push an update immediately (a hotfix):
 #   ./scripts/deploy.sh            # rebuild only if the branch has new commits
 #   FORCE=1 ./scripts/deploy.sh    # rebuild even if nothing changed
-#   DEPLOY_BRANCH=production ./scripts/deploy.sh
+#   DEPLOY_BRANCH=some-branch ./scripts/deploy.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-BRANCH="${DEPLOY_BRANCH:-main}"
+# Default to whatever branch the live checkout is already on (this repo's
+# default branch is currently `claude/music-container-repo-72yqub`, not `main`),
+# so we redeploy the same line of work the server already tracks.
+BRANCH="${DEPLOY_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
 
 echo "==> Deploy starting $(date '+%Y-%m-%d %H:%M:%S')  (branch: $BRANCH)"
 
