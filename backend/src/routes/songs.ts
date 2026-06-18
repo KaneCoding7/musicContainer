@@ -263,7 +263,14 @@ function runYtDlp(
         "mp3",
         "--embed-thumbnail",
         ...(playlist
-          ? ["--yes-playlist", "--playlist-end", String(PLAYLIST_CAP)]
+          ? [
+              "--yes-playlist",
+              "--playlist-end",
+              String(PLAYLIST_CAP),
+              // Skip individual unavailable/private/region-locked items and keep
+              // going instead of aborting the whole playlist on the first one.
+              "--ignore-errors",
+            ]
           : ["--no-playlist"]),
         "--newline",
         "--progress-template",
@@ -313,6 +320,12 @@ function runYtDlp(
     child.on("close", (code) => {
       clearTimeout(timer);
       if (code === 0) return resolve();
+      // In playlist mode yt-dlp exits non-zero if ANY item was unavailable
+      // (private/region-locked/deleted), even when the rest downloaded fine.
+      // Don't treat that as a total failure — resolve and let the ingest step
+      // decide based on what actually landed on disk (it reports "no audio
+      // could be extracted" when the dir is truly empty).
+      if (playlist) return resolve();
       const last = stderrTail
         .split("\n")
         .map((l) => l.trim())
