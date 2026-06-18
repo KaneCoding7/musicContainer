@@ -8,6 +8,7 @@ import { getDb } from "./db/init.js";
 import { allowAllOrigins, configuredOrigins, isPrivateOrigin } from "./origins.js";
 import { rateLimit } from "./rate-limit.js";
 import { attachSync } from "./sync.js";
+import { friendsRouter } from "./routes/friends.js";
 import { invitesRouter } from "./routes/invites.js";
 import { playlistsRouter } from "./routes/playlists.js";
 import { publicRouter } from "./routes/public.js";
@@ -86,6 +87,7 @@ app.use("/api", requireAuth, songsRouter);
 app.use("/api", requireAuth, playlistsRouter);
 app.use("/api", requireAuth, invitesRouter);
 app.use("/api", requireAuth, sharesRouter);
+app.use("/api", requireAuth, friendsRouter);
 
 // Initialize the database (creates schema + data dirs) before serving.
 getDb();

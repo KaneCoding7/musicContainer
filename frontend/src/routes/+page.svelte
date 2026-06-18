@@ -5,6 +5,7 @@
   import AlbumsView from "$lib/components/AlbumsView.svelte";
   import ArtistsView from "$lib/components/ArtistsView.svelte";
   import AuthScreen from "$lib/components/AuthScreen.svelte";
+  import FriendsView from "$lib/components/FriendsView.svelte";
   import HomeView from "$lib/components/HomeView.svelte";
   import Icon from "$lib/components/Icon.svelte";
   import InviteView from "$lib/components/InviteView.svelte";
@@ -20,6 +21,7 @@
   import type { SongMetadata } from "$lib/services/songService";
   import DeviceBar from "$lib/components/DeviceBar.svelte";
   import { AuthViewModel } from "$lib/viewmodels/authViewModel.svelte";
+  import { FriendsViewModel } from "$lib/viewmodels/friendsViewModel.svelte";
   import { PlaylistViewModel } from "$lib/viewmodels/playlistViewModel.svelte";
   import { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
   import { SyncController } from "$lib/viewmodels/syncController.svelte";
@@ -27,6 +29,7 @@
   const authVm = new AuthViewModel();
   const vm = new SongViewModel();
   const playlistVm = new PlaylistViewModel();
+  const friendsVm = new FriendsViewModel();
   const sync = new SyncController(vm);
 
   // Load the signed-in user's library.
@@ -34,6 +37,7 @@
     vm.load();
     vm.loadStaged(); // resurface any uploads still awaiting review
     playlistVm.load();
+    friendsVm.load(); // friends + pending requests (drives the nav badge)
   }
 
   async function handleLogout() {
@@ -52,6 +56,7 @@
     | "artists"
     | "recent"
     | "invite"
+    | "friends"
     | "settings";
   // The active view is driven by the URL (?view=…) so the browser back/forward
   // buttons navigate between sections.
@@ -66,6 +71,7 @@
       case "artists":
       case "recent":
       case "invite":
+      case "friends":
       case "settings":
         return v;
       default:
@@ -103,6 +109,7 @@
     { id: "albums", label: "Albums", icon: "album" },
     { id: "artists", label: "Artists", icon: "artist" },
     { id: "recent", label: "Recently Played", icon: "history" },
+    { id: "friends", label: "Friends", icon: "group" },
     { id: "invite", label: "Invite", icon: "person_add" },
     { id: "upload", label: "Upload", icon: "upload" },
     { id: "settings", label: "Settings", icon: "settings" },
@@ -282,6 +289,9 @@
           >
             <Icon name={item.icon} size={22} />
             {item.label}
+            {#if item.id === "friends" && friendsVm.pendingCount > 0}
+              <span class="nav-badge">{friendsVm.pendingCount}</span>
+            {/if}
           </button>
         {/each}
       </nav>
@@ -342,6 +352,9 @@
       {:else if view === "recent"}
         <h2>Recently Played</h2>
         <RecentlyPlayedView {vm} />
+      {:else if view === "friends"}
+        <h2>Friends</h2>
+        <FriendsView vm={friendsVm} />
       {:else if view === "invite"}
         <h2>Invite a friend</h2>
         <InviteView />
@@ -443,6 +456,21 @@
   .nav-item.active {
     background: var(--active-bg);
     color: var(--text);
+  }
+  .nav-badge {
+    margin-left: auto;
+    flex-shrink: 0;
+    min-width: 1.25rem;
+    padding: 0 0.35rem;
+    height: 1.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 1rem;
+    font-size: 0.72rem;
+    font-weight: 700;
   }
   .boot {
     height: 100vh;
