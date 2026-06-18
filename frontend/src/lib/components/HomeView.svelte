@@ -1,7 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import Icon from "$lib/components/Icon.svelte";
-  import PlayActions from "$lib/components/PlayActions.svelte";
   import { thumbUrl } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -48,7 +47,6 @@
     <section>
       <div class="head">
         <h3><Icon name={icon} size={20} /> {title}</h3>
-        <PlayActions {vm} songs={list} shuffle={false} />
       </div>
       <div class="cards">
         {#each list as song, i (song.id)}
