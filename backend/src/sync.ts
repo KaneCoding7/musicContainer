@@ -2,6 +2,7 @@ import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
 import { auth } from "./auth.js";
+import { getDb } from "./db/init.js";
 
 // Cross-device playback sync (Spotify Connect style). Each account has one
 // session: a set of connected devices, one "active" device (the audio output),
@@ -22,10 +23,37 @@ interface Session {
 
 const sessions = new Map<string, Session>(); // keyed by userId
 
+// The active device id is persisted per user so a refresh or server restart
+// defaults playback back to the last device that had output, rather than
+// letting another open device grab it.
+function loadActiveDevice(userId: string): string | null {
+  const row = getDb()
+    .prepare("SELECT active_device_id FROM sync_active_device WHERE user_id = ?")
+    .get(userId) as { active_device_id: string | null } | undefined;
+  return row?.active_device_id ?? null;
+}
+
+function setActiveDevice(userId: string, s: Session, deviceId: string | null): void {
+  s.activeDeviceId = deviceId;
+  getDb()
+    .prepare(
+      `INSERT INTO sync_active_device (user_id, active_device_id, updated_at)
+       VALUES (?, ?, datetime('now'))
+       ON CONFLICT(user_id) DO UPDATE SET
+         active_device_id = excluded.active_device_id,
+         updated_at = excluded.updated_at`
+    )
+    .run(userId, deviceId);
+}
+
 function getSession(userId: string): Session {
   let s = sessions.get(userId);
   if (!s) {
-    s = { devices: new Map(), activeDeviceId: null, state: null };
+    s = {
+      devices: new Map(),
+      activeDeviceId: loadActiveDevice(userId), // restore last-active device
+      state: null,
+    };
     sessions.set(userId, s);
   }
   return s;
@@ -122,9 +150,10 @@ export function attachSync(server: Server): void {
         }
         case "state": {
           if (!deviceId) return;
-          // The first device to report a loaded track claims "active".
+          // The first device to report a loaded track claims "active" (only when
+          // none is remembered — otherwise output stays put until a manual claim).
           if (s.activeDeviceId === null && msg.state?.currentIndex != null) {
-            s.activeDeviceId = deviceId;
+            setActiveDevice(userId, s, deviceId);
           }
           if (s.activeDeviceId !== deviceId) return; // only the active device sets state
           s.state = msg.state ?? null;
@@ -135,7 +164,7 @@ export function attachSync(server: Server): void {
           if (!deviceId) return;
           // No active device yet → the commander becomes active.
           if (s.activeDeviceId === null) {
-            s.activeDeviceId = deviceId;
+            setActiveDevice(userId, s, deviceId);
             broadcast(userId);
           }
           const active = s.activeDeviceId
@@ -149,9 +178,9 @@ export function attachSync(server: Server): void {
           break;
         }
         case "claim": {
-          // Transfer audio output to this device.
+          // Transfer audio output to this device ("listen here").
           if (!deviceId) return;
-          s.activeDeviceId = deviceId;
+          setActiveDevice(userId, s, deviceId);
           broadcast(userId);
           break;
         }
@@ -160,8 +189,17 @@ export function attachSync(server: Server): void {
 
     const cleanup = () => {
       if (!deviceId) return;
+      // iOS reopens the socket constantly; a reconnect registers a new socket
+      // under the same deviceId. Only tear down if WE are still the registered
+      // socket — otherwise an old socket's close would wipe the live device and
+      // clear activeDeviceId, making the active device "flap".
+      const current = s.devices.get(deviceId);
+      if (current && current.socket !== ws) return;
       s.devices.delete(deviceId);
-      if (s.activeDeviceId === deviceId) s.activeDeviceId = null;
+      // Keep activeDeviceId pointing at this device even though it's gone, so a
+      // refresh defaults back to it (and other devices don't auto-grab output).
+      // It's persisted, so a server restart restores it too. Use "listen here"
+      // on another device to move output deliberately.
       if (s.devices.size === 0) sessions.delete(userId);
       else broadcast(userId);
     };

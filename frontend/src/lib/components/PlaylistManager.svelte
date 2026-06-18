@@ -1,10 +1,14 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
+  import { page } from "$app/state";
   import Icon from "$lib/components/Icon.svelte";
+  import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import PlaylistMembers from "$lib/components/PlaylistMembers.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
   import UserAutocomplete from "$lib/components/UserAutocomplete.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
+  import { reorderHandle } from "$lib/actions/reorderHandle";
   import { playlistZipUrl } from "$lib/services/playlistService";
   import { thumbUrl } from "$lib/services/songService";
   import {
@@ -29,6 +33,25 @@
   let addOpen = $state(false);
   let addQuery = $state("");
 
+  // The open playlist is driven by the URL (?playlist=id) so it's a real
+  // drill-in view: deep-linkable and the browser back button returns to the
+  // grid, like the artist view.
+  const openId = $derived.by(() => {
+    const raw = page.url.searchParams.get("playlist");
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) ? n : null;
+  });
+  // Keep the view-model's selection in sync with the URL.
+  $effect(() => {
+    if (openId !== null && vm.selectedId !== openId) vm.select(openId);
+  });
+  function openPlaylist(id: number) {
+    goto(`?view=playlists&playlist=${id}`, { noScroll: true });
+  }
+  function closePlaylist() {
+    goto("?view=playlists", { noScroll: true });
+  }
+
   // --- Sharing ---
   let shareOpen = $state(false);
   let shareCanEdit = $state(false);
@@ -46,6 +69,7 @@
     const id = vm.selectedId;
     shareOpen = false;
     shareError = null;
+    reordering = false; // leave reorder mode when switching playlists
     shares = [];
     publicToken = null;
     publicCopied = false;
@@ -116,7 +140,10 @@
     const name = newName.trim();
     if (!name) return;
     const ok = await vm.create(name);
-    if (ok) newName = "";
+    if (ok) {
+      newName = "";
+      if (vm.selectedId !== null) openPlaylist(vm.selectedId); // drill into it
+    }
   }
 
   // Songs in the library not already in the selected playlist.
@@ -159,37 +186,26 @@
     if (!current) return;
     if (confirm(`Delete playlist "${current.name}"? This cannot be undone.`)) {
       vm.remove(current.id);
+      closePlaylist(); // back to the grid
     }
   }
 
   // --- Drag-to-reorder ---
-  let dragIndex = $state<number | null>(null);
-  let overIndex = $state<number | null>(null);
+  // Off by default; the Edit button reveals the drag handles. Reordering is
+  // pointer-based (works on touch) via the handle.
+  let reordering = $state(false);
 
-  function onDragStart(i: number) {
-    dragIndex = i;
-  }
-  function onDragOver(e: DragEvent, i: number) {
-    e.preventDefault(); // allow drop
-    overIndex = i;
-  }
-  function onDrop(i: number) {
-    const from = dragIndex;
-    dragIndex = null;
-    overIndex = null;
-    if (from === null || from === i) return;
+  function moveTrack(from: number, to: number) {
+    if (from === to) return;
     const arr = [...vm.selectedSongs];
     const [moved] = arr.splice(from, 1);
-    arr.splice(i, 0, moved);
+    arr.splice(to, 0, moved);
     vm.reorder(arr);
-  }
-  function onDragEnd() {
-    dragIndex = null;
-    overIndex = null;
   }
 </script>
 
 <div class="playlists">
+  {#if openId === null}
   <div class="create">
     <input
       type="text"
@@ -211,8 +227,7 @@
       {#each vm.playlists as playlist (playlist.id)}
         <button
           class="card"
-          class:active={playlist.id === vm.selectedId}
-          onclick={() => vm.select(playlist.id)}
+          onclick={() => openPlaylist(playlist.id)}
         >
           <span class="cover">
             {#if playlist.coverSongId != null}
@@ -232,39 +247,69 @@
       {/each}
     </div>
   {/if}
+  {/if}
 
-  {#if vm.selected}
+  {#if openId !== null}
+    <button class="back" onclick={closePlaylist}>
+      <Icon name="arrow_back" size={20} /> All playlists
+    </button>
+    {#if vm.selected}
     <div class="detail">
-      <div class="detail-head">
-        <h3>{vm.selected.name}</h3>
-        <button
-          class="head-action"
-          title="Rename playlist"
-          aria-label="Rename playlist"
-          onclick={renameSelected}><Icon name="edit" size={20} /></button
-        >
-        {#if vm.selectedSongs.length > 0}
-          <a
-            class="head-action"
-            href={playlistZipUrl(vm.selectedId ?? 0)}
-            title="Download as zip"
-            aria-label="Download playlist as zip"><Icon name="download" size={20} /></a
-          >
-        {/if}
-        <button
-          class="head-action"
-          class:on={shareOpen}
-          title="Share playlist"
-          aria-label="Share playlist"
-          onclick={() => (shareOpen = !shareOpen)}
-          ><Icon name="share" size={20} /></button
-        >
-        <button
-          class="head-action danger"
-          title="Delete playlist"
-          aria-label="Delete playlist"
-          onclick={deleteSelected}><Icon name="delete" size={20} /></button
-        >
+      <div class="head">
+        <span class="cover-lg">
+          {#if vm.selected.coverSongId != null}
+            <img src={thumbUrl(vm.selected.coverSongId, 512)} alt="" />
+          {:else}
+            <Icon name="queue_music" size={48} />
+          {/if}
+        </span>
+        <div class="head-info">
+          <h3>{vm.selected.name}</h3>
+          <p class="muted">
+            {vm.selectedSongs.length}
+            {vm.selectedSongs.length === 1 ? "track" : "tracks"}
+          </p>
+          <div class="detail-actions">
+            <button
+              class="head-action"
+              title="Rename playlist"
+              aria-label="Rename playlist"
+              onclick={renameSelected}><Icon name="edit" size={20} /></button
+            >
+            {#if vm.selectedSongs.length > 1}
+              <button
+                class="head-action"
+                class:on={reordering}
+                title={reordering ? "Done" : "Reorder"}
+                aria-label={reordering ? "Done" : "Reorder"}
+                onclick={() => (reordering = !reordering)}
+                ><Icon name={reordering ? "check" : "swap_vert"} size={20} /></button
+              >
+            {/if}
+            {#if vm.selectedSongs.length > 0}
+              <a
+                class="head-action"
+                href={playlistZipUrl(vm.selectedId ?? 0)}
+                title="Download as zip"
+                aria-label="Download playlist as zip"><Icon name="download" size={20} /></a
+              >
+            {/if}
+            <button
+              class="head-action"
+              class:on={shareOpen}
+              title="Share playlist"
+              aria-label="Share playlist"
+              onclick={() => (shareOpen = !shareOpen)}
+              ><Icon name="share" size={20} /></button
+            >
+            <button
+              class="head-action danger"
+              title="Delete playlist"
+              aria-label="Delete playlist"
+              onclick={deleteSelected}><Icon name="delete" size={20} /></button
+            >
+          </div>
+        </div>
       </div>
 
       {#if vm.selectedSongs.length > 0}
@@ -351,18 +396,22 @@
             {@const isCurrent = song.id === songVm.currentSong?.id}
             <li
               class:current={isCurrent}
-              class:dragging={i === dragIndex}
-              class:dragover={i === overIndex && i !== dragIndex}
-              draggable="true"
-              ondragstart={() => onDragStart(i)}
-              ondragover={(e) => onDragOver(e, i)}
-              ondrop={() => onDrop(i)}
-              ondragend={onDragEnd}
-              use:swipeQueue={{ onQueue: () => songVm.addToQueue(song) }}
+              class:playing={isCurrent && songVm.isPlaying}
+              data-reorder-index={i}
+              use:swipeQueue={{
+                onQueue: () => songVm.playNext(song),
+                disabled: reordering,
+              }}
             >
-              <span class="handle" title="Drag to reorder" aria-hidden="true">
-                <Icon name="drag_indicator" size={20} />
-              </span>
+              {#if reordering}
+                <span
+                  class="handle"
+                  title="Drag to reorder"
+                  use:reorderHandle={{ index: i, onMove: moveTrack }}
+                >
+                  <Icon name="drag_indicator" size={20} />
+                </span>
+              {/if}
               <button class="play-btn" onclick={() => playFrom(i)}>
                 <span class="thumb">
                   {#if song.hasArt}
@@ -377,6 +426,9 @@
                       size={20}
                     />
                   </span>
+                  {#if isCurrent && songVm.isPlaying}
+                    <span class="thumb-wave"><EqualizerBars size={18} /></span>
+                  {/if}
                 </span>
                 <span class="name">{song.originalFilename}</span>
               </button>
@@ -455,6 +507,7 @@
         {/if}
       </div>
     </div>
+    {/if}
   {/if}
 </div>
 
@@ -488,6 +541,21 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
+  .back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.25rem 0;
+    margin-bottom: 1rem;
+    font: inherit;
+  }
+  .back:hover {
+    color: var(--text);
+  }
   .cards {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -507,10 +575,6 @@
   }
   .cards .card:hover {
     background: var(--hover);
-  }
-  .card.active {
-    border-color: var(--accent);
-    background: var(--active-bg);
   }
   .cover {
     aspect-ratio: 1;
@@ -542,26 +606,51 @@
     color: var(--muted);
     font-size: 0.8rem;
   }
-  .detail {
-    border-top: 1px solid var(--surface-2);
-    padding-top: 1rem;
-  }
   .actions-bar {
     margin-bottom: 1rem;
   }
-  .detail-head {
+  .head {
+    display: flex;
+    gap: 1.25rem;
+    align-items: center;
+    margin-bottom: 1.25rem;
+  }
+  .cover-lg {
+    flex-shrink: 0;
+    width: 120px;
+    height: 120px;
     display: flex;
     align-items: center;
-    gap: 0.25rem;
-    margin-bottom: 0.5rem;
+    justify-content: center;
+    background: var(--surface-2);
+    border-radius: 0.6rem;
+    color: var(--dim);
+    overflow: hidden;
   }
-  .detail-head h3 {
-    margin: 0;
-    flex: 1;
+  .cover-lg img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .head-info {
     min-width: 0;
+  }
+  .head-info h3 {
+    margin: 0 0 0.25rem;
+    font-size: 1.5rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .head-info .muted {
+    margin: 0 0 0.6rem;
+    padding: 0;
+  }
+  .detail-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
   }
   .head-action {
     display: inline-flex;
@@ -818,12 +907,6 @@
   .play-btn:hover {
     background: var(--hover);
   }
-  li.dragging {
-    opacity: 0.4;
-  }
-  li.dragover {
-    border-top: 2px solid var(--accent-text);
-  }
   .handle {
     display: inline-flex;
     align-items: center;
@@ -864,8 +947,21 @@
     transition: opacity 0.12s;
   }
   .play-btn:hover .thumb-play,
-  li.current .thumb-play {
+  li.current:not(.playing) .thumb-play {
     opacity: 1;
+  }
+  .thumb-wave {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.45);
+    transition: opacity 0.12s;
+  }
+  .play-btn:hover .thumb-wave {
+    opacity: 0;
   }
   .name {
     flex: 1;

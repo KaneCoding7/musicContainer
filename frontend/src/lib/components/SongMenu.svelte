@@ -169,7 +169,17 @@
 </div>
 
 {#if open}
-  <button class="backdrop" aria-label="Close menu" onclick={close}></button>
+  <button
+    class="backdrop"
+    aria-label="Close menu"
+    onpointerdown={(e) => {
+      // Swallow the press so it only dismisses the menu — it shouldn't click
+      // through to the row behind, nor start that row's swipe gesture.
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    }}
+  ></button>
 {/if}
 
 {#if editing}

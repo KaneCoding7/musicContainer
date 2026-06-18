@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
+  import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import PlaylistMembers from "$lib/components/PlaylistMembers.svelte";
   import { copySongToLibrary, thumbUrl } from "$lib/services/songService";
   import {
@@ -188,12 +189,14 @@
       {@const isCurrent = song.id === songVm.currentSong?.id}
       <li class:current={isCurrent}>
         <button class="track" onclick={() => songVm.playQueue(songs, i)}>
-          <span class="num">{i + 1}</span>
           <span class="thumb">
             {#if song.hasArt}
               <img src={thumbUrl(song.id, 128)} alt="" />
             {:else}
               <Icon name="music_note" size={18} />
+            {/if}
+            {#if isCurrent && songVm.isPlaying}
+              <span class="thumb-wave"><EqualizerBars size={18} /></span>
             {/if}
           </span>
           <span class="t-meta">
@@ -516,12 +519,8 @@
   .track:hover {
     background: var(--hover);
   }
-  .num {
-    width: 1.5rem;
-    color: var(--dim);
-    text-align: right;
-  }
   .thumb {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -532,6 +531,15 @@
     border-radius: 0.35rem;
     color: var(--dim);
     overflow: hidden;
+  }
+  .thumb-wave {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.45);
   }
   .thumb img {
     width: 100%;

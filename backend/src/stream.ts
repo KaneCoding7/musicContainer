@@ -12,7 +12,10 @@ export function streamSongFile(
   const { path, size, contentType } = file;
   res.setHeader("Content-Type", contentType);
   res.setHeader("Accept-Ranges", "bytes");
-  res.setHeader("Cache-Control", "no-cache");
+  // A song's bytes never change for a given id, so let the browser cache them
+  // hard. This makes skipping back to a recent track — and playing a track the
+  // client prefetched — start instantly instead of re-fetching from scratch.
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
 
   const range = req.headers.range;
   if (!range) {

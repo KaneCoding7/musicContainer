@@ -184,6 +184,94 @@ songsRouter.delete("/songs/:id/art", (req, res) => {
   return res.json({ song: result.value.song });
 });
 
+// --- Custom artist avatar images ---
+// A per-user override for an artist's picture; the UI falls back to the top
+// track's embedded art when none is set.
+
+// The artist name travels as a `?name=` query param, never a path segment, so
+// names with slashes or other special characters (e.g. "AC/DC") work.
+function artistParam(req: { query: Record<string, unknown> }): string {
+  return typeof req.query.name === "string" ? req.query.name : "";
+}
+
+// GET /api/artists/images — names of artists the user has a custom image for.
+songsRouter.get("/artists/images", (req, res) => {
+  const rows = getDb()
+    .prepare("SELECT artist FROM artist_images WHERE user_id = ?")
+    .all(req.userId!) as { artist: string }[];
+  return res.json({ artists: rows.map((r) => r.artist) });
+});
+
+// GET /api/artists/image?name=… — serve the user's custom image, or 404.
+songsRouter.get("/artists/image", (req, res) => {
+  const artist = artistParam(req);
+  if (!artist) return res.status(404).end();
+  const row = getDb()
+    .prepare(
+      "SELECT filename FROM artist_images WHERE user_id = ? AND artist = ?"
+    )
+    .get(req.userId!, artist) as { filename: string } | undefined;
+  if (!row) return res.status(404).end();
+  const path = join(ART_DIR, row.filename);
+  if (!existsSync(path)) return res.status(404).end();
+  // Filename is unique per upload, but the URL is stable, so revalidate.
+  res.setHeader("Cache-Control", "no-cache");
+  return res.sendFile(path);
+});
+
+// PUT /api/artists/image?name=… — upload/replace the image (field "art").
+songsRouter.put("/artists/image", (req, res) => {
+  artUpload.single("art")(req, res, (uploadErr: unknown) => {
+    if (uploadErr) {
+      const message =
+        uploadErr instanceof Error ? uploadErr.message : "Upload failed";
+      return res.status(400).json({ error: { code: "validation", message } });
+    }
+    const artist = artistParam(req);
+    if (!artist) {
+      if (req.file) cleanupArt(req.file.filename);
+      return res
+        .status(400)
+        .json({ error: { code: "validation", message: "Missing artist name" } });
+    }
+    if (!req.file) {
+      return res.status(400).json({
+        error: { code: "validation", message: "No image provided (field: art)" },
+      });
+    }
+    const db = getDb();
+    const existing = db
+      .prepare(
+        "SELECT filename FROM artist_images WHERE user_id = ? AND artist = ?"
+      )
+      .get(req.userId!, artist) as { filename: string } | undefined;
+    db.prepare(
+      `INSERT INTO artist_images (user_id, artist, filename, updated_at)
+       VALUES (?, ?, ?, datetime('now'))
+       ON CONFLICT(user_id, artist) DO UPDATE SET
+         filename = excluded.filename, updated_at = excluded.updated_at`
+    ).run(req.userId!, artist, req.file.filename);
+    if (existing?.filename) cleanupArt(existing.filename);
+    return res.status(201).json({ ok: true });
+  });
+});
+
+// DELETE /api/artists/image?name=… — revert to the default (track) art.
+songsRouter.delete("/artists/image", (req, res) => {
+  const artist = artistParam(req);
+  if (!artist) return res.status(204).end();
+  const db = getDb();
+  const row = db
+    .prepare("SELECT filename FROM artist_images WHERE user_id = ? AND artist = ?")
+    .get(req.userId!, artist) as { filename: string } | undefined;
+  db.prepare("DELETE FROM artist_images WHERE user_id = ? AND artist = ?").run(
+    req.userId!,
+    artist
+  );
+  if (row?.filename) cleanupArt(row.filename);
+  return res.status(204).end();
+});
+
 // POST /api/upload — upload a single audio file (extracts embedded metadata).
 songsRouter.post("/upload", (req, res) => {
   upload.single("file")(req, res, async (uploadErr: unknown) => {

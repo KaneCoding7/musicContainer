@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
+  import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
@@ -18,7 +19,7 @@
       {@const isCurrent = song.id === vm.currentSong?.id}
       <li
         class:current={isCurrent}
-        use:swipeQueue={{ onQueue: () => vm.addToQueue(song) }}
+        use:swipeQueue={{ onQueue: () => vm.playNext(song) }}
       >
         <button class="row" onclick={() => vm.playQueue(vm.likedSongs, i)}>
           <span class="thumb">
@@ -26,6 +27,9 @@
               <img src={thumbUrl(song.id, 128)} alt="" />
             {:else}
               <Icon name="music_note" size={20} />
+            {/if}
+            {#if isCurrent && vm.isPlaying}
+              <span class="thumb-wave"><EqualizerBars size={20} /></span>
             {/if}
           </span>
           <span class="meta">
@@ -88,6 +92,7 @@
     background: var(--hover);
   }
   .thumb {
+    position: relative;
     width: 40px;
     height: 40px;
     flex-shrink: 0;
@@ -103,6 +108,15 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  .thumb-wave {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.45);
   }
   .meta {
     flex: 1;

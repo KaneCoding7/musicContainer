@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
+  import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
@@ -67,10 +68,12 @@
       {@const isCurrent = song.id === vm.currentSong?.id}
       <li
         class:current={isCurrent}
-        use:swipeQueue={{ onQueue: () => vm.addToQueue(song) }}
+        use:swipeQueue={{ onQueue: () => vm.playNext(song) }}
       >
         <button class="track" onclick={() => vm.playQueue(current.songs, i)}>
-          <span class="num">{i + 1}</span>
+          {#if isCurrent && vm.isPlaying}
+            <span class="num"><EqualizerBars size={14} /></span>
+          {/if}
           <span class="t-meta">
             <span class="t-name">{song.originalFilename}</span>
             {#if song.artist}<span class="t-artist">{song.artist}</span>{/if}
