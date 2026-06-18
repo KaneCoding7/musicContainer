@@ -219,6 +219,13 @@
             {:else}
               <Icon name="album" size={18} />
             {/if}
+            <span class="thumb-play">
+              <Icon
+                name={isCurrent && vm.isPlaying ? "pause" : "play_arrow"}
+                fill
+                size={22}
+              />
+            </span>
           </span>
           <span class="t-meta">
             <span class="t-name">{song.originalFilename}</span>
@@ -448,6 +455,7 @@
     text-align: right;
   }
   .thumb {
+    position: relative;
     width: 40px;
     height: 40px;
     flex-shrink: 0;
@@ -463,6 +471,21 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  .thumb-play {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  .track:hover .thumb-play,
+  li.current .thumb-play {
+    opacity: 1;
   }
   .t-meta {
     display: flex;
