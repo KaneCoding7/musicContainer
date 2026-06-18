@@ -75,9 +75,30 @@
     selected = new Set();
   }
 
+  function parseDate(iso: string): Date {
+    return new Date(iso.includes("T") ? iso : iso.replace(" ", "T") + "Z");
+  }
+
   function formatDate(iso: string): string {
-    const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T") + "Z");
+    const d = parseDate(iso);
     return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+  }
+
+  // Compact "added X ago" label for the Date added column.
+  function relativeDate(iso: string): string {
+    const d = parseDate(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    const sec = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
+    const min = Math.round(sec / 60);
+    const hr = Math.round(min / 60);
+    const day = Math.round(hr / 24);
+    if (sec < 60) return "just now";
+    if (min < 60) return `${min}m ago`;
+    if (hr < 24) return `${hr}h ago`;
+    if (day < 7) return `${day}d ago`;
+    if (day < 30) return `${Math.round(day / 7)}w ago`;
+    if (day < 365) return `${Math.round(day / 30)}mo ago`;
+    return `${Math.round(day / 365)}y ago`;
   }
 
   function formatDuration(seconds: number): string {
@@ -86,10 +107,25 @@
     return `${m}:${s.toString().padStart(2, "0")}`;
   }
 
+  // Total runtime of the currently shown songs, as "11h 42m" / "42m".
+  const totalDuration = $derived(
+    vm.filteredSongs.reduce((sum, s) => sum + (s.duration ?? 0), 0)
+  );
+  function formatTotal(seconds: number): string {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.round((seconds % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  }
 </script>
 
 <div class="song-list">
   {#if vm.songs.length > 0}
+    <p class="stats">
+      {vm.filteredSongs.length}
+      {vm.filteredSongs.length === 1 ? "song" : "songs"} · {formatTotal(
+        totalDuration
+      )}
+    </p>
     <div class="actions-bar">
       <PlayActions {vm} songs={vm.filteredSongs} />
     </div>
@@ -181,28 +217,44 @@
   {:else if vm.filteredSongs.length === 0}
     <p class="muted">No songs match "{vm.query}".</p>
   {:else}
+    <div class="list-head" aria-hidden="true">
+      <span class="col-index">#</span>
+      <span>Title</span>
+      <span class="col-date">Date added</span>
+      <span class="col-plays">Plays</span>
+      <span class="col-dur"><Icon name="schedule" size={18} /></span>
+      <span class="col-like"></span>
+      <span class="col-menu"></span>
+    </div>
     <ul>
       {#each vm.filteredSongs as song, i (song.id)}
         {@const isCurrent = song.id === vm.currentSong?.id}
         <li
+          class="song-row"
           class:current={isCurrent}
           class:selected={selected.has(song.id)}
           use:swipeQueue={{ onQueue: () => vm.addToQueue(song) }}
         >
-          {#if selecting}
-            <button
-              class="check"
-              role="checkbox"
-              aria-checked={selected.has(song.id)}
-              aria-label="Select song"
-              onclick={() => toggleSelect(song.id)}
-            >
-              <Icon
-                name={selected.has(song.id) ? "check_box" : "check_box_outline_blank"}
-                size={22}
-              />
-            </button>
-          {/if}
+          <span class="col-index">
+            {#if selecting}
+              <button
+                class="check"
+                role="checkbox"
+                aria-checked={selected.has(song.id)}
+                aria-label="Select song"
+                onclick={() => toggleSelect(song.id)}
+              >
+                <Icon
+                  name={selected.has(song.id)
+                    ? "check_box"
+                    : "check_box_outline_blank"}
+                  size={22}
+                />
+              </button>
+            {:else}
+              <span class="num">{String(i + 1).padStart(2, "0")}</span>
+            {/if}
+          </span>
           <button
             class="row"
             onclick={() =>
@@ -230,22 +282,21 @@
                 <span class="artist">{song.artist}</span>
               {/if}
             </span>
-            {#if song.duration}
-              <span class="date" title={formatDate(song.uploadedAt)}
-                >{formatDuration(song.duration)}</span
-              >
-            {:else}
-              <span class="date">{formatDate(song.uploadedAt)}</span>
-            {/if}
           </button>
+          <span class="col-date" title={formatDate(song.uploadedAt)}>
+            {relativeDate(song.uploadedAt)}
+          </span>
           <span
-            class="plays"
+            class="col-plays plays"
             title={`${song.playCount} play${song.playCount === 1 ? "" : "s"}`}
           >
             <Icon name="play_arrow" size={13} />{song.playCount}
           </span>
+          <span class="col-dur dur">
+            {song.duration ? formatDuration(song.duration) : "—"}
+          </span>
           <button
-            class="action like"
+            class="col-like action like"
             class:liked={song.liked}
             title={song.liked ? "Unlike" : "Like"}
             aria-label={song.liked ? "Unlike song" : "Like song"}
@@ -260,6 +311,12 @@
 </div>
 
 <style>
+  .stats {
+    margin: 0 0 0.85rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
   .actions-bar {
     margin-bottom: 0.85rem;
   }
@@ -372,11 +429,12 @@
   .check {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     background: transparent;
     border: none;
     color: var(--accent-text);
     cursor: pointer;
-    padding: 0 0.25rem 0 0.75rem;
+    padding: 0;
   }
   li.selected {
     background: var(--active-bg);
@@ -410,21 +468,55 @@
     padding: 0;
     margin: 0;
   }
-  li {
-    display: flex;
+  /* Shared column grid for the header and every row so they line up. */
+  .list-head,
+  li.song-row {
+    display: grid;
+    grid-template-columns: 2.25rem minmax(0, 1fr) 7.5rem 4rem 4rem 2.75rem 2.5rem;
     align-items: center;
+    column-gap: 0.75rem;
+  }
+  .list-head {
+    padding: 0 0.75rem 0.5rem;
+    border-bottom: 1px solid var(--border-strong);
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .list-head .col-dur {
+    display: inline-flex;
+  }
+  li.song-row {
+    padding: 0 0.75rem;
     border-bottom: 1px solid var(--surface-2);
   }
   li.current {
     background: var(--active-bg);
   }
+  li.song-row:hover {
+    background: var(--hover);
+  }
+  li.current:hover {
+    background: var(--active-bg);
+  }
+  .col-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .num {
+    color: var(--dim);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+  }
   .row {
-    flex: 1;
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 0.75rem 1rem;
+    gap: 0.85rem;
+    padding: 0.6rem 0;
     background: transparent;
     border: none;
     color: inherit;
@@ -435,34 +527,41 @@
   .action {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     background: transparent;
     border: none;
     color: var(--muted);
     cursor: pointer;
-    padding: 0.5rem 0.7rem;
+    padding: 0.4rem;
+    border-radius: 0.4rem;
     font-size: 0.95rem;
     text-decoration: none;
   }
   .action:hover {
     background: var(--surface-2);
   }
+  .col-date {
+    color: var(--muted);
+    font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .col-dur.dur {
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+  }
   .plays {
     display: inline-flex;
     align-items: center;
     gap: 0.15rem;
-    flex-shrink: 0;
     color: var(--muted);
     font-size: 0.78rem;
     font-variant-numeric: tabular-nums;
   }
   .like.liked {
     color: #ef4444;
-  }
-  .row:hover {
-    background: var(--hover);
-  }
-  li.current .row:hover {
-    background: var(--active-bg);
   }
   .thumb {
     position: relative;
@@ -493,7 +592,7 @@
     opacity: 0;
     transition: opacity 0.12s;
   }
-  .row:hover .thumb-play,
+  li.song-row:hover .thumb-play,
   li.current .thumb-play {
     opacity: 1;
   }
@@ -516,11 +615,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .date {
-    color: var(--muted);
-    font-size: 0.8rem;
-    flex-shrink: 0;
-  }
   .muted {
     color: var(--muted);
     padding: 1rem;
@@ -530,15 +624,21 @@
     .search {
       flex-basis: 100%;
     }
+    /* Drop the date + plays columns to keep rows readable on phones. */
+    .list-head,
+    li.song-row {
+      grid-template-columns: 2.25rem minmax(0, 1fr) 3.5rem 2.5rem 2.5rem;
+      column-gap: 0.5rem;
+    }
+    .col-date,
+    .col-plays {
+      display: none;
+    }
     .row {
       gap: 0.6rem;
-      padding: 0.6rem 0.35rem;
     }
     .action {
-      padding: 0.45rem 0.4rem;
-    }
-    .check {
-      padding-left: 0.4rem;
+      padding: 0.4rem;
     }
   }
 </style>
