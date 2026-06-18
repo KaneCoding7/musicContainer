@@ -1,14 +1,17 @@
-// Svelte action: swipe a row horizontally on a touch device to add a song to
-// the queue (Spotify-style). No-op on non-touch devices (mouse/desktop), so
-// it never interferes with clicking.
+// Svelte action: swipe a row right on a touch device to play it next
+// (Spotify-style). As you drag, a "Play next" affordance is revealed in the
+// space the row vacates; past the threshold it commits on release. No-op on
+// non-touch devices (mouse/desktop), so it never interferes with clicking.
 //
-// Usage: <li use:swipeQueue={{ onQueue: () => vm.addToQueue(song) }}> … </li>
+// Usage: <li use:swipeQueue={{ onQueue: () => vm.playNext(song) }}> … </li>
 
 interface Params {
   onQueue: () => void;
+  label?: string; // hint + toast text; defaults to "Play next"
+  disabled?: boolean; // off in edit/reorder mode so drag-to-reorder can work
 }
 
-const THRESHOLD = 70; // px of horizontal travel needed to trigger
+const THRESHOLD = 70; // px of rightward travel needed to trigger
 
 let toastEl: HTMLElement | null = null;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -21,8 +24,7 @@ function showToast(text: string) {
     document.body.appendChild(toastEl);
   }
   toastEl.textContent = text;
-  // Force reflow so re-adding the class re-triggers the transition.
-  void toastEl.offsetWidth;
+  void toastEl.offsetWidth; // force reflow so the transition re-triggers
   toastEl.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toastEl?.classList.remove("show"), 1400);
@@ -30,6 +32,8 @@ function showToast(text: string) {
 
 export function swipeQueue(node: HTMLElement, params: Params) {
   let onQueue = params.onQueue;
+  let label = params.label ?? "Play next";
+  let disabled = params.disabled ?? false;
 
   const isTouch =
     typeof window !== "undefined" &&
@@ -41,11 +45,30 @@ export function swipeQueue(node: HTMLElement, params: Params) {
   let dx = 0;
   let active = false;
   let horizontal = false;
+  let hint: HTMLElement | null = null;
 
-  // Let the browser handle vertical scrolling; we take over horizontal gestures.
-  node.style.touchAction = "pan-y";
+  node.style.touchAction = "pan-y"; // we own horizontal gestures
+
+  // Built lazily on the first swipe so idle rows stay cheap.
+  function ensureHint(): HTMLElement {
+    if (hint) return hint;
+    if (getComputedStyle(node).position === "static") {
+      node.style.position = "relative";
+    }
+    hint = document.createElement("div");
+    hint.className = "swipe-hint";
+    const icon = document.createElement("span");
+    icon.className = "material-symbols-rounded";
+    icon.textContent = "playlist_play";
+    const text = document.createElement("span");
+    text.textContent = label;
+    hint.append(icon, text);
+    node.appendChild(hint);
+    return hint;
+  }
 
   function start(e: TouchEvent) {
+    if (disabled) return; // edit/reorder mode owns the gesture
     if (e.touches.length !== 1) return;
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
@@ -59,37 +82,48 @@ export function swipeQueue(node: HTMLElement, params: Params) {
     const ddx = e.touches[0].clientX - startX;
     const ddy = e.touches[0].clientY - startY;
     if (!horizontal) {
-      if (Math.abs(ddx) > 10 && Math.abs(ddx) > Math.abs(ddy)) {
-        horizontal = true; // committed to a horizontal swipe
-      } else if (Math.abs(ddy) > 10) {
-        active = false; // it's a vertical scroll — bail
+      if (ddx > 10 && ddx > Math.abs(ddy)) {
+        horizontal = true; // committed to a rightward swipe
+      } else if (Math.abs(ddy) > 10 || ddx < -10) {
+        active = false; // vertical scroll or leftward — bail
         return;
       } else {
         return;
       }
     }
-    dx = ddx;
+    dx = Math.max(0, ddx); // right only
     node.style.transition = "none";
     node.style.transform = `translateX(${dx}px)`;
-    node.style.background = Math.abs(dx) > THRESHOLD ? "var(--active-bg)" : "";
+    const h = ensureHint();
+    // Counter-translate so the hint stays put as the row slides away from it,
+    // revealing it in the vacated space.
+    h.style.transform = `translateX(${-dx}px)`;
+    h.style.opacity = String(Math.min(1, dx / THRESHOLD));
+    h.classList.toggle("armed", dx > THRESHOLD);
   }
 
   function end() {
     if (!active) return;
     active = false;
-    const trigger = Math.abs(dx) > THRESHOLD;
-    node.style.transition = "transform 0.18s ease, background 0.18s ease";
+    const trigger = dx > THRESHOLD;
+    node.style.transition = "transform 0.18s ease";
     node.style.transform = "translateX(0)";
-    node.style.background = "";
+    if (hint) {
+      hint.style.transition = "opacity 0.18s ease, transform 0.18s ease";
+      hint.style.opacity = "0";
+      hint.style.transform = "translateX(0)";
+      hint.classList.remove("armed");
+    }
     if (trigger) {
       onQueue();
-      showToast("Added to queue");
+      showToast(label);
     }
     // Clear the transform once settled so it doesn't leave a containing block
     // (which would trap position:fixed descendants like menu backdrops).
     setTimeout(() => {
       node.style.transform = "";
       node.style.transition = "";
+      if (hint) hint.style.transition = "";
     }, 200);
     dx = 0;
     horizontal = false;
@@ -103,12 +137,20 @@ export function swipeQueue(node: HTMLElement, params: Params) {
   return {
     update(p: Params) {
       onQueue = p.onQueue;
+      disabled = p.disabled ?? false;
+      if (p.label && hint) {
+        label = p.label;
+        (hint.lastChild as Text).textContent = label;
+      } else if (p.label) {
+        label = p.label;
+      }
     },
     destroy() {
       node.removeEventListener("touchstart", start);
       node.removeEventListener("touchmove", move);
       node.removeEventListener("touchend", end);
       node.removeEventListener("touchcancel", end);
+      hint?.remove();
     },
   };
 }

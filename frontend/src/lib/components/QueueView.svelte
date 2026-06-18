@@ -1,6 +1,8 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
+  import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
+  import { swipeRemove } from "$lib/actions/swipeRemove";
   import { thumbUrl } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -54,6 +56,7 @@
           dragIndex = null;
           overIndex = null;
         }}
+        use:swipeRemove={{ onRemove: () => vm.removeFromQueue(i) }}
       >
         <button class="row" onclick={() => vm.playQueue(vm.queue, i)}>
           <span class="thumb">
@@ -64,7 +67,11 @@
             {/if}
             {#if isCurrent}
               <span class="thumb-state">
-                <Icon name={vm.isPlaying ? "equalizer" : "pause"} fill size={18} />
+                {#if vm.isPlaying}
+                  <EqualizerBars size={16} />
+                {:else}
+                  <Icon name="pause" fill size={18} />
+                {/if}
               </span>
             {/if}
           </span>
@@ -214,5 +221,13 @@
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+  }
+
+  /* On touch/mobile, removal is a left-swipe (see use:swipeRemove), so the
+     explicit X button is dropped to keep the row clean. */
+  @media (max-width: 768px) {
+    .remove {
+      display: none;
+    }
   }
 </style>

@@ -2,8 +2,10 @@
   import { mount, unmount } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
   import MiniPlayer from "$lib/components/MiniPlayer.svelte";
+  import QueueView from "$lib/components/QueueView.svelte";
   import { artUrl, streamUrl, thumbUrl } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
+  import type { Song } from "$lib/types";
 
   let {
     vm,
@@ -23,10 +25,47 @@
 
   const song = $derived(vm.currentSong);
 
+  // Warm the browser cache with nearby cover art (±2 tracks) so the stack
+  // animation almost always has the image ready when you skip or go back.
+  // peekPrev/peekNext cover the immediate neighbours (wrap-aware); the queue
+  // lookups add one more on each side.
+  const preloadIds = $derived.by(() => {
+    const ids = new Set<number>();
+    const add = (s: Song | null | undefined) => {
+      if (s?.hasArt) ids.add(s.id);
+    };
+    add(vm.peekPrev);
+    add(vm.peekNext);
+    const q = vm.queue;
+    const i = vm.currentIndex;
+    if (i !== null) for (const off of [-2, 2]) add(q[i + off]);
+    return [...ids];
+  });
+  // Hold the Image refs so an in-flight fetch isn't GC'd before it completes.
+  let preloadImgs: HTMLImageElement[] = [];
+  $effect(() => {
+    if (typeof Image === "undefined") return;
+    preloadImgs = preloadIds.map((id) => {
+      const img = new Image();
+      img.src = artUrl(id);
+      return img;
+    });
+  });
+
   // --- Volume normalization (loudness leveling) ---
   const NORM_TARGET_LUFS = -14;
   let audioCtx: AudioContext | null = null;
   let gainNode: GainNode | null = null;
+
+  // iOS suspends the AudioContext when the screen locks and won't play audio
+  // routed through Web Audio in the background — only a plain <audio> element
+  // keeps playing on the lock screen. So on iOS we skip the graph entirely and
+  // fall back to element-volume normalization (attenuate only; no boost).
+  const isIOS =
+    typeof navigator !== "undefined" &&
+    (/iP(hone|od|ad)/.test(navigator.platform) ||
+      (navigator.userAgent.includes("Mac") && "ontouchend" in document) ||
+      /iPad|iPhone|iPod/.test(navigator.userAgent));
   // Reactive flag flipped once the graph is built. audioCtx/gainNode are plain
   // (non-reactive) refs — wrapping Web Audio nodes in $state proxies breaks
   // them — so the gain effect below tracks this flag to re-run when the graph
@@ -49,6 +88,7 @@
   // cross-origin without CORS (which would taint the graph).
   function ensureAudioGraph() {
     if (audioCtx || !audio) return;
+    if (isIOS) return; // keep plain element playback so the lock screen works
     try {
       const Ctor =
         window.AudioContext ??
@@ -124,6 +164,7 @@
     if (!active) return; // another device is the audio output; stay silent
     const url = streamUrl(id);
     if (el.src !== url) {
+      prefetchCtrl?.abort(); // don't let a prefetch starve the new track's buffer
       el.src = url;
       el.load();
       const restored = vm.suppressPlayRecord;
@@ -156,6 +197,32 @@
     if (!vm.isPlaying && !audio.paused) audio.pause();
   });
 
+  // Prebuffer the upcoming track so a forward skip starts instantly. We use
+  // fetch() rather than an <audio preload> element because iOS Safari ignores
+  // preload on a non-playing element (to save data) — a plain fetch warms the
+  // browser's HTTP cache, which the main <audio> then replays without a network
+  // round-trip (the stream is immutable + cacheable).
+  //
+  // Crucially this only fires once the CURRENT track is comfortably buffered
+  // (the audio element's `canplaythrough`), and is aborted the moment we load a
+  // new track — otherwise the whole-file prefetch competes with playback for
+  // the server's bandwidth and starves the current track, causing it to stall.
+  let prefetchCtrl: AbortController | null = null;
+  function prefetchNext() {
+    if (!active) return;
+    const id = vm.peekNext?.id;
+    if (id == null) return;
+    prefetchCtrl?.abort();
+    const ctrl = new AbortController();
+    prefetchCtrl = ctrl;
+    const init: RequestInit = { signal: ctrl.signal };
+    // Deprioritise behind the playing track (where the browser supports it).
+    (init as Record<string, unknown>).priority = "low";
+    fetch(streamUrl(id), init)
+      .then((r) => r.arrayBuffer())
+      .catch(() => {}); // aborted on track change, or offline — ignore
+  }
+
   // Keep volume + normalization in sync. With the Web Audio graph active, the
   // element stays at unity and the gain node carries volume × normalization
   // (so quiet tracks can be boosted past 1). Without it, use element volume.
@@ -166,13 +233,47 @@
       audio.volume = 1;
       gainNode.gain.value = vm.volume * normGain;
     } else {
-      audio.volume = vm.volume;
+      // No Web Audio graph (iOS, or Web Audio unavailable): normalize via
+      // element volume. Capped at 1, so loud tracks get turned down but quiet
+      // tracks can't be boosted above unity.
+      audio.volume = Math.min(1, vm.volume * normGain);
     }
   });
 
   // --- Media Session (Cycle 26): OS / lock-screen / headphone controls ---
   const hasMediaSession =
     typeof navigator !== "undefined" && "mediaSession" in navigator;
+
+  // iOS shows now-playing art in a square frame, so non-square album art gets
+  // letterboxed (looks short). Cover-crop it onto a 512×512 canvas so the
+  // lock-screen artwork always fills a clean square. Returns an object URL.
+  let artObjectUrl: string | null = null;
+  function buildSquareArtwork(id: number): Promise<string | null> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const SIZE = 512;
+        const canvas = document.createElement("canvas");
+        canvas.width = SIZE;
+        canvas.height = SIZE;
+        const ctx = canvas.getContext("2d");
+        if (!ctx || !img.width || !img.height) return resolve(null);
+        // cover: scale so the shorter side fills, then center-crop the overflow
+        const scale = Math.max(SIZE / img.width, SIZE / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        ctx.drawImage(img, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
+        canvas.toBlob(
+          (blob) => resolve(blob ? URL.createObjectURL(blob) : null),
+          "image/jpeg",
+          0.9
+        );
+      };
+      img.onerror = () => resolve(null);
+      img.src = artUrl(id);
+    });
+  }
 
   // Publish now-playing metadata as the track changes.
   $effect(() => {
@@ -182,14 +283,34 @@
       navigator.mediaSession.metadata = null;
       return;
     }
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: s.originalFilename,
-      artist: s.artist ?? "",
-      album: s.album ?? "",
-      artwork: s.hasArt
-        ? [{ src: artUrl(s.id), sizes: "512x512" }]
-        : [],
-    });
+    let cancelled = false;
+    const setMeta = (artwork: MediaImage[]) => {
+      if (cancelled) return;
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: s.originalFilename,
+        artist: s.artist ?? "",
+        album: s.album ?? "",
+        artwork,
+      });
+    };
+    // Show the raw art immediately, then upgrade to the square-cropped version.
+    setMeta(
+      s.hasArt ? [{ src: artUrl(s.id), sizes: "512x512", type: "image/jpeg" }] : []
+    );
+    if (s.hasArt) {
+      buildSquareArtwork(s.id).then((url) => {
+        if (cancelled || !url) {
+          if (url) URL.revokeObjectURL(url);
+          return;
+        }
+        if (artObjectUrl) URL.revokeObjectURL(artObjectUrl);
+        artObjectUrl = url;
+        setMeta([{ src: url, sizes: "512x512", type: "image/jpeg" }]);
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
   });
 
   // Mirror play/pause state to the OS.
@@ -199,10 +320,15 @@
     }
   });
 
-  // Register hardware/lock-screen action handlers once the element exists.
+  // Register hardware/lock-screen action handlers. iOS re-derives the Now
+  // Playing controls whenever the now-playing item or play state changes, and
+  // reverts to the ±15s seek buttons unless prev/next are re-asserted — so we
+  // depend on song id + isPlaying to re-run and re-register on every change.
   $effect(() => {
     const el = audio;
     if (!el || !hasMediaSession) return;
+    void song?.id; // re-assert when the track changes (iOS resets controls)
+    void vm.isPlaying; // ...and when play/pause toggles
     const ms = navigator.mediaSession;
     ms.setActionHandler("play", () => {
       if (!vm.isPlaying) vm.togglePlay();
@@ -215,15 +341,11 @@
     ms.setActionHandler("seekto", (d) => {
       if (d.seekTime != null) el.currentTime = d.seekTime;
     });
-    ms.setActionHandler("seekbackward", (d) => {
-      el.currentTime = Math.max(0, el.currentTime - (d.seekOffset ?? 10));
-    });
-    ms.setActionHandler("seekforward", (d) => {
-      el.currentTime = Math.min(
-        el.duration || 0,
-        el.currentTime + (d.seekOffset ?? 10)
-      );
-    });
+    // iOS shows ±15s skip buttons on the lock screen whenever seekforward/
+    // seekbackward handlers exist, hiding the track skip buttons. Clearing
+    // them forces iOS to fall back to prev/next track controls instead.
+    ms.setActionHandler("seekbackward", null);
+    ms.setActionHandler("seekforward", null);
   });
 
   // Keeps the OS scrubber in sync.
@@ -272,10 +394,208 @@
 
   // Full-screen now-playing overlay (Cycle 36).
   let expanded = $state(false);
+  // Queue sheet that slides up over the now-playing screen.
+  let queueSheet = $state(false);
+  // Reset the queue sheet whenever the now-playing view closes, so it doesn't
+  // pop back open (already slid up) next time the screen is expanded.
+  $effect(() => {
+    if (!expanded) queueSheet = false;
+  });
 
-  // Esc closes the full-screen now-playing view.
+  // Esc closes the queue sheet first, then the full-screen now-playing view.
   function onWindowKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape" && expanded) expanded = false;
+    if (e.key !== "Escape") return;
+    if (queueSheet) queueSheet = false;
+    else if (expanded) expanded = false;
+  }
+
+  // --- Mobile bottom-bar swipe: left/right changes track ---
+  // A tap on the bar still opens the expanded view; barSwiped suppresses that
+  // tap-open (and any button tap) when the gesture turned into a swipe.
+  let barStartX = 0;
+  let barStartY = 0;
+  let barAxis: "" | "x" | "y" = "";
+  let barSwiped = false;
+  let barDragX = $state(0); // how far the bar content follows the finger (px)
+  let barDragging = $state(false); // true while a horizontal drag is in progress
+  function barTouchStart(e: TouchEvent) {
+    const t = e.touches[0];
+    barStartX = t.clientX;
+    barStartY = t.clientY;
+    barAxis = "";
+    barSwiped = false;
+    barDragX = 0;
+  }
+  function barTouchMove(e: TouchEvent) {
+    const t = e.touches[0];
+    const dx = t.clientX - barStartX;
+    const dy = t.clientY - barStartY;
+    if (barAxis === "" && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+      barAxis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+    }
+    if (barAxis === "x") {
+      barDragging = true;
+      // Dampened + capped so it reads as a nudge, not a full drag-off.
+      barDragX = Math.max(-56, Math.min(56, dx * 0.5));
+    }
+  }
+  function barTouchEnd(e: TouchEvent) {
+    barDragging = false;
+    barDragX = 0; // springs back via the CSS transition
+    if (barAxis !== "x") return;
+    const dx = e.changedTouches[0].clientX - barStartX;
+    if (Math.abs(dx) > 60) {
+      barSwiped = true;
+      if (dx < 0) vm.next();
+      else vm.prevTrack();
+    }
+  }
+
+  // --- Touch gestures on the full-screen view ---
+  // Swipe down (anywhere) drags the whole sheet down to dismiss. Swipe the
+  // artwork left/right to change tracks with a stacked-records animation:
+  // swiping forward pulls the next record onto the top of the stack, swiping
+  // back lifts the current record off to reveal the previous one beneath.
+  // Gestures on the scrubber or a button are ignored so those still work.
+  let dragY = $state(0); // vertical finger offset on the whole sheet (px)
+  // Horizontal swipe progress: dir is the direction being dragged and p is how
+  // far through the gesture we are (0 → 1, where 1 means the skip commits). The
+  // moving "top" record is driven entirely off these two values.
+  let dir = $state<"none" | "next" | "prev">("none");
+  let p = $state(0);
+  // Stable snapshot of the three records for the current gesture. Captured once
+  // when a swipe/animation begins so the cards never re-render mid-animation
+  // (binding to live vm.peek* flashes the wrong art when the track swaps).
+  let gPrev = $state<Song | null>(null);
+  let gCur = $state<Song | null>(null);
+  let gNext = $state<Song | null>(null);
+  function captureNeighbors() {
+    gPrev = vm.peekPrev;
+    gCur = song;
+    gNext = vm.peekNext;
+  }
+  let npDragging = $state(false); // true while the finger is down (no transition)
+  let npStartX = 0;
+  let npStartY = 0;
+  let npAxis: "" | "x" | "y" = "";
+  let committing = false; // a skip animation is in progress
+  const SKIP_THRESHOLD = 135; // px the record must travel before a skip commits
+  const SETTLE_MS = 340; // matches the .npf-card transform transition
+
+  function npTouchStart(e: TouchEvent) {
+    if (committing || queueSheet) return; // queue sheet owns its own scrolling
+    if ((e.target as HTMLElement).closest("input,button")) return;
+    const t = e.touches[0];
+    npStartX = t.clientX;
+    npStartY = t.clientY;
+    npAxis = "";
+    dir = "none";
+    p = 0;
+    npDragging = true;
+  }
+  function npTouchMove(e: TouchEvent) {
+    if (!npDragging) return;
+    const t = e.touches[0];
+    const dx = t.clientX - npStartX;
+    const dy = t.clientY - npStartY;
+    if (npAxis === "" && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+      npAxis = Math.abs(dy) > Math.abs(dx) ? "y" : "x";
+    }
+    if (npAxis === "y" && dy > 0) dragY = dy; // follow downward drags only
+    else if (npAxis === "x") {
+      if (dir === "none") {
+        // Lock the direction for this gesture (jitter mustn't flip it) and
+        // snapshot the records so the cards stay stable.
+        dir = dx < 0 ? "next" : "prev";
+        captureNeighbors();
+      }
+      const sign = dir === "next" ? -1 : 1; // forward = drag left
+      p = Math.max(0, Math.min(1, (dx * sign) / SKIP_THRESHOLD));
+    }
+  }
+  function npTouchEnd(e: TouchEvent) {
+    if (!npDragging) return;
+    npDragging = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - npStartX;
+    const dy = t.clientY - npStartY;
+    if (npAxis === "y" && dy > 90) expanded = false;
+    else if (npAxis === "x" && dx <= -SKIP_THRESHOLD && vm.peekNext) {
+      commitSkip("next");
+    } else if (npAxis === "x" && dx >= SKIP_THRESHOLD && vm.peekPrev) {
+      commitSkip("prev");
+    } else if (npAxis === "x") {
+      // Below threshold (or no neighbor): the record settles back onto the
+      // stack. Clear the gesture once the spring-back transition finishes.
+      p = 0;
+      setTimeout(() => (dir = "none"), SETTLE_MS);
+    }
+    dragY = 0;
+    npAxis = "";
+  }
+
+  // Button-driven skip: replay the same stacked-record animation from the
+  // start so tapping prev/next teaches the swipe gesture. Renders the incoming/
+  // revealed card at p=0 for a frame, then runs it to completion via commitSkip.
+  async function animateSkip(d: "next" | "prev") {
+    if (committing) return;
+    committing = true;
+    // Pre-decode the destination art before animating. A swipe gets this for
+    // free (the art decodes while you drag), but a button press runs the whole
+    // animation in ~340ms — without this the base card is revealed before its
+    // new image has decoded and flashes the previous cover for a frame.
+    const target = d === "next" ? vm.peekNext : vm.peekPrev;
+    if (target?.hasArt && typeof Image !== "undefined") {
+      try {
+        const img = new Image();
+        img.src = artUrl(target.id);
+        await img.decode();
+      } catch {
+        /* decode can reject if interrupted — proceed anyway */
+      }
+    }
+    npDragging = false; // transitions on
+    captureNeighbors();
+    dir = d;
+    p = 0;
+    requestAnimationFrame(() => requestAnimationFrame(() => commitSkip(d)));
+  }
+
+  // The full-screen prev/next buttons. Both animate the stacked-record skip when
+  // there's a neighbouring track, matching the swipe gesture (so prev always
+  // animates to the previous track rather than restarting the current one). At
+  // the very first track prev just restarts, so the button still responds.
+  function buttonNext() {
+    if (vm.peekNext) animateSkip("next");
+    else vm.next();
+  }
+  function buttonPrev() {
+    if (vm.peekPrev) animateSkip("prev");
+    else vm.prev();
+  }
+
+  // Run the record the rest of the way, then snap the stack back to centre.
+  // The track swap happens NOW (not after the animation) so the new song's
+  // audio loads/plays during the slide instead of after it — no skip delay.
+  // The visuals run off the gPrev/gCur/gNext snapshot, so the live swap doesn't
+  // disturb them; resetting dir at the end just reveals the (already-playing)
+  // current track, which matches the record that landed on top.
+  function commitSkip(d: "next" | "prev") {
+    committing = true;
+    if (d === "next") vm.next();
+    else vm.prevTrack();
+    p = 1; // transition animates the record the rest of the way
+    setTimeout(() => {
+      npDragging = true; // disable transitions for the instant reset
+      dir = "none";
+      p = 0;
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          npDragging = false; // re-enable transitions for the next gesture
+          committing = false;
+        })
+      );
+    }, SETTLE_MS);
   }
 
   // --- Pop-out mini player (Document Picture-in-Picture) ---
@@ -377,6 +697,8 @@
 <audio
   bind:this={audio}
   crossorigin="anonymous"
+  preload="auto"
+  oncanplaythrough={prefetchNext}
   ontimeupdate={onTimeUpdate}
   onloadedmetadata={onLoadedMetadata}
   onplay={() => {
@@ -417,17 +739,78 @@
   ></button>
 {/if}
 
+{#snippet cover(s: Song | null)}
+  {#if s?.hasArt}
+    <img src={artUrl(s.id)} alt="" />
+  {:else}
+    <Icon name="music_note" size={96} />
+  {/if}
+{/snippet}
+
 {#if song && expanded}
-  <div class="np-full">
+  <div
+    class="np-full"
+    class:np-dragging={npDragging}
+    ontouchstart={npTouchStart}
+    ontouchmove={npTouchMove}
+    ontouchend={npTouchEnd}
+    ontouchcancel={npTouchEnd}
+    style="transform: translateY({dragY}px); opacity: {1 - Math.min(dragY / 500, 0.6)}"
+  >
     <button class="np-collapse" onclick={() => (expanded = false)} aria-label="Close">
       <Icon name="keyboard_arrow_down" size={28} />
     </button>
+    <button
+      class="np-queue"
+      onclick={() => (queueSheet = true)}
+      aria-label="Queue"
+      title="Queue"
+    >
+      <Icon name="queue_music" size={26} />
+    </button>
     <div class="npf-art">
-      {#if song.hasArt}
-        <img src={artUrl(song.id)} alt="" />
-      {:else}
-        <Icon name="music_note" size={96} />
-      {/if}
+      <div class="npf-stack" class:np-dragging={npDragging}>
+        <!-- The live current record — the source of truth for what's playing.
+             It's hidden while a gesture's snapshot cards animate on top, then
+             revealed at the end. Because its source swaps at commit-start (well
+             before it's shown) it's already decoded when revealed, so there's
+             no morph/flash; the card it replaces showed the identical image. -->
+        <div class="npf-card npf-base" style="opacity: {dir === 'none' ? 1 : 0}">
+          {@render cover(song)}
+        </div>
+
+        {#if dir === "next"}
+          <!-- old current receding as the next is pulled over it -->
+          <div
+            class="npf-card npf-recede"
+            style="transform: translateY({p * 14}px) scale({1 - 0.18 * p})"
+          >
+            {@render cover(gCur)}
+          </div>
+          <!-- next record pulled onto the top of the stack -->
+          <div
+            class="npf-card npf-raised"
+            style="transform: translateX({(1 - p) * 112}%) rotate({(1 - p) * 7}deg)"
+          >
+            {@render cover(gNext)}
+          </div>
+        {:else if dir === "prev"}
+          <!-- previous record revealed beneath, popping up into place -->
+          <div
+            class="npf-card npf-reveal"
+            style="transform: translateY({(1 - p) * 14}px) scale({0.82 + 0.18 * p})"
+          >
+            {@render cover(gPrev)}
+          </div>
+          <!-- old current lifting off the top of the stack -->
+          <div
+            class="npf-card npf-raised"
+            style="transform: translateX({p * 112}%) rotate({p * 7}deg)"
+          >
+            {@render cover(gCur)}
+          </div>
+        {/if}
+      </div>
     </div>
     <div class="npf-meta">
       <h2>{song.originalFilename}</h2>
@@ -455,13 +838,13 @@
         onclick={() => vm.toggleShuffle()}
         aria-label="Shuffle"><Icon name="shuffle" size={26} /></button
       >
-      <button onclick={() => vm.prev()} aria-label="Previous"
+      <button onclick={buttonPrev} aria-label="Previous"
         ><Icon name="skip_previous" fill size={38} /></button
       >
       <button class="npf-play" onclick={togglePlay} aria-label="Play/Pause">
         <Icon name={vm.isPlaying ? "pause" : "play_arrow"} fill size={48} />
       </button>
-      <button onclick={() => vm.next()} aria-label="Next"
+      <button onclick={buttonNext} aria-label="Next"
         ><Icon name="skip_next" fill size={38} /></button
       >
       <button
@@ -475,14 +858,45 @@
         /></button
       >
     </div>
+
+    <!-- Queue sheet that slides up over the now-playing screen. -->
+    <div class="npf-queue" class:open={queueSheet}>
+      <div class="npf-queue-head">
+        <span class="npf-queue-title">Up Next</span>
+        <button
+          class="np-collapse npf-queue-close"
+          onclick={() => (queueSheet = false)}
+          aria-label="Close queue"
+        >
+          <Icon name="keyboard_arrow_down" size={28} />
+        </button>
+      </div>
+      <div class="npf-queue-body">
+        {#if vm.queue.length === 0}
+          <p class="npf-queue-empty">Nothing queued yet.</p>
+        {:else}
+          <QueueView {vm} />
+        {/if}
+      </div>
+    </div>
   </div>
 {/if}
 
 {#if song}
-  <div class="player">
+  <div
+    class="player"
+    ontouchstart={barTouchStart}
+    ontouchmove={barTouchMove}
+    ontouchend={barTouchEnd}
+  >
     <button
       class="now-playing"
-      onclick={() => (expanded = true)}
+      class:bar-dragging={barDragging}
+      style="transform: translateX({barDragX}px)"
+      onclick={() => {
+        if (barSwiped) return; // a swipe just happened — don't open the view
+        expanded = true;
+      }}
       title="Open now playing"
     >
       <span class="np-art">
@@ -513,7 +927,14 @@
       <button onclick={() => vm.prev()} aria-label="Previous" title="Previous"
         ><Icon name="skip_previous" fill size={26} /></button
       >
-      <button class="play" onclick={togglePlay} aria-label="Play/Pause">
+      <button
+        class="play"
+        onclick={() => {
+          if (barSwiped) return; // ignore a play tap that was really a swipe
+          togglePlay();
+        }}
+        aria-label="Play/Pause"
+      >
         <Icon name={vm.isPlaying ? "pause" : "play_arrow"} fill size={32} />
       </button>
       <button onclick={() => vm.next()} aria-label="Next" title="Next"
@@ -582,7 +1003,10 @@
       <button
         class="queue-toggle"
         class:active={queueOpen}
-        onclick={() => onToggleQueue?.()}
+        onclick={() => {
+          if (barSwiped) return; // ignore a queue tap that was really a swipe
+          onToggleQueue?.();
+        }}
         aria-label="Toggle queue"
         title="Queue"><Icon name="queue_music" size={22} /></button
       >
@@ -607,6 +1031,12 @@
         aria-label="Volume"
       />
     </div>
+
+    <!-- Thin track-progress line along the bottom edge (mobile only). -->
+    <div
+      class="mini-progress"
+      style="--pct: {duration ? (currentTime / duration) * 100 : 0}%"
+    ></div>
   </div>
 {/if}
 
@@ -623,6 +1053,11 @@
     gap: 1.5rem;
     padding: 2rem 1.5rem;
     box-sizing: border-box;
+    touch-action: none; /* let us own the swipe gestures */
+    transition: transform 0.25s ease, opacity 0.25s ease; /* snap-back */
+  }
+  .np-full.np-dragging {
+    transition: none; /* follow the finger 1:1 while dragging */
   }
   .np-collapse {
     position: absolute;
@@ -640,19 +1075,109 @@
     background: var(--surface-2);
     color: var(--text);
   }
+  .np-queue {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    display: inline-flex;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 0.5rem;
+  }
+  .np-queue:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  .npf-queue {
+    position: absolute;
+    inset: 0;
+    z-index: 5; /* above the art/controls (z 0-3) and the top buttons */
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%); /* parked below the screen */
+    transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+  .npf-queue.open {
+    transform: translateY(0); /* slides up over the now-playing screen */
+  }
+  .npf-queue-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1rem 0.5rem;
+    flex-shrink: 0;
+  }
+  .npf-queue-title {
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+  .npf-queue-close {
+    position: static; /* override .np-collapse's absolute positioning */
+  }
+  .npf-queue-body {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 1rem 1.5rem;
+  }
+  .npf-queue-empty {
+    color: var(--muted);
+    text-align: center;
+    margin-top: 2rem;
+  }
   .npf-art {
+    /* Square stage holding the stacked record cards. */
     width: min(320px, 70vw);
     aspect-ratio: 1;
+    position: relative;
+  }
+  .npf-stack {
+    position: absolute;
+    inset: 0;
+  }
+  .npf-card {
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--surface-2);
-    border-radius: 0.75rem;
     color: var(--dim);
+    border-radius: 0.75rem;
     overflow: hidden;
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+    /* Decelerating ease so the record settles smoothly. Keep the duration in
+       sync with SETTLE_MS in the script. will-change promotes each card to its
+       own GPU layer so the motion stays buttery. */
+    transition:
+      transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.34s ease;
+    will-change: transform;
   }
-  .npf-art img {
+  .npf-stack.np-dragging .npf-card {
+    transition: none; /* follow the finger 1:1 while dragging */
+  }
+  .npf-base {
+    z-index: 0; /* the live current record, revealed at rest / gesture end */
+  }
+  .npf-recede,
+  .npf-reveal {
+    z-index: 2; /* the record being covered / revealed beneath the mover */
+  }
+  /* The record being moved (pulled on for next, lifted off for prev) sits on
+     top of the stack with a deeper shadow so it reads as raised. */
+  .npf-raised {
+    z-index: 3;
+    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.55);
+  }
+  .npf-card img {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -686,6 +1211,7 @@
   .npf-seek input {
     flex: 1;
     accent-color: var(--accent);
+    touch-action: auto; /* keep native drag-to-seek (parent owns swipes) */
   }
   .npf-controls {
     display: flex;
@@ -726,6 +1252,8 @@
     padding: 0.75rem 1.25rem;
     background: var(--surface);
     border-top: 1px solid var(--surface-2);
+    -webkit-user-select: none;
+    user-select: none; /* swiping the bar shouldn't select the title/artist */
   }
   .now-playing {
     display: flex;
@@ -739,6 +1267,10 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
+    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1); /* swipe spring-back */
+  }
+  .now-playing.bar-dragging {
+    transition: none; /* follow the finger 1:1 while dragging */
   }
   .np-art {
     width: 40px;
@@ -946,14 +1478,22 @@
     border-radius: 50%;
     background: var(--accent);
   }
+  /* Thin track-progress line (mobile only); hidden on desktop. */
+  .mini-progress {
+    display: none;
+  }
+
   @media (max-width: 768px) {
+    /* Compact bar: art + title/artist, play/pause, queue — track changes are
+       done by swiping the bar left/right, with a thin progress line below. */
     .player {
+      position: relative;
       grid-template-columns: 1fr auto auto;
-      grid-template-areas:
-        "now controls extras"
-        "progress progress progress";
+      grid-template-areas: "now controls extras";
       gap: 0.35rem 0.5rem;
-      padding: 0.6rem 0.8rem;
+      /* Extra bottom padding clears the iOS home indicator when installed as a
+         PWA (0 in Safari, where dvh already accounts for the toolbar). */
+      padding: 0.6rem 0.8rem calc(0.6rem + env(safe-area-inset-bottom, 0px));
     }
     .now-playing {
       grid-area: now;
@@ -964,19 +1504,36 @@
     .volume {
       grid-area: extras;
     }
-    .progress {
-      grid-area: progress;
-    }
-    /* Shuffle/repeat live in the full-screen view on mobile to save space. */
-    .controls .toggle {
+    /* Only play/pause stays in the controls; prev/next become swipe, and
+       shuffle/repeat live in the full-screen view. */
+    .controls button:not(.play) {
       display: none;
     }
-    /* System handles output volume on phones; drop the slider + its icon. */
+    /* Extras: keep only the queue button. Sleep timer + volume live in the
+       full-screen view; the OS handles output volume on phones. */
+    .sleep-wrap,
     .volume > input,
     .volume > :global(.material-symbols-rounded) {
       display: none;
     }
-    .controls button,
+    /* Replace the scrubber row with the thin bottom progress line. */
+    .progress {
+      display: none;
+    }
+    .mini-progress {
+      display: block;
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: env(safe-area-inset-bottom, 0px); /* sit above the home indicator */
+      height: 3px;
+      background: linear-gradient(
+        to right,
+        var(--accent) 0 var(--pct, 0%),
+        var(--surface-2) var(--pct, 0%)
+      );
+    }
+    .play,
     .queue-toggle {
       padding: 0.4rem;
     }

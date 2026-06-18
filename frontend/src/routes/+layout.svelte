@@ -104,4 +104,29 @@
     opacity: 1;
     transform: translate(-50%, 0);
   }
+
+  /* "Play next" affordance revealed in the space a row vacates as you swipe it
+     right (Spotify-style). The action sets its transform/opacity live. */
+  :global(.swipe-hint) {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding-left: 0.9rem;
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 0.82rem;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+  }
+  :global(.swipe-hint .material-symbols-rounded) {
+    transition: transform 0.12s ease;
+  }
+  :global(.swipe-hint.armed .material-symbols-rounded) {
+    transform: scale(1.25);
+  }
 </style>

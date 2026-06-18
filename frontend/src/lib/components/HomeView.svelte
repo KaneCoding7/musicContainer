@@ -70,7 +70,7 @@
           <button class="card" onclick={() => vm.playQueue(list, i)}>
             <span class="cover">
               {#if song.hasArt}
-                <img src={thumbUrl(song.id, 128)} alt="" />
+                <img src={thumbUrl(song.id, 512)} alt="" />
               {:else}
                 <Icon name="music_note" size={26} />
               {/if}
@@ -230,5 +230,17 @@
   }
   .muted {
     color: var(--muted);
+  }
+
+  @media (max-width: 768px) {
+    /* Always fit at least 2 cards per row on phones: cap the minimum column at
+       half the row (minus the gap) so a fixed 140px min can't force 1 column on
+       narrow screens. Wider phones/tablets still pack 3+. */
+    .cards {
+      grid-template-columns: repeat(
+        auto-fill,
+        minmax(min(140px, calc(50% - 0.5rem)), 1fr)
+      );
+    }
   }
 </style>

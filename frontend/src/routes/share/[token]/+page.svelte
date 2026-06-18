@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { page } from "$app/stores";
   import Icon from "$lib/components/Icon.svelte";
+  import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import {
     fetchPublicShare,
     publicArtUrl,
@@ -116,13 +117,9 @@
         {@const isCurrent = i === currentIndex}
         <li class:current={isCurrent}>
           <button class="row" onclick={() => play(i)}>
-            <span class="num">
-              {#if isCurrent && isPlaying}
-                <Icon name="equalizer" fill size={18} />
-              {:else}
-                {i + 1}
-              {/if}
-            </span>
+            {#if isCurrent && isPlaying}
+              <span class="num"><EqualizerBars size={16} /></span>
+            {/if}
             <span class="meta">
               <span class="name">{song.originalFilename}</span>
               {#if song.artist}<span class="artist">{song.artist}</span>{/if}

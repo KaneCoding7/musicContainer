@@ -284,6 +284,22 @@ export class SongViewModel {
     return this.queue[this.currentIndex] ?? null;
   }
 
+  // The track a "next" skip would land on (null at the end with repeat off).
+  // Used by the UI to preview the upcoming art during a swipe.
+  get peekNext(): Song | null {
+    const n = this.nextIndex();
+    return n === null ? null : this.queue[n] ?? null;
+  }
+
+  // The track a "previous" skip would land on. Mirrors prev()'s skip target
+  // (ignoring its restart-current-track behavior) so the swipe can preview it.
+  get peekPrev(): Song | null {
+    if (this.currentIndex === null) return null;
+    if (this.currentIndex > 0) return this.queue[this.currentIndex - 1] ?? null;
+    if (this.repeat === "all") return this.queue[this.queue.length - 1] ?? null;
+    return null;
+  }
+
   // Plays an arbitrary list of songs starting at the given index. If shuffle is
   // on, the list is shuffled (the chosen track first) so the queue order is
   // exactly what will play.
@@ -539,6 +555,25 @@ export class SongViewModel {
     this.currentIndex = n;
     this.isPlaying = true;
     return true;
+  }
+
+  // Skips straight to the previous track, never restarting the current one.
+  // The swipe gesture uses this (it previews and commits to the earlier track),
+  // unlike the prev() button which restarts when a few seconds in.
+  prevTrack(): boolean {
+    if (this.remoteSink?.("prev")) return false;
+    if (this.currentIndex === null) return false;
+    if (this.currentIndex > 0) {
+      this.currentIndex -= 1;
+      this.isPlaying = true;
+      return true;
+    }
+    if (this.repeat === "all") {
+      this.currentIndex = this.queue.length - 1;
+      this.isPlaying = true;
+      return true;
+    }
+    return false;
   }
 
   // How many seconds into a track the "previous" button restarts it instead of

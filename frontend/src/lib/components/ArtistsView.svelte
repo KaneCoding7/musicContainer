@@ -2,16 +2,25 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import Icon from "$lib/components/Icon.svelte";
+  import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
+  import { reorderHandle } from "$lib/actions/reorderHandle";
   import {
     disableArtistPublicLink,
     enableArtistPublicLink,
     getArtistPublicToken,
     publicLink,
   } from "$lib/services/shareService";
-  import { thumbUrl } from "$lib/services/songService";
+  import {
+    artistImageUrl,
+    fetchArtistImages,
+    removeArtistImage,
+    thumbUrl,
+    uploadArtistImage,
+  } from "$lib/services/songService";
+  import { onMount } from "svelte";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -83,6 +92,7 @@
     const name = current?.name;
     shareToken = null;
     shareCopied = false;
+    reordering = false; // leave reorder mode when switching artists
     if (!name || name === NO_ARTIST) return;
     let cancelled = false;
     getArtistPublicToken(name)
@@ -128,19 +138,55 @@
   }
 
   // Drag-to-reorder the current artist's tracks (persisted via the view-model).
-  let dragIndex = $state<number | null>(null);
-  let overIndex = $state<number | null>(null);
+  // Off by default — turned on with the Reorder button so the drag handles only
+  // appear when you actually want to rearrange.
+  let reordering = $state(false);
 
-  function onDrop(i: number) {
-    const songs = current?.songs ?? [];
-    if (dragIndex !== null && dragIndex !== i && songs.length > 0) {
-      const ids = songs.map((s) => s.id);
-      const [moved] = ids.splice(dragIndex, 1);
-      ids.splice(i, 0, moved);
-      vm.reorderSongs(ids);
+  // Custom artist images: names the user has uploaded a picture for. The avatar
+  // uses it when present, else falls back to the top track's embedded art.
+  let customImages = $state<Set<string>>(new Set());
+  let imgVersion = $state(0); // bumped after upload/remove to bust the cache
+  let imageInput = $state<HTMLInputElement | null>(null);
+  onMount(async () => {
+    customImages = new Set(await fetchArtistImages());
+  });
+
+  function pickArtistImage() {
+    imageInput?.click();
+  }
+  async function onArtistImagePicked(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ""; // allow re-picking the same file
+    if (!file || !current) return;
+    try {
+      await uploadArtistImage(current.name, file);
+      customImages = new Set(customImages).add(current.name);
+      imgVersion++;
+    } catch {
+      /* ignore — keep the existing image */
     }
-    dragIndex = null;
-    overIndex = null;
+  }
+  async function clearArtistImage() {
+    if (!current) return;
+    try {
+      await removeArtistImage(current.name);
+      const next = new Set(customImages);
+      next.delete(current.name);
+      customImages = next;
+      imgVersion++;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function moveTrack(from: number, to: number) {
+    const songs = current?.songs ?? [];
+    if (from === to || songs.length === 0) return;
+    const ids = songs.map((s) => s.id);
+    const [moved] = ids.splice(from, 1);
+    ids.splice(to, 0, moved);
+    vm.reorderSongs(ids);
   }
 </script>
 
@@ -152,12 +198,31 @@
   </button>
   <div class="head">
     <span class="avatar">
-      {#if current.artId !== null}
+      {#if customImages.has(current.name)}
+        <img src={artistImageUrl(current.name, imgVersion)} alt="" />
+      {:else if current.artId !== null}
         <img src={thumbUrl(current.artId, 512)} alt="" />
       {:else if current.name === NO_ARTIST}
         <Icon name="music_note" size={44} />
       {:else}
         <Icon name="person" size={48} />
+      {/if}
+      {#if reordering && current.name !== NO_ARTIST}
+        <button
+          class="avatar-edit"
+          onclick={pickArtistImage}
+          title="Change artist image"
+          aria-label="Change artist image"
+        >
+          <Icon name="photo_camera" size={20} />
+        </button>
+        <input
+          type="file"
+          accept="image/*"
+          bind:this={imageInput}
+          onchange={onArtistImagePicked}
+          hidden
+        />
       {/if}
     </span>
     <div>
@@ -165,6 +230,21 @@
       <p class="muted">{trackLabel(current.songs)}</p>
       <div class="head-actions">
         <PlayActions {vm} songs={current.songs} />
+        {#if current.songs.length > 1}
+          <button
+            class="edit-order"
+            class:on={reordering}
+            onclick={() => (reordering = !reordering)}
+          >
+            <Icon name={reordering ? "check" : "edit"} size={16} />
+            {reordering ? "Done" : "Edit"}
+          </button>
+        {/if}
+        {#if reordering && current.name !== NO_ARTIST && customImages.has(current.name)}
+          <button class="edit-order" onclick={clearArtistImage}>
+            <Icon name="hide_image" size={16} /> Remove image
+          </button>
+        {/if}
         {#if current.name !== NO_ARTIST}
           <button class="share-artist" onclick={toggleArtistShare} disabled={shareBusy}>
             <Icon name="public" size={16} />
@@ -190,27 +270,19 @@
       {@const isCurrent = song.id === vm.currentSong?.id}
       <li
         class:current={isCurrent}
-        class:dragging={i === dragIndex}
-        class:dragover={i === overIndex && i !== dragIndex}
-        draggable="true"
-        ondragstart={() => (dragIndex = i)}
-        ondragover={(e) => {
-          e.preventDefault();
-          overIndex = i;
-        }}
-        ondrop={(e) => {
-          e.preventDefault();
-          onDrop(i);
-        }}
-        ondragend={() => {
-          dragIndex = null;
-          overIndex = null;
-        }}
-        use:swipeQueue={{ onQueue: () => vm.addToQueue(song) }}
+        class:playing={isCurrent && vm.isPlaying}
+        data-reorder-index={i}
+        use:swipeQueue={{ onQueue: () => vm.playNext(song), disabled: reordering }}
       >
-        <span class="handle" title="Drag to reorder" aria-hidden="true">
-          <Icon name="drag_indicator" size={18} />
-        </span>
+        {#if reordering}
+          <span
+            class="handle"
+            title="Drag to reorder"
+            use:reorderHandle={{ index: i, onMove: moveTrack }}
+          >
+            <Icon name="drag_indicator" size={18} />
+          </span>
+        {/if}
         <button class="track" onclick={() => vm.playQueue(current.songs, i)}>
           <span class="thumb">
             {#if song.hasArt}
@@ -225,6 +297,9 @@
                 size={22}
               />
             </span>
+            {#if isCurrent && vm.isPlaying}
+              <span class="thumb-wave"><EqualizerBars size={18} /></span>
+            {/if}
           </span>
           <span class="t-meta">
             <span class="t-name">{song.originalFilename}</span>
@@ -246,7 +321,9 @@
     {#each artists as artist (artist.name)}
       <button class="card" onclick={() => openArtistView(artist.name)}>
         <span class="avatar">
-          {#if artist.artId !== null}
+          {#if customImages.has(artist.name)}
+            <img src={artistImageUrl(artist.name, imgVersion)} alt="" />
+          {:else if artist.artId !== null}
             <img src={thumbUrl(artist.artId, 512)} alt="" />
           {:else if artist.name === NO_ARTIST}
             <Icon name="music_note" size={36} />
@@ -285,6 +362,7 @@
     background: var(--hover);
   }
   .avatar {
+    position: relative;
     width: 100%;
     aspect-ratio: 1;
     display: flex;
@@ -299,6 +377,21 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  /* Camera overlay shown only in edit mode to change the artist picture. */
+  .avatar-edit {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    border: none;
+    color: #fff;
+    cursor: pointer;
+  }
+  .avatar-edit:hover {
+    background: rgba(0, 0, 0, 0.55);
   }
   .card-name {
     font-weight: 600;
@@ -338,7 +431,8 @@
     align-items: center;
     gap: 0.5rem;
   }
-  .share-artist {
+  .share-artist,
+  .edit-order {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
@@ -351,6 +445,11 @@
     font-weight: 600;
     font-size: 0.85rem;
     cursor: pointer;
+  }
+  .edit-order.on {
+    background: var(--active-bg);
+    color: var(--accent-text);
+    border-color: var(--accent);
   }
   .share-artist:hover:not(:disabled) {
     background: var(--hover);
@@ -410,12 +509,6 @@
     display: flex;
     align-items: center;
     border-bottom: 1px solid var(--surface-2);
-  }
-  li.dragging {
-    opacity: 0.4;
-  }
-  li.dragover {
-    border-top: 2px solid var(--accent);
   }
   .handle {
     display: inline-flex;
@@ -478,8 +571,21 @@
     transition: opacity 0.12s;
   }
   .track:hover .thumb-play,
-  li.current .thumb-play {
+  li.current:not(.playing) .thumb-play {
     opacity: 1;
+  }
+  .thumb-wave {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.45);
+    transition: opacity 0.12s;
+  }
+  .track:hover .thumb-wave {
+    opacity: 0;
   }
   .t-meta {
     display: flex;

@@ -161,6 +161,25 @@ export function migrate(database: Database.Database): void {
       ON friendships(requester_id, status);
     CREATE INDEX IF NOT EXISTS idx_friendships_addressee
       ON friendships(addressee_id, status);
+
+    -- Cross-device sync: remembers which device was last the audio output for a
+    -- user, so a refresh (or server restart) defaults back to it instead of
+    -- jumping to another open device. Moving output is a manual "listen here".
+    CREATE TABLE IF NOT EXISTS sync_active_device (
+      user_id          TEXT PRIMARY KEY,
+      active_device_id TEXT,
+      updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Custom artist avatar images (per user). When absent, the UI falls back to
+    -- the artist's top track embedded art. The file lives in the art directory.
+    CREATE TABLE IF NOT EXISTS artist_images (
+      user_id    TEXT NOT NULL,
+      artist     TEXT NOT NULL,
+      filename   TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, artist)
+    );
   `);
 
   // Metadata columns added post-MVP (Cycle 9). Added conditionally so existing

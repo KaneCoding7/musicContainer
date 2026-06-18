@@ -257,6 +257,52 @@ export function thumbUrl(songId: number, size: number): string {
   )}&v=${artVersion(songId)}`;
 }
 
+// --- Custom artist avatar images ---
+
+// The artist name is passed as a query param (not a path segment) so names with
+// slashes or other special characters work.
+function artistImageEndpoint(artist: string): string {
+  return `${apiBase()}/api/artists/image?name=${encodeURIComponent(artist)}`;
+}
+
+// URL for an artist's custom image. `version` busts the cache after a change.
+export function artistImageUrl(artist: string, version = 0): string {
+  return `${withToken(artistImageEndpoint(artist))}&v=${version}`;
+}
+
+// Artist names the current user has set a custom image for.
+export async function fetchArtistImages(): Promise<string[]> {
+  const res = await fetch(`${apiBase()}/api/artists/images`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) return [];
+  return ((await res.json()).artists ?? []) as string[];
+}
+
+// Uploads/replaces an artist's custom image.
+export async function uploadArtistImage(
+  artist: string,
+  file: File
+): Promise<void> {
+  const formData = new FormData();
+  formData.append("art", file);
+  const res = await fetch(artistImageEndpoint(artist), {
+    method: "PUT",
+    headers: authHeaders(),
+    body: formData,
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
+// Removes an artist's custom image (reverts to the top-track art).
+export async function removeArtistImage(artist: string): Promise<void> {
+  const res = await fetch(artistImageEndpoint(artist), {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
 // Deletes a song from the library.
 export async function deleteSong(songId: number): Promise<void> {
   const res = await fetch(`${apiBase()}/api/songs/${songId}`, {

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { fade, slide } from "svelte/transition";
+  import { cubicOut } from "svelte/easing";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import AlbumsView from "$lib/components/AlbumsView.svelte";
@@ -175,6 +177,23 @@
     };
   });
 
+  // Closes the queue panel when clicking anywhere outside it. Clicks on the
+  // player bar are ignored so the queue toggle (and other transport controls)
+  // keep working — the toggle closes the queue via its own handler.
+  function closeOnOutside(node: HTMLElement) {
+    const handler = (e: Event) => {
+      const t = e.target as HTMLElement;
+      if (node.contains(t) || t.closest(".player")) return;
+      queueOpen = false;
+    };
+    document.addEventListener("pointerdown", handler, true);
+    return {
+      destroy() {
+        document.removeEventListener("pointerdown", handler, true);
+      },
+    };
+  }
+
   // Delete a song, then refresh the open playlist (its membership may change).
   async function handleDelete(id: number) {
     await vm.remove(id);
@@ -266,6 +285,7 @@
           class="scrim"
           aria-label="Close menu"
           onclick={() => (sidebarOpen = false)}
+          transition:fade={{ duration: 200 }}
         ></button>
       {/if}
       <aside class="sidebar" class:open={sidebarOpen}>
@@ -373,7 +393,11 @@
   </div>
 
   {#if queueOpen}
-    <section class="queue-panel">
+    <section
+      class="queue-panel"
+      use:closeOnOutside
+      transition:slide={{ duration: 260, easing: cubicOut }}
+    >
       <div class="queue-head">
         <h3>Queue</h3>
         <button
@@ -404,7 +428,8 @@
   .layout {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 100vh; /* fallback for browsers without dvh */
+    height: 100dvh; /* dynamic viewport: excludes Safari's bottom toolbar */
   }
   .body {
     display: flex;
@@ -474,6 +499,7 @@
   }
   .boot {
     height: 100vh;
+    height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -666,7 +692,8 @@
       z-index: 50;
       width: min(80vw, 280px);
       transform: translateX(-100%);
-      transition: transform 0.22s ease;
+      transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+      will-change: transform;
       box-shadow: 0 0 32px rgba(0, 0, 0, 0.4);
     }
     .sidebar.open {

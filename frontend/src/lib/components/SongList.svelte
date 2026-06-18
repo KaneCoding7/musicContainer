@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
+  import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
@@ -217,26 +218,29 @@
   {:else if vm.filteredSongs.length === 0}
     <p class="muted">No songs match "{vm.query}".</p>
   {:else}
-    <div class="list-head" aria-hidden="true">
-      <span class="col-index">#</span>
-      <span>Title</span>
-      <span class="col-date">Date added</span>
-      <span class="col-plays">Plays</span>
-      <span class="col-dur"><Icon name="schedule" size={18} /></span>
-      <span class="col-like"></span>
-      <span class="col-menu"></span>
+    <div class="list-head" class:selecting aria-hidden="true">
+      {#if selecting}<span class="col-index"></span>{/if}
+      <span class="head-title">Title</span>
+      <div class="row-end">
+        <span class="col-date">Date added</span>
+        <span class="col-plays">Plays</span>
+        <span class="col-dur"><Icon name="schedule" size={18} /></span>
+        <span class="col-like"></span>
+        <span class="col-menu"></span>
+      </div>
     </div>
-    <ul>
+    <ul class:selecting>
       {#each vm.filteredSongs as song, i (song.id)}
         {@const isCurrent = song.id === vm.currentSong?.id}
         <li
           class="song-row"
           class:current={isCurrent}
+          class:playing={isCurrent && vm.isPlaying}
           class:selected={selected.has(song.id)}
-          use:swipeQueue={{ onQueue: () => vm.addToQueue(song) }}
+          use:swipeQueue={{ onQueue: () => vm.playNext(song) }}
         >
-          <span class="col-index">
-            {#if selecting}
+          {#if selecting}
+            <span class="col-index">
               <button
                 class="check"
                 role="checkbox"
@@ -251,10 +255,8 @@
                   size={22}
                 />
               </button>
-            {:else}
-              <span class="num">{String(i + 1).padStart(2, "0")}</span>
-            {/if}
-          </span>
+            </span>
+          {/if}
           <button
             class="row"
             onclick={() =>
@@ -275,6 +277,9 @@
                   size={22}
                 />
               </span>
+              {#if isCurrent && vm.isPlaying}
+                <span class="thumb-wave"><EqualizerBars size={20} /></span>
+              {/if}
             </span>
             <span class="meta">
               <span class="name">{song.originalFilename}</span>
@@ -283,27 +288,29 @@
               {/if}
             </span>
           </button>
-          <span class="col-date" title={formatDate(song.uploadedAt)}>
-            {relativeDate(song.uploadedAt)}
-          </span>
-          <span
-            class="col-plays plays"
-            title={`${song.playCount} play${song.playCount === 1 ? "" : "s"}`}
-          >
-            <Icon name="play_arrow" size={13} />{song.playCount}
-          </span>
-          <span class="col-dur dur">
-            {song.duration ? formatDuration(song.duration) : "—"}
-          </span>
-          <button
-            class="col-like action like"
-            class:liked={song.liked}
-            title={song.liked ? "Unlike" : "Like"}
-            aria-label={song.liked ? "Unlike song" : "Like song"}
-            onclick={() => vm.toggleLike(song.id)}
-            ><Icon name="favorite" fill={song.liked} size={20} /></button
-          >
-          <SongMenu {vm} {song} onEdit={onUpdate} onDelete={onDelete} />
+          <div class="row-end">
+            <span class="col-date" title={formatDate(song.uploadedAt)}>
+              {relativeDate(song.uploadedAt)}
+            </span>
+            <span
+              class="col-plays plays"
+              title={`${song.playCount} play${song.playCount === 1 ? "" : "s"}`}
+            >
+              <Icon name="play_arrow" size={13} />{song.playCount}
+            </span>
+            <span class="col-dur dur">
+              {song.duration ? formatDuration(song.duration) : "—"}
+            </span>
+            <button
+              class="col-like action like"
+              class:liked={song.liked}
+              title={song.liked ? "Unlike" : "Like"}
+              aria-label={song.liked ? "Unlike song" : "Like song"}
+              onclick={() => vm.toggleLike(song.id)}
+              ><Icon name="favorite" fill={song.liked} size={20} /></button
+            >
+            <SongMenu {vm} {song} onEdit={onUpdate} onDelete={onDelete} />
+          </div>
         </li>
       {/each}
     </ul>
@@ -469,13 +476,23 @@
     padding: 0;
     margin: 0;
   }
-  /* Shared column grid for the header and every row so they line up. */
+  /* Two sections: the track (art + title + artist) fills the left, the metadata
+     group sits on the right, with the flexible space between them. */
   .list-head,
   li.song-row {
-    display: grid;
-    grid-template-columns: 2.25rem minmax(0, 1fr) 7.5rem 4rem 4rem 2.75rem 2.5rem;
+    display: flex;
     align-items: center;
-    column-gap: 0.75rem;
+    gap: 0.75rem;
+  }
+  .head-title {
+    flex: 1;
+    min-width: 0;
+  }
+  .row-end {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    flex-shrink: 0;
   }
   .list-head {
     padding: 0 0.75rem 0.5rem;
@@ -488,6 +505,13 @@
   }
   .list-head .col-dur {
     display: inline-flex;
+    justify-content: flex-end;
+  }
+  .col-like {
+    width: 2.25rem;
+  }
+  .col-menu {
+    width: 2.25rem;
   }
   li.song-row {
     padding: 0 0.75rem;
@@ -506,13 +530,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-  }
-  .num {
-    color: var(--dim);
-    font-size: 0.85rem;
-    font-variant-numeric: tabular-nums;
+    width: 1.75rem;
+    flex-shrink: 0;
   }
   .row {
+    flex: 1;
     min-width: 0;
     display: flex;
     align-items: center;
@@ -541,17 +563,28 @@
   .action:hover {
     background: var(--surface-2);
   }
+  /* Fixed widths keep the header labels lined up over their values. */
   .col-date {
+    width: 7.5rem;
+    text-align: right;
     color: var(--muted);
     font-size: 0.8rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .col-dur {
+    width: 3rem;
+    text-align: right;
+  }
   .col-dur.dur {
     color: var(--muted);
     font-size: 0.82rem;
     font-variant-numeric: tabular-nums;
+  }
+  .col-plays {
+    width: 3rem;
+    justify-content: flex-end;
   }
   .plays {
     display: inline-flex;
@@ -594,8 +627,23 @@
     transition: opacity 0.12s;
   }
   li.song-row:hover .thumb-play,
-  li.current .thumb-play {
+  li.current:not(.playing) .thumb-play {
     opacity: 1;
+  }
+  /* The playing track shows the live sound-wave by default; hovering hides it
+     so the play/pause control underneath is reachable. */
+  .thumb-wave {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.45);
+    transition: opacity 0.12s;
+  }
+  li.song-row:hover .thumb-wave {
+    opacity: 0;
   }
   .meta {
     flex: 1;
@@ -626,12 +674,8 @@
       flex-basis: 100%;
       max-width: none;
     }
-    /* Drop the date + plays columns to keep rows readable on phones. */
-    .list-head,
-    li.song-row {
-      grid-template-columns: 2.25rem minmax(0, 1fr) 3.5rem 2.5rem 2.5rem;
-      column-gap: 0.5rem;
-    }
+    /* Track on the left, controls on the right (flex handles the split). Date +
+       plays are dropped to keep rows readable on phones. */
     .col-date,
     .col-plays {
       display: none;
