@@ -40,13 +40,30 @@
   function openArtist(name: string) {
     goto(`?view=artists&artist=${encodeURIComponent(name)}`, { noScroll: true });
   }
+
+  type SortBy = "added" | "name" | "plays" | "duration";
+
+  // Clicking a section title jumps to the full view it summarizes.
+  function goSection(targetView: string, sort?: SortBy) {
+    if (sort) vm.sortBy = sort;
+    goto(targetView === "home" ? "/" : `?view=${targetView}`, { noScroll: true });
+  }
 </script>
 
-{#snippet section(title: string, icon: string, list: Song[])}
+{#snippet section(
+  title: string,
+  icon: string,
+  list: Song[],
+  target: string,
+  sort?: SortBy,
+)}
   {#if list.length > 0}
     <section>
       <div class="head">
-        <h3><Icon name={icon} size={20} /> {title}</h3>
+        <button class="head-title" onclick={() => goSection(target, sort)}>
+          <Icon name={icon} size={20} /> {title}
+          <Icon name="chevron_right" size={20} />
+        </button>
       </div>
       <div class="cards">
         {#each list as song, i (song.id)}
@@ -71,13 +88,16 @@
 {#if vm.songs.length === 0}
   <p class="muted">No songs yet. Upload some to get started.</p>
 {:else}
-  {@render section("Recently Added", "schedule", recentlyAdded)}
-  {@render section("Most Played", "trending_up", mostPlayed)}
+  {@render section("Recently Added", "schedule", recentlyAdded, "songs", "added")}
+  {@render section("Most Played", "trending_up", mostPlayed, "songs", "plays")}
 
   {#if mostPlayedArtists.length > 0}
     <section>
       <div class="head">
-        <h3><Icon name="artist" size={20} /> Most Played Artists</h3>
+        <button class="head-title" onclick={() => goSection("artists")}>
+          <Icon name="artist" size={20} /> Most Played Artists
+          <Icon name="chevron_right" size={20} />
+        </button>
       </div>
       <div class="cards artists">
         {#each mostPlayedArtists as a (a.name)}
@@ -97,7 +117,7 @@
     </section>
   {/if}
 
-  {@render section("Recently Played", "history", recentlyPlayed)}
+  {@render section("Recently Played", "history", recentlyPlayed, "recent")}
 {/if}
 
 <style>
@@ -110,12 +130,32 @@
     gap: 0.85rem;
     margin-bottom: 0.75rem;
   }
-  h3 {
-    display: flex;
+  .head-title {
+    display: inline-flex;
     align-items: center;
     gap: 0.45rem;
     margin: 0;
+    padding: 0.1rem 0.3rem 0.1rem 0;
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
     font-size: 1.15rem;
+    font-weight: 700;
+    cursor: pointer;
+    border-radius: 0.4rem;
+  }
+  /* The trailing chevron is dim until you hover the title. */
+  .head-title :global(.material-symbols-rounded:last-child) {
+    color: var(--dim);
+    transition: transform 0.12s;
+  }
+  .head-title:hover {
+    color: var(--accent-text);
+  }
+  .head-title:hover :global(.material-symbols-rounded:last-child) {
+    color: var(--accent-text);
+    transform: translateX(2px);
   }
   .cards {
     display: grid;
