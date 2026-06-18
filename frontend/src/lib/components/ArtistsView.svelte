@@ -213,6 +213,13 @@
         </span>
         <button class="track" onclick={() => vm.playQueue(current.songs, i)}>
           <span class="num">{i + 1}</span>
+          <span class="thumb">
+            {#if song.hasArt}
+              <img src={thumbUrl(song.id, 128)} alt="" />
+            {:else}
+              <Icon name="album" size={18} />
+            {/if}
+          </span>
           <span class="t-meta">
             <span class="t-name">{song.originalFilename}</span>
             {#if song.album}<span class="t-sub">{song.album}</span>{/if}
@@ -439,6 +446,23 @@
     width: 1.5rem;
     color: var(--dim);
     text-align: right;
+  }
+  .thumb {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-2);
+    border-radius: 0.35rem;
+    color: var(--dim);
+    overflow: hidden;
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
   .t-meta {
     display: flex;
