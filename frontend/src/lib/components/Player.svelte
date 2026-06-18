@@ -443,6 +443,7 @@
         step="0.1"
         value={currentTime}
         oninput={onSeek}
+        style="--pct: {duration ? (currentTime / duration) * 100 : 0}%"
         aria-label="Seek"
       />
       <span class="time">{formatTime(duration)}</span>
@@ -544,6 +545,7 @@
         step="0.1"
         value={currentTime}
         oninput={onSeek}
+        style="--pct: {duration ? (currentTime / duration) * 100 : 0}%"
         aria-label="Seek"
       />
       <span class="time">{formatTime(duration)}</span>
@@ -601,6 +603,7 @@
         max="1"
         step="0.01"
         bind:value={vm.volume}
+        style="--pct: {vm.volume * 100}%"
         aria-label="Volume"
       />
     </div>
@@ -900,8 +903,48 @@
     color: var(--accent-text);
     background: var(--active-bg);
   }
+  /* Thin, crisp custom sliders (fill driven by --pct on the element). */
   input[type="range"] {
-    accent-color: var(--accent);
+    -webkit-appearance: none;
+    appearance: none;
+    height: 12px;
+    background: transparent;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(
+      to right,
+      var(--accent) 0 var(--pct, 0%),
+      var(--surface-2) var(--pct, 0%)
+    );
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 11px;
+    height: 11px;
+    margin-top: -3.5px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  input[type="range"]::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--surface-2);
+  }
+  input[type="range"]::-moz-range-progress {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 11px;
+    height: 11px;
+    border: none;
+    border-radius: 50%;
+    background: var(--accent);
   }
   @media (max-width: 768px) {
     .player {

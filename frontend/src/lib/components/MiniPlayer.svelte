@@ -46,6 +46,7 @@
         step="0.1"
         value={vm.position}
         oninput={onSeek}
+        style="--pct: {vm.duration ? (vm.position / vm.duration) * 100 : 0}%"
         aria-label="Seek"
       />
       <div class="times">
@@ -145,7 +146,46 @@
   .seek input {
     width: 100%;
     margin: 0;
-    accent-color: #fff;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 12px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .seek input::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(
+      to right,
+      #fff 0 var(--pct, 0%),
+      rgba(255, 255, 255, 0.3) var(--pct, 0%)
+    );
+  }
+  .seek input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 11px;
+    height: 11px;
+    margin-top: -3.5px;
+    border-radius: 50%;
+    background: #fff;
+  }
+  .seek input::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.3);
+  }
+  .seek input::-moz-range-progress {
+    height: 4px;
+    border-radius: 2px;
+    background: #fff;
+  }
+  .seek input::-moz-range-thumb {
+    width: 11px;
+    height: 11px;
+    border: none;
+    border-radius: 50%;
+    background: #fff;
   }
   .times {
     display: flex;

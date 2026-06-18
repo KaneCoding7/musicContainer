@@ -48,7 +48,7 @@
     <section>
       <div class="head">
         <h3><Icon name={icon} size={20} /> {title}</h3>
-        <PlayActions {vm} songs={list} />
+        <PlayActions {vm} songs={list} shuffle={false} />
       </div>
       <div class="cards">
         {#each list as song, i (song.id)}
