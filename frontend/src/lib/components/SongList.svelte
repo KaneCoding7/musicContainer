@@ -275,10 +275,10 @@
     align-items: center;
     gap: 0.4rem;
     flex-shrink: 0;
-    padding: 0.5rem 0.8rem;
+    padding: 0.5rem 1rem;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
-    border-radius: 0.5rem;
+    border-radius: 2rem;
     color: var(--text);
     font: inherit;
     font-weight: 500;
@@ -292,10 +292,10 @@
     align-items: center;
     gap: 0.35rem;
     flex-shrink: 0;
-    padding: 0.4rem 0.6rem;
+    padding: 0.4rem 0.9rem;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
-    border-radius: 0.5rem;
+    border-radius: 2rem;
     color: var(--muted);
   }
   .sort select {
@@ -382,16 +382,17 @@
     background: var(--active-bg);
   }
   .search {
-    flex: 1;
+    flex: 0 1 22rem;
     min-width: 0;
+    max-width: 22rem;
     box-sizing: border-box;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.5rem 0.8rem;
+    padding: 0.5rem 1.1rem;
     background: var(--surface);
     border: 1px solid var(--border-strong);
-    border-radius: 0.5rem;
+    border-radius: 2rem;
     color: var(--dim);
   }
   .search input {
@@ -529,6 +530,7 @@
   @media (max-width: 768px) {
     .search {
       flex-basis: 100%;
+      max-width: none;
     }
     .row {
       gap: 0.6rem;

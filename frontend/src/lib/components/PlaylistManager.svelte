@@ -934,10 +934,10 @@
     width: 100%;
     box-sizing: border-box;
     margin-top: 0.6rem;
-    padding: 0.5rem 0.7rem;
+    padding: 0.5rem 1.1rem;
     background: var(--bg);
     border: 1px solid var(--border-strong);
-    border-radius: 0.5rem;
+    border-radius: 2rem;
     color: var(--text);
     font: inherit;
   }

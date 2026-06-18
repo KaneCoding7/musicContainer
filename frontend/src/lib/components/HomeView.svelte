@@ -109,7 +109,7 @@
   .head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 0.85rem;
     margin-bottom: 0.75rem;
   }
   h3 {
