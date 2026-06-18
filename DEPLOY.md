@@ -7,11 +7,10 @@ Two goals:
 2. **Hold the live rebuild until midnight**, so merging during the day doesn't
    restart the server while people are listening.
 
-> **Which branch is "live"?** This repo's default branch — the one everyone uses
-> and the live server tracks — is currently **`claude/music-container-repo-72yqub`**
-> (there is no branch literally named `main`). The deploy tooling below
-> auto-detects whatever branch the live checkout is on, so you don't have to
-> hardcode that name anywhere.
+> **Which branch is "live"?** The default branch — the one everyone uses and the
+> live server tracks — is **`main`**. The deploy tooling below auto-detects
+> whatever branch the live checkout is on, so renaming/changing it later needs
+> no edits here.
 
 ---
 
@@ -26,10 +25,11 @@ The preview stack is a full, isolated copy of the app:
 | Data dir | `./data` (real library) | `./data-preview` (sandbox) |
 | Containers | `music-*` | `music-preview-*` |
 
-Check out the branch you want to try, then:
+Preview the branch you're on, or name a branch to fetch + preview it:
 
 ```bash
-./scripts/preview.sh
+./scripts/preview.sh                     # the branch you're on
+./scripts/preview.sh claude/some-branch  # fetch + preview a specific branch
 # open http://localhost:3100
 ```
 
@@ -42,6 +42,24 @@ docker compose -p music-preview -f docker-compose.preview.yml down
 ```
 
 (The `./data-preview` folder is git-ignored, so it never gets committed.)
+
+> Run previews from a **dev clone or your laptop**, not the live server's deploy
+> folder — that way switching branches to preview can't disturb what the nightly
+> deploy ships.
+
+### Previewing changes I (Claude) make for you
+
+The flow that keeps `main` safe:
+
+1. I make changes on a **feature branch** and open a PR — `main` is untouched.
+2. You preview that branch:  `./scripts/preview.sh <the-branch-name>`  →
+   http://localhost:3100. The live server (`:3000`) and `main` are unaffected
+   because nothing has merged yet.
+3. Happy with it? Merge the PR into `main`. The live server picks it up at the
+   next **midnight** rebuild (or `FORCE=1 ./scripts/deploy.sh` for an immediate
+   push).
+
+So nothing I do reaches `main` — or anyone's playback — until you merge.
 
 > Prefer hot-reload while coding? `docker-compose.dev.yml` is still there for
 > live source reloading. The preview stack is for testing a *built* copy that

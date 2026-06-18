@@ -11,8 +11,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Default to whatever branch the live checkout is already on (this repo's
-# default branch is currently `claude/music-container-repo-72yqub`, not `main`),
+# Default to whatever branch the live checkout is already on (normally `main`),
 # so we redeploy the same line of work the server already tracks.
 BRANCH="${DEPLOY_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
 
