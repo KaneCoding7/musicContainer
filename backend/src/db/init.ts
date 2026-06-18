@@ -144,6 +144,23 @@ export function migrate(database: Database.Database): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(user_id, artist)
     );
+
+    -- Mutual friendships: one row per ordered pair. 'pending' until the
+    -- addressee accepts, then 'accepted' (the relationship is undirected once
+    -- accepted, so reads check both the requester and addressee sides).
+    CREATE TABLE IF NOT EXISTS friendships (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      requester_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      addressee_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      status       TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'accepted'
+      created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(requester_id, addressee_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_friendships_requester
+      ON friendships(requester_id, status);
+    CREATE INDEX IF NOT EXISTS idx_friendships_addressee
+      ON friendships(addressee_id, status);
   `);
 
   // Metadata columns added post-MVP (Cycle 9). Added conditionally so existing
