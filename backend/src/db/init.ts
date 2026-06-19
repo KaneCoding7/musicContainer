@@ -190,6 +190,16 @@ export function migrate(database: Database.Database): void {
       snapshot   TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
+
+    -- A dedicated, revocable password per user for Subsonic/OpenSubsonic API
+    -- clients (DSub, Symfonium, ...). The login password is irreversibly hashed
+    -- by Better Auth, but Subsonic token auth needs the plaintext to verify, so
+    -- this is a separate generated credential the user can regenerate any time.
+    CREATE TABLE IF NOT EXISTS subsonic_credentials (
+      user_id    TEXT PRIMARY KEY,
+      password   TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Metadata columns added post-MVP (Cycle 9). Added conditionally so existing

@@ -1,6 +1,12 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
   import { analyzeLoudness } from "$lib/services/songService";
+  import { apiBase } from "$lib/services/apiBase";
+  import {
+    getSubsonicCredential,
+    generateSubsonicCredential,
+  } from "$lib/services/subsonicService";
   import type { AuthViewModel } from "$lib/viewmodels/authViewModel.svelte";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -52,6 +58,50 @@
       };
     } finally {
       analyzing = false;
+    }
+  }
+
+  // Subsonic / OpenSubsonic client credential.
+  const subsonicUrl = apiBase();
+  let subUsername = $state<string | null>(null);
+  let subPassword = $state<string | null>(null);
+  let subShow = $state(false);
+  let subBusy = $state(false);
+  let subMsg = $state<string | null>(null);
+
+  onMount(async () => {
+    try {
+      const c = await getSubsonicCredential();
+      subUsername = c.username;
+      subPassword = c.password;
+    } catch {
+      /* leave blank; user can still generate */
+    }
+  });
+
+  async function genSubsonic() {
+    subBusy = true;
+    subMsg = null;
+    try {
+      const c = await generateSubsonicCredential();
+      subUsername = c.username;
+      subPassword = c.password;
+      subShow = true;
+      subMsg = "New password generated — update it in your Subsonic app.";
+    } catch (e) {
+      subMsg = e instanceof Error ? e.message : "Failed to generate";
+    } finally {
+      subBusy = false;
+    }
+  }
+
+  async function copyText(text: string | null) {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      subMsg = "Copied to clipboard";
+    } catch {
+      subMsg = "Couldn't copy — select and copy manually";
     }
   }
 
@@ -201,6 +251,49 @@
   </form>
   {#if pwMsg}<p class="msg" class:err={!pwMsg.ok}>{pwMsg.text}</p>{/if}
 
+  <p class="section">Subsonic apps</p>
+  <p class="sub hint">
+    Connect a Subsonic / OpenSubsonic app (DSub, Symfonium, Tempo, play:Sub…)
+    using a dedicated password — separate from your login.
+  </p>
+  <div class="row">
+    <div class="info">
+      <span class="t">Server</span>
+      <span class="sub mono">{subsonicUrl}</span>
+    </div>
+    <button class="ghost" onclick={() => copyText(subsonicUrl)}>Copy</button>
+  </div>
+  <div class="row">
+    <div class="info">
+      <span class="t">Username</span>
+      <span class="sub mono">{subUsername ?? "—"}</span>
+    </div>
+    {#if subUsername}
+      <button class="ghost" onclick={() => copyText(subUsername)}>Copy</button>
+    {/if}
+  </div>
+  <div class="row">
+    <div class="info">
+      <span class="t">Password</span>
+      <span class="sub mono">
+        {subPassword ? (subShow ? subPassword : "••••••••••••") : "Not set"}
+      </span>
+    </div>
+    {#if subPassword}
+      <button class="ghost" onclick={() => (subShow = !subShow)}>
+        {subShow ? "Hide" : "Show"}
+      </button>
+    {/if}
+  </div>
+  <button class="ghost gen" onclick={genSubsonic} disabled={subBusy}>
+    {subBusy
+      ? "Generating…"
+      : subPassword
+        ? "Regenerate password"
+        : "Generate password"}
+  </button>
+  {#if subMsg}<p class="msg">{subMsg}</p>{/if}
+
   <p class="section">Account</p>
   <button class="signout" onclick={onSignOut}>
     <Icon name="logout" size={18} /> Sign out
@@ -243,6 +336,16 @@
   .sub {
     color: var(--dim);
     font-size: 0.78rem;
+  }
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow-wrap: anywhere;
+  }
+  .hint {
+    margin: 0.25rem 0 0.5rem;
+  }
+  .gen {
+    margin-top: 0.6rem;
   }
 
   /* Toggle switch */
