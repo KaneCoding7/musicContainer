@@ -60,8 +60,12 @@
         <input bind:value={name} autocomplete="name" required />
       </label>
       <label>
-        Invite code <span class="opt">(if you have one)</span>
-        <input bind:value={invite} placeholder="Optional" />
+        Invite code
+        <input
+          bind:value={invite}
+          placeholder="Enter your invite code"
+          required
+        />
       </label>
     {/if}
     <label>
