@@ -22,6 +22,10 @@
   let audio = $state<HTMLAudioElement | null>(null);
   let currentTime = $state(0);
   let duration = $state(0);
+  // True while the user is dragging a seek bar, so playback's timeupdate events
+  // don't yank currentTime (and thus the fill) back to the live position and
+  // fight the scrub.
+  let seeking = $state(false);
   // The track id we've already counted a play for, so a play is recorded once
   // per listen (reset when the same track restarts — replay / repeat-one).
   let recordedSongId: number | null = null;
@@ -367,6 +371,7 @@
   }
 
   function onTimeUpdate() {
+    if (seeking) return; // don't fight an active scrub
     currentTime = audio?.currentTime ?? 0;
     vm.position = currentTime; // tracked for refresh-resume persistence
     updatePositionState();
@@ -702,7 +707,43 @@
 
   function onSeek(event: Event) {
     const value = Number((event.target as HTMLInputElement).value);
+    currentTime = value; // keep the thumb and the filled track in lockstep
     vm.seek(value); // forwards as a command when this device is a remote
+  }
+  // Native sliders (web): mark the scrub so playback doesn't fight the fill.
+  function onSeekStart() {
+    seeking = true;
+  }
+  function onSeekCommit() {
+    seeking = false;
+  }
+
+  // Full-screen seek row: dragging anywhere across it scrubs the position,
+  // rather than the swipe being read as a track skip. The skip gesture stays on
+  // the album art above. Touches here are kept from bubbling to the skip
+  // handler (npTouch*), and mapped to a time via the slider's width.
+  let seekInput: HTMLInputElement | null = null;
+  function seekFromClientX(clientX: number) {
+    if (!seekInput || !duration) return;
+    const r = seekInput.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    const t = frac * duration;
+    currentTime = t; // immediate visual feedback while dragging
+    vm.seek(t);
+  }
+  function seekTouchStart(e: TouchEvent) {
+    e.stopPropagation(); // don't let the skip-swipe see this gesture
+    seeking = true;
+    seekFromClientX(e.touches[0].clientX);
+  }
+  function seekTouchMove(e: TouchEvent) {
+    e.stopPropagation();
+    e.preventDefault(); // own the gesture: no page scroll / skip animation
+    seekFromClientX(e.touches[0].clientX);
+  }
+  function seekTouchEnd(e: TouchEvent) {
+    e.stopPropagation();
+    seeking = false;
   }
 
   function formatTime(seconds: number): string {
@@ -838,7 +879,13 @@
       {#if song.artist}<p class="npf-artist">{song.artist}</p>{/if}
       {#if song.album}<p class="npf-album">{song.album}</p>{/if}
     </div>
-    <div class="npf-seek">
+    <div
+      class="npf-seek"
+      ontouchstart={seekTouchStart}
+      ontouchmove={seekTouchMove}
+      ontouchend={seekTouchEnd}
+      ontouchcancel={seekTouchEnd}
+    >
       <span class="time">{formatTime(currentTime)}</span>
       <input
         type="range"
@@ -847,6 +894,11 @@
         step="0.1"
         value={currentTime}
         oninput={onSeek}
+        onpointerdown={onSeekStart}
+        onpointerup={onSeekCommit}
+        onpointercancel={onSeekCommit}
+        onchange={onSeekCommit}
+        bind:this={seekInput}
         style="--pct: {duration ? (currentTime / duration) * 100 : 0}%"
         aria-label="Seek"
       />
@@ -987,6 +1039,10 @@
         step="0.1"
         value={currentTime}
         oninput={onSeek}
+        onpointerdown={onSeekStart}
+        onpointerup={onSeekCommit}
+        onpointercancel={onSeekCommit}
+        onchange={onSeekCommit}
         style="--pct: {duration ? (currentTime / duration) * 100 : 0}%"
         aria-label="Seek"
       />
@@ -1228,6 +1284,10 @@
     align-items: center;
     gap: 0.6rem;
     width: min(520px, 90vw);
+    /* Taller hit area so a drag in this row reliably scrubs instead of being
+       read as a track-skip swipe, and own the touch gesture (no page pan). */
+    padding: 0.5rem 0;
+    touch-action: none;
   }
   .npf-seek input {
     flex: 1;
