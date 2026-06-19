@@ -84,6 +84,12 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+// Public client config — lets the sign-in screen reflect server settings (e.g.
+// whether an invite code is required to register) without hardcoding them.
+app.get("/api/config", (_req, res) => {
+  res.json({ inviteOnly: INVITE_ONLY });
+});
+
 // Registration wrapper (public; enforces invites when enabled). Rate-limited
 // since it isn't behind Better Auth's own throttling.
 app.use("/api/register", rateLimit({ windowMs: 60_000, max: 5 }));
