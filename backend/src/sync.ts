@@ -27,6 +27,11 @@ interface Session {
 
 const sessions = new Map<string, Session>(); // keyed by userId
 
+// Commands that express "start playing this here" — the only ones allowed to
+// move audio output to the commanding device when no active device is currently
+// connected. Everything else only controls existing playback.
+const PLAY_INTENT_COMMANDS = new Set(["playQueue", "playList", "shufflePlay"]);
+
 // The active device id is persisted per user so a refresh or server restart
 // defaults playback back to the last device that had output, rather than
 // letting another open device grab it.
@@ -180,12 +185,20 @@ export function attachSync(server: Server): void {
             );
             break;
           }
-          // No active device, or the remembered active device is gone (its tab
-          // was closed / the laptop slept) → the commanding device takes over
-          // output instead of forwarding the command into the void. This is what
-          // makes "press play" on a freshly opened device actually play there
-          // and show the player bar, rather than leaving it stuck on
-          // "Playing on <offline device>".
+          // The active device isn't reachable right now. Only an explicit
+          // "play this" intent may move output to the commanding device — so a
+          // freshly opened device can start playing when the remembered device
+          // is truly gone. Transport tweaks (next/prev/seek/pause/queue edits)
+          // must NOT hijack playback away from a device that's merely
+          // temporarily disconnected (e.g. an iOS PWA whose WebSocket the OS
+          // suspended while backgrounded); those are dropped until it
+          // reconnects, so output stays put instead of silently jumping here.
+          const cmdType =
+            typeof (msg.command as { type?: unknown } | undefined)?.type ===
+            "string"
+              ? (msg.command as { type: string }).type
+              : "";
+          if (!PLAY_INTENT_COMMANDS.has(cmdType)) break;
           setActiveDevice(userId, s, deviceId);
           broadcast(userId);
           const self = s.devices.get(deviceId);
