@@ -15,6 +15,10 @@ import { publicRouter } from "./routes/public.js";
 import { registerRouter } from "./routes/register.js";
 import { sharesRouter } from "./routes/shares.js";
 import { songsRouter } from "./routes/songs.js";
+import {
+  subsonicRouter,
+  subsonicCredentialRouter,
+} from "./routes/subsonic.js";
 
 const INVITE_ONLY = process.env.INVITE_ONLY === "true";
 
@@ -98,8 +102,14 @@ app.use("/api", registerRouter);
 // Public share-link routes (no auth; gated by the opaque token).
 app.use("/api", publicRouter);
 
+// Subsonic / OpenSubsonic API for third-party clients (DSub, Symfonium, ...).
+// Has its own credential scheme (username + generated Subsonic password), so
+// it's mounted outside Better Auth.
+app.use("/rest", subsonicRouter);
+
 // Feature routes (require authentication; data is scoped per user).
 app.use("/api", requireAuth, songsRouter);
+app.use("/api", requireAuth, subsonicCredentialRouter);
 app.use("/api", requireAuth, playlistsRouter);
 app.use("/api", requireAuth, invitesRouter);
 app.use("/api", requireAuth, sharesRouter);
