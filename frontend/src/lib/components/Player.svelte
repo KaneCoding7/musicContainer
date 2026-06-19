@@ -1,6 +1,7 @@
 <script lang="ts">
   import { mount, unmount } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
+  import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import MiniPlayer from "$lib/components/MiniPlayer.svelte";
   import QueueView from "$lib/components/QueueView.svelte";
   import { artUrl, streamUrl, thumbUrl } from "$lib/services/songService";
@@ -22,6 +23,9 @@
   let audio = $state<HTMLAudioElement | null>(null);
   let currentTime = $state(0);
   let duration = $state(0);
+  // The track id we've already counted a play for, so a play is recorded once
+  // per listen (reset when the same track restarts — replay / repeat-one).
+  let recordedSongId: number | null = null;
 
   const song = $derived(vm.currentSong);
 
@@ -155,8 +159,9 @@
     el.play().catch(() => armAutoResume());
   }
 
-  // Load a new source whenever the selected song changes, recording a play for
-  // each newly loaded track (but not for one merely restored after a refresh).
+  // Load a new source whenever the selected song changes. The play itself is
+  // counted later, once the listener reaches ~75% of the track (see
+  // maybeRecordPlay), not the instant it loads.
   $effect(() => {
     const el = audio;
     const id = song?.id;
@@ -170,8 +175,9 @@
       const restored = vm.suppressPlayRecord;
       if (restored) {
         vm.suppressPlayRecord = false;
-      } else {
-        vm.recordPlay(id);
+        // A track restored after a refresh resumes mid-way; don't let crossing
+        // 75% on resume re-count a play it may already have earned.
+        recordedSongId = id;
       }
       if (vm.isPlaying) {
         if (restored) {
@@ -365,6 +371,22 @@
     currentTime = audio?.currentTime ?? 0;
     vm.position = currentTime; // tracked for refresh-resume persistence
     updatePositionState();
+    maybeRecordPlay();
+  }
+
+  // Count a play once ~75% of the track has been reached — a real listen, not a
+  // brief sample or an accidental tap. Only the device actually playing audio
+  // (active) counts it, and only once per listen; a restart (replay/repeat-one)
+  // re-arms it.
+  function maybeRecordPlay() {
+    if (!active) return;
+    const id = song?.id;
+    if (id == null || !duration || !isFinite(duration)) return;
+    if (id === recordedSongId && currentTime < 1) recordedSongId = null;
+    if (id !== recordedSongId && currentTime / duration >= 0.75) {
+      recordedSongId = id;
+      vm.recordPlay(id);
+    }
   }
   function onLoadedMetadata() {
     duration = audio?.duration ?? 0;
@@ -905,6 +927,9 @@
         {:else}
           <Icon name="music_note" size={20} />
         {/if}
+        {#if vm.isPlaying}
+          <span class="np-eq"><EqualizerBars size={16} /></span>
+        {/if}
       </span>
       <span class="np-meta">
         <span class="np-title" title={song.originalFilename}
@@ -1273,6 +1298,7 @@
     transition: none; /* follow the finger 1:1 while dragging */
   }
   .np-art {
+    position: relative;
     width: 40px;
     height: 40px;
     flex-shrink: 0;
@@ -1283,6 +1309,16 @@
     border-radius: 0.35rem;
     color: var(--dim);
     overflow: hidden;
+  }
+  /* Animated "now playing" sound-wave over the art while audio is playing. */
+  .np-eq {
+    position: absolute;
+    inset: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    color: #fff;
   }
   .np-art img {
     width: 100%;
