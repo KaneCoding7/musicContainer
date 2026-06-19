@@ -37,6 +37,16 @@ const app = express();
 // req.ip reflects the real client (used by rate limiting).
 app.set("trust proxy", true);
 
+// Baseline security headers. The API returns JSON/audio (never HTML), so the
+// key ones are nosniff (don't let a reflected response be sniffed as HTML) and
+// denying framing/referrer leakage.
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  next();
+});
+
 app.use(
   cors({
     // Allow the configured public origin(s) plus localhost / private-LAN so the
