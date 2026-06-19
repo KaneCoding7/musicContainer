@@ -19,6 +19,25 @@ docker compose up --build
 The **first account you register becomes the owner** (and claims any pre-existing
 library). The data (SQLite DB, audio, art) persists in `./data`.
 
+## Run from Docker Hub (no source needed)
+
+Published images: [`mrkane7/music-backend`](https://hub.docker.com/r/mrkane7/music-backend)
+and [`mrkane7/music-frontend`](https://hub.docker.com/r/mrkane7/music-frontend).
+`:latest` tracks `main`; `:dev` is the most recent pull-request build.
+
+```bash
+# Grab just the compose file
+curl -O https://raw.githubusercontent.com/KaneCoding7/musicContainer/main/docker-compose.hub.yml
+
+# Required secret (the API won't start without it)
+echo "BETTER_AUTH_SECRET=$(openssl rand -base64 48)" > .env
+
+docker compose -f docker-compose.hub.yml up -d
+```
+
+- Frontend: http://localhost:3000 · Backend API: http://localhost:3001
+- Data persists in `./data`. Try a PR build with `TAG=dev docker compose -f docker-compose.hub.yml up -d`.
+
 ## Local development (no Docker)
 
 ```bash
