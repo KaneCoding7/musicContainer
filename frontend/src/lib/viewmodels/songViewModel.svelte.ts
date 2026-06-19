@@ -332,7 +332,10 @@ export class SongViewModel {
     if (songs.length === 0) return;
     if (this.remoteSink?.("shufflePlay", { songs })) return;
     this.shuffle = true;
-    this.playQueue(songs, 0);
+    // Start on a random track so the first song is shuffled too, rather than
+    // always the list's first; playQueue then shuffles the remainder after it.
+    const start = Math.floor(Math.random() * songs.length);
+    this.playQueue(songs, start);
   }
 
   // Plays from the full library list (used by the song list).
