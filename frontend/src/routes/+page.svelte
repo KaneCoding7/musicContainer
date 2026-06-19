@@ -474,9 +474,11 @@
     text-align: left;
     cursor: pointer;
   }
-  .nav-item:hover {
-    background: var(--hover);
-    color: var(--text);
+  @media (hover: hover) {
+    .nav-item:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
   }
   .nav-item.active {
     background: var(--active-bg);
@@ -529,9 +531,11 @@
   .shortcuts summary::-webkit-details-marker {
     display: none;
   }
-  .shortcuts summary:hover {
-    background: var(--hover);
-    color: var(--text);
+  @media (hover: hover) {
+    .shortcuts summary:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
   }
   .sc-label {
     flex: 1;
@@ -622,8 +626,10 @@
     color: var(--muted);
     cursor: pointer;
   }
-  .collapse:hover {
-    color: #fff;
+  @media (hover: hover) {
+    .collapse:hover {
+      color: #fff;
+    }
   }
   .muted {
     color: var(--muted);
@@ -652,9 +658,11 @@
     padding: 0.4rem;
     border-radius: 0.5rem;
   }
-  .hamburger:hover,
-  .drawer-close:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .hamburger:hover,
+    .drawer-close:hover {
+      background: var(--hover);
+    }
   }
   .topbar-title {
     font-weight: 600;

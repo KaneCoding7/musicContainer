@@ -97,8 +97,10 @@
     cursor: pointer;
     margin-bottom: 1.25rem;
   }
-  .generate:hover:not(:disabled) {
-    background: var(--accent-hover);
+  @media (hover: hover) {
+    .generate:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
   }
   .generate:disabled {
     opacity: 0.6;
@@ -143,8 +145,10 @@
     font-size: 0.85rem;
     cursor: pointer;
   }
-  .copy:hover {
-    background: var(--border-strong);
+  @media (hover: hover) {
+    .copy:hover {
+      background: var(--border-strong);
+    }
   }
   .badge {
     flex-shrink: 0;

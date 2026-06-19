@@ -319,9 +319,11 @@
       border-color 0.15s ease,
       background 0.15s ease;
   }
-  .dropzone:hover {
-    background: var(--hover);
-    border-color: var(--accent-text);
+  @media (hover: hover) {
+    .dropzone:hover {
+      background: var(--hover);
+      border-color: var(--accent-text);
+    }
   }
   .dropzone.dragging {
     background: var(--active-bg);
@@ -434,8 +436,10 @@
     font-weight: 600;
     cursor: pointer;
   }
-  .link-btn:hover:not(:disabled) {
-    background: var(--accent-hover);
+  @media (hover: hover) {
+    .link-btn:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
   }
   .link-btn:disabled {
     opacity: 0.55;
@@ -567,12 +571,16 @@
     border-radius: 0.35rem;
     cursor: pointer;
   }
-  .sbtn:hover {
-    background: var(--surface-2);
-    color: var(--text);
+  @media (hover: hover) {
+    .sbtn:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
   }
-  .sbtn.danger:hover {
-    color: var(--danger-text);
+  @media (hover: hover) {
+    .sbtn.danger:hover {
+      color: var(--danger-text);
+    }
   }
   .review-foot {
     display: flex;
@@ -592,9 +600,11 @@
     font-size: 0.85rem;
     cursor: pointer;
   }
-  .discard-btn:hover:not(:disabled) {
-    background: var(--danger-bg);
-    border-color: var(--danger-bg);
+  @media (hover: hover) {
+    .discard-btn:hover:not(:disabled) {
+      background: var(--danger-bg);
+      border-color: var(--danger-bg);
+    }
   }
   .confirm-btn {
     display: inline-flex;
@@ -610,8 +620,10 @@
     font-size: 0.85rem;
     cursor: pointer;
   }
-  .confirm-btn:hover:not(:disabled) {
-    background: var(--accent-hover);
+  @media (hover: hover) {
+    .confirm-btn:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
   }
   .confirm-btn:disabled,
   .discard-btn:disabled {

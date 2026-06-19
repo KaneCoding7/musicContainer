@@ -58,7 +58,9 @@
     font-size: 0.8rem;
     cursor: pointer;
   }
-  .here:hover {
-    background: var(--accent-hover);
+  @media (hover: hover) {
+    .here:hover {
+      background: var(--accent-hover);
+    }
   }
 </style>

@@ -88,8 +88,10 @@
     text-align: left;
     cursor: pointer;
   }
-  .row:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .row:hover {
+      background: var(--hover);
+    }
   }
   .thumb {
     position: relative;

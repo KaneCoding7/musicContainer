@@ -355,9 +355,11 @@
     font-size: 0.8rem;
     font-weight: 500;
   }
-  .art-remove:hover:not(:disabled) {
-    background: var(--surface-2);
-    color: var(--text);
+  @media (hover: hover) {
+    .art-remove:hover:not(:disabled) {
+      background: var(--surface-2);
+      color: var(--text);
+    }
   }
   .art-frames {
     display: inline-flex;
@@ -373,8 +375,10 @@
     font-weight: 600;
     cursor: pointer;
   }
-  .art-frames:hover:not(:disabled) {
-    background: var(--hover);
+  @media (hover: hover) {
+    .art-frames:hover:not(:disabled) {
+      background: var(--hover);
+    }
   }
   .art-frames:disabled {
     opacity: 0.6;
@@ -426,8 +430,10 @@
     font-size: 0.8rem;
     font-weight: 500;
   }
-  .link-toggle:hover:not(:disabled) {
-    background: var(--border-strong);
+  @media (hover: hover) {
+    .link-toggle:hover:not(:disabled) {
+      background: var(--border-strong);
+    }
   }
   .public-url {
     display: flex;
@@ -454,8 +460,10 @@
     color: var(--text);
     font-size: 0.8rem;
   }
-  .public-url .copy:hover {
-    background: var(--border-strong);
+  @media (hover: hover) {
+    .public-url .copy:hover {
+      background: var(--border-strong);
+    }
   }
   .hint {
     margin: 0.4rem 0 0;
@@ -477,8 +485,10 @@
     font-weight: 600;
     cursor: pointer;
   }
-  button:hover:not(:disabled) {
-    background: var(--accent-hover);
+  @media (hover: hover) {
+    button:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
   }
   button:disabled {
     opacity: 0.5;
@@ -487,7 +497,9 @@
   .secondary {
     background: var(--border-strong);
   }
-  .secondary:hover {
-    background: var(--border-strong);
+  @media (hover: hover) {
+    .secondary:hover {
+      background: var(--border-strong);
+    }
   }
 </style>

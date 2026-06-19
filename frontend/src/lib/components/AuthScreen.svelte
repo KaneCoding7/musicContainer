@@ -182,8 +182,10 @@
     font-weight: 600;
     cursor: pointer;
   }
-  .submit:hover:not(:disabled) {
-    background: var(--accent-hover);
+  @media (hover: hover) {
+    .submit:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
   }
   .submit:disabled {
     opacity: 0.6;

@@ -213,8 +213,10 @@
     border-radius: 50%;
     filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
   }
-  .controls button:hover {
-    background: rgba(255, 255, 255, 0.18);
+  @media (hover: hover) {
+    .controls button:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
   }
   .controls .play {
     background: rgba(255, 255, 255, 0.95);
@@ -222,7 +224,9 @@
     width: 48px;
     height: 48px;
   }
-  .controls .play:hover {
-    background: #fff;
+  @media (hover: hover) {
+    .controls .play:hover {
+      background: #fff;
+    }
   }
 </style>
