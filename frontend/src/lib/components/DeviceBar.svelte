@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
+  import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import type { SyncController } from "$lib/viewmodels/syncController.svelte";
 
   // Shown when another device is the active audio output. Indicates where
@@ -9,7 +10,7 @@
 
 <div class="device-bar">
   <span class="info">
-    <Icon name="graphic_eq" size={18} />
+    <EqualizerBars size={18} />
     Playing on <strong>{sync.activeDeviceName}</strong>
   </span>
   <button class="here" onclick={() => sync.claim()} title="Transfer playback here">
