@@ -612,17 +612,18 @@ export class SongViewModel {
     return true;
   }
 
-  // Writes a snapshot of the player to sessionStorage so playback survives a
-  // refresh. The live position is read untracked so this is safe to call from a
+  // Writes a snapshot of the player to localStorage so the current song, queue
+  // and position survive not just a refresh but fully closing and reopening the
+  // app/tab. The live position is read untracked so this is safe to call from a
   // reactive effect without re-running on every timeupdate.
   persist(): void {
-    if (typeof sessionStorage === "undefined") return;
+    if (typeof localStorage === "undefined") return;
     if (this.currentIndex === null || this.queue.length === 0) {
-      sessionStorage.removeItem(this.NOW_PLAYING_KEY);
+      localStorage.removeItem(this.NOW_PLAYING_KEY);
       return;
     }
     try {
-      sessionStorage.setItem(
+      localStorage.setItem(
         this.NOW_PLAYING_KEY,
         JSON.stringify({
           queue: this.queue,
@@ -644,8 +645,8 @@ export class SongViewModel {
   // Restores a persisted snapshot if present. Returns true when playback state
   // was restored. The player decides whether autoplay policy lets it resume.
   restore(): boolean {
-    if (typeof sessionStorage === "undefined") return false;
-    const raw = sessionStorage.getItem(this.NOW_PLAYING_KEY);
+    if (typeof localStorage === "undefined") return false;
+    const raw = localStorage.getItem(this.NOW_PLAYING_KEY);
     if (!raw) return false;
     try {
       const s = JSON.parse(raw);

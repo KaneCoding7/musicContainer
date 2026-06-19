@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
+  import { apiBase } from "$lib/services/apiBase";
   import type { AuthViewModel } from "$lib/viewmodels/authViewModel.svelte";
 
   let { vm, onAuthed }: { vm: AuthViewModel; onAuthed: () => void } = $props();
@@ -10,13 +11,23 @@
   let password = $state("");
   let name = $state("");
   let invite = $state("");
+  // Whether registration requires an invite code — read from the server so the
+  // UI follows the INVITE_ONLY setting without redeploying the frontend.
+  let inviteRequired = $state(false);
 
-  // An invite link (?invite=CODE) prefills the code and opens registration.
-  onMount(() => {
+  onMount(async () => {
+    // An invite link (?invite=CODE) prefills the code and opens registration.
     const code = new URLSearchParams(window.location.search).get("invite");
     if (code) {
       invite = code;
       mode = "register";
+    }
+    // Reflect the server's invite-only setting in the form.
+    try {
+      const res = await fetch(`${apiBase()}/api/config`);
+      if (res.ok) inviteRequired = (await res.json()).inviteOnly === true;
+    } catch {
+      /* leave default; the server enforces it regardless */
     }
   });
 
@@ -60,11 +71,11 @@
         <input bind:value={name} autocomplete="name" required />
       </label>
       <label>
-        Invite code
+        Invite code {#if !inviteRequired}<span class="opt">(optional)</span>{/if}
         <input
           bind:value={invite}
-          placeholder="Enter your invite code"
-          required
+          placeholder={inviteRequired ? "Enter your invite code" : "Optional"}
+          required={inviteRequired}
         />
       </label>
     {/if}
