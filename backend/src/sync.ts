@@ -162,19 +162,28 @@ export function attachSync(server: Server): void {
         }
         case "command": {
           if (!deviceId) return;
-          // No active device yet → the commander becomes active.
-          if (s.activeDeviceId === null) {
-            setActiveDevice(userId, s, deviceId);
-            broadcast(userId);
-          }
           const active = s.activeDeviceId
             ? s.devices.get(s.activeDeviceId)
             : null;
+          // If the active device is connected, forward the command to it.
           if (active && active.socket.readyState === WebSocket.OPEN) {
             active.socket.send(
               JSON.stringify({ type: "command", command: msg.command })
             );
+            break;
           }
+          // No active device, or the remembered active device is gone (its tab
+          // was closed / the laptop slept) → the commanding device takes over
+          // output instead of forwarding the command into the void. This is what
+          // makes "press play" on a freshly opened device actually play there
+          // and show the player bar, rather than leaving it stuck on
+          // "Playing on <offline device>".
+          setActiveDevice(userId, s, deviceId);
+          broadcast(userId);
+          const self = s.devices.get(deviceId);
+          self?.socket.send(
+            JSON.stringify({ type: "command", command: msg.command })
+          );
           break;
         }
         case "claim": {

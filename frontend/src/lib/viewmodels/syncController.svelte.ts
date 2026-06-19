@@ -78,6 +78,16 @@ export class SyncController {
   get isRemote(): boolean {
     return this.activeDeviceId !== null && this.activeDeviceId !== this.deviceId;
   }
+  // True only when output is on a *different, currently-connected* device, so
+  // the "Playing on …" bar reflects somewhere you can actually reach. A
+  // remembered-but-offline active device (a closed tab/sleeping laptop) doesn't
+  // count: we hide that bar and let a transport command transfer output here
+  // (the server promotes the commanding device when the active one is gone).
+  get hasOnlineRemote(): boolean {
+    return (
+      this.isRemote && this.devices.some((d) => d.id === this.activeDeviceId)
+    );
+  }
   get activeDeviceName(): string {
     return (
       this.devices.find((d) => d.id === this.activeDeviceId)?.name ??
