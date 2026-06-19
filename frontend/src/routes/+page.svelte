@@ -120,6 +120,9 @@
   // Becomes true once we've attempted to restore the saved player state, so the
   // persistence effect below doesn't overwrite the snapshot before we read it.
   let restoreReady = $state(false);
+  // Becomes true once the cross-device (server) snapshot has been reconciled, so
+  // we don't push a local state up and clobber a newer one from another device.
+  let remoteReady = $state(false);
 
   onMount(async () => {
     const saved = localStorage.getItem("theme");
@@ -129,10 +132,13 @@
     await authVm.init();
     if (authVm.isAuthed) {
       loadLibrary();
-      vm.restore(); // resume playback from before a refresh
-      sync.connect(); // cross-device playback sync
+      vm.restore(); // instant same-device resume
+      sync.connect(); // cross-device live sync
     }
     restoreReady = true;
+    // Cross-device resume: apply the server snapshot when it's newer than local.
+    if (authVm.isAuthed) await vm.restoreRemote();
+    remoteReady = true;
   });
 
   // Active device: broadcast playback state whenever the discrete state changes.
@@ -147,7 +153,10 @@
   $effect(() => {
     const id = setInterval(() => {
       if (sync.isActive) {
-        if (vm.isPlaying) sync.sendState();
+        if (vm.isPlaying) {
+          sync.sendState();
+          if (remoteReady) vm.persistRemote(); // throttled ~5s: save position
+        }
       } else if (vm.isPlaying) {
         vm.position = Math.min(vm.position + 1, vm.duration || vm.position + 1);
       }
@@ -155,19 +164,24 @@
     return () => clearInterval(id);
   });
 
-  // Persist a now-playing snapshot whenever the discrete player state changes.
-  // (Position isn't tracked here — it's captured on page hide below.)
+  // Persist a now-playing snapshot whenever the discrete player state changes
+  // (track/queue/play-pause/shuffle/repeat). Position is saved on the timer
+  // above and on page hide below.
   $effect(() => {
     if (!restoreReady) return;
     vm.persist();
+    if (remoteReady) vm.persistRemote();
   });
 
   // Capture the exact playback position when the page is refreshed, closed, or
   // backgrounded (covers mobile PWA tab switches).
   $effect(() => {
-    const persistNow = () => vm.persist();
+    const persistNow = () => {
+      vm.persist();
+      if (remoteReady) vm.persistRemote({ force: true, keepalive: true });
+    };
     const onVisibility = () => {
-      if (document.visibilityState === "hidden") vm.persist();
+      if (document.visibilityState === "hidden") persistNow();
     };
     window.addEventListener("pagehide", persistNow);
     document.addEventListener("visibilitychange", onVisibility);

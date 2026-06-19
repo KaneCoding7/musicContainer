@@ -15,6 +15,10 @@ import {
   uploadSong,
   type SongMetadata,
 } from "$lib/services/songService";
+import {
+  fetchPlaybackState,
+  savePlaybackState,
+} from "$lib/services/playbackStateService";
 import type { Song } from "$lib/types";
 
 // The playback state synced across devices (Spotify-Connect style).
@@ -612,68 +616,106 @@ export class SongViewModel {
     return true;
   }
 
-  // Writes a snapshot of the player to localStorage so the current song, queue
-  // and position survive not just a refresh but fully closing and reopening the
-  // app/tab. The live position is read untracked so this is safe to call from a
-  // reactive effect without re-running on every timeupdate.
+  // savedAt of the snapshot we last restored, so a server snapshot only wins
+  // when it's strictly newer than what this device already has.
+  private restoredSavedAt = 0;
+  private lastRemoteSaveAt = 0;
+
+  // Builds the now-playing snapshot (or null when nothing is queued). Position
+  // is read untracked so callers in reactive effects don't re-run every tick.
+  private buildSnapshot(): Record<string, unknown> | null {
+    if (this.currentIndex === null || this.queue.length === 0) return null;
+    return {
+      queue: this.queue,
+      currentIndex: this.currentIndex,
+      isPlaying: this.isPlaying,
+      shuffle: this.shuffle,
+      repeat: this.repeat,
+      volume: this.volume,
+      position: untrack(() => this.position),
+      sleepUntil: this.sleepUntil,
+      sleepAtTrackEnd: this.sleepAtTrackEnd,
+      savedAt: Date.now(),
+    };
+  }
+
+  // Applies a parsed snapshot to the player. Returns true when it took effect.
+  private applySnapshot(s: Record<string, unknown> | null): boolean {
+    if (!s || !Array.isArray(s.queue) || s.queue.length === 0) return false;
+    const queue = s.queue as Song[];
+    const ci = s.currentIndex;
+    const idx =
+      typeof ci === "number" && ci >= 0 && ci < queue.length ? ci : 0;
+    this.queue = queue;
+    this.currentIndex = idx;
+    this.shuffle = !!s.shuffle;
+    this.repeat =
+      s.repeat === "all" || s.repeat === "one"
+        ? (s.repeat as "all" | "one")
+        : "off";
+    if (typeof s.volume === "number") this.volume = s.volume;
+    this.resumeAt = typeof s.position === "number" ? s.position : 0;
+    this.suppressPlayRecord = true;
+    this.isPlaying = !!s.isPlaying;
+    // Restore the sleep timer; re-arm from the saved deadline (pausing now if it
+    // already elapsed while away).
+    this.sleepAtTrackEnd = !!s.sleepAtTrackEnd;
+    this.sleepUntil = typeof s.sleepUntil === "number" ? s.sleepUntil : null;
+    this.armSleepTimeout();
+    this.restoredSavedAt = typeof s.savedAt === "number" ? s.savedAt : 0;
+    return true;
+  }
+
+  // Writes the snapshot to localStorage (instant same-device resume).
   persist(): void {
     if (typeof localStorage === "undefined") return;
-    if (this.currentIndex === null || this.queue.length === 0) {
+    const snap = this.buildSnapshot();
+    if (!snap) {
       localStorage.removeItem(this.NOW_PLAYING_KEY);
       return;
     }
     try {
-      localStorage.setItem(
-        this.NOW_PLAYING_KEY,
-        JSON.stringify({
-          queue: this.queue,
-          currentIndex: this.currentIndex,
-          isPlaying: this.isPlaying,
-          shuffle: this.shuffle,
-          repeat: this.repeat,
-          volume: this.volume,
-          position: untrack(() => this.position),
-          sleepUntil: this.sleepUntil,
-          sleepAtTrackEnd: this.sleepAtTrackEnd,
-        })
-      );
+      localStorage.setItem(this.NOW_PLAYING_KEY, JSON.stringify(snap));
     } catch {
       /* storage full/unavailable — best-effort */
     }
   }
 
-  // Restores a persisted snapshot if present. Returns true when playback state
-  // was restored. The player decides whether autoplay policy lets it resume.
+  // Saves the snapshot to the server so playback resumes on other devices.
+  // Throttled to ~5s; force/keepalive for the final save on page hide.
+  persistRemote(opts?: { force?: boolean; keepalive?: boolean }): void {
+    const now = Date.now();
+    if (!opts?.force && now - this.lastRemoteSaveAt < 5000) return;
+    const snap = this.buildSnapshot();
+    this.lastRemoteSaveAt = now;
+    savePlaybackState(snap, now, opts?.keepalive); // snap null clears the server
+  }
+
+  // Restores the local (same-device) snapshot. The player decides whether
+  // autoplay policy lets it resume.
   restore(): boolean {
     if (typeof localStorage === "undefined") return false;
     const raw = localStorage.getItem(this.NOW_PLAYING_KEY);
     if (!raw) return false;
     try {
-      const s = JSON.parse(raw);
-      if (!Array.isArray(s.queue) || s.queue.length === 0) return false;
-      const idx =
-        typeof s.currentIndex === "number" &&
-        s.currentIndex >= 0 &&
-        s.currentIndex < s.queue.length
-          ? s.currentIndex
-          : 0;
-      this.queue = s.queue;
-      this.currentIndex = idx;
-      this.shuffle = !!s.shuffle;
-      this.repeat = s.repeat === "all" || s.repeat === "one" ? s.repeat : "off";
-      if (typeof s.volume === "number") this.volume = s.volume;
-      this.resumeAt = typeof s.position === "number" ? s.position : 0;
-      this.suppressPlayRecord = true;
-      this.isPlaying = !!s.isPlaying;
-      // Restore the sleep timer; re-arm from the saved deadline (pausing now if
-      // it already elapsed while the page was away).
-      this.sleepAtTrackEnd = !!s.sleepAtTrackEnd;
-      this.sleepUntil = typeof s.sleepUntil === "number" ? s.sleepUntil : null;
-      this.armSleepTimeout();
-      return true;
+      return this.applySnapshot(JSON.parse(raw));
     } catch {
       return false;
     }
+  }
+
+  // Pulls the server snapshot and applies it when it's newer than whatever this
+  // device restored locally — so opening on another device resumes where you
+  // left off. Returns true when the server state was applied.
+  async restoreRemote(): Promise<boolean> {
+    const remote = await fetchPlaybackState();
+    if (!remote?.state) return false;
+    const savedAt =
+      typeof remote.state.savedAt === "number"
+        ? remote.state.savedAt
+        : remote.updatedAt;
+    if (savedAt <= this.restoredSavedAt) return false; // local is as fresh
+    return this.applySnapshot(remote.state);
   }
 
   // Loads the song list from the backend.
