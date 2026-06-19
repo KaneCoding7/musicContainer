@@ -18,6 +18,10 @@ interface DeviceConn {
 interface Session {
   devices: Map<string, DeviceConn>;
   activeDeviceId: string | null;
+  // Name of the active device, remembered even while its socket is briefly
+  // gone (e.g. iOS suspends the WebSocket during background playback) so other
+  // devices still show "Playing on <name>" rather than "another device".
+  activeDeviceName: string | null;
   state: unknown | null; // last PlaybackState pushed by the active device
 }
 
@@ -35,6 +39,9 @@ function loadActiveDevice(userId: string): string | null {
 
 function setActiveDevice(userId: string, s: Session, deviceId: string | null): void {
   s.activeDeviceId = deviceId;
+  s.activeDeviceName = deviceId
+    ? s.devices.get(deviceId)?.name ?? s.activeDeviceName
+    : null;
   getDb()
     .prepare(
       `INSERT INTO sync_active_device (user_id, active_device_id, updated_at)
@@ -52,6 +59,7 @@ function getSession(userId: string): Session {
     s = {
       devices: new Map(),
       activeDeviceId: loadActiveDevice(userId), // restore last-active device
+      activeDeviceName: null, // re-learned when that device next connects
       state: null,
     };
     sessions.set(userId, s);
@@ -67,6 +75,7 @@ function sessionMessage(s: Session): string {
   return JSON.stringify({
     type: "session",
     activeDeviceId: s.activeDeviceId,
+    activeDeviceName: s.activeDeviceName,
     devices: deviceList(s),
     state: s.state,
   });
@@ -139,11 +148,10 @@ export function attachSync(server: Server): void {
         case "hello": {
           deviceId = String(msg.deviceId ?? "");
           if (!deviceId) return;
-          s.devices.set(deviceId, {
-            id: deviceId,
-            name: String(msg.name ?? "Device"),
-            socket: ws,
-          });
+          const name = String(msg.name ?? "Device");
+          s.devices.set(deviceId, { id: deviceId, name, socket: ws });
+          // Refresh the remembered active-device name when it reconnects.
+          if (deviceId === s.activeDeviceId) s.activeDeviceName = name;
           ws.send(sessionMessage(s)); // current session to the newcomer
           broadcast(userId); // announce the new device to others
           break;

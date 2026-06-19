@@ -416,7 +416,7 @@
     </section>
   {/if}
 
-  {#if sync.hasOnlineRemote}
+  {#if sync.isRemote}
     <DeviceBar {sync} />
   {/if}
 

@@ -54,6 +54,10 @@ export class SyncController {
   connected = $state(false);
   devices = $state<SyncDevice[]>([]);
   activeDeviceId = $state<string | null>(null);
+  // Server-remembered name of the active device, used when it isn't in the
+  // connected `devices` list (e.g. playing in the background with its socket
+  // suspended) so we still show "Playing on <name>".
+  activeName = $state<string | null>(null);
   readonly deviceId: string = getDeviceId();
 
   private vm: SongViewModel;
@@ -78,19 +82,10 @@ export class SyncController {
   get isRemote(): boolean {
     return this.activeDeviceId !== null && this.activeDeviceId !== this.deviceId;
   }
-  // True only when output is on a *different, currently-connected* device, so
-  // the "Playing on …" bar reflects somewhere you can actually reach. A
-  // remembered-but-offline active device (a closed tab/sleeping laptop) doesn't
-  // count: we hide that bar and let a transport command transfer output here
-  // (the server promotes the commanding device when the active one is gone).
-  get hasOnlineRemote(): boolean {
-    return (
-      this.isRemote && this.devices.some((d) => d.id === this.activeDeviceId)
-    );
-  }
   get activeDeviceName(): string {
     return (
       this.devices.find((d) => d.id === this.activeDeviceId)?.name ??
+      this.activeName ??
       "another device"
     );
   }
@@ -162,6 +157,7 @@ export class SyncController {
     let msg: {
       type?: string;
       activeDeviceId?: string | null;
+      activeDeviceName?: string | null;
       devices?: SyncDevice[];
       state?: PlaybackSnapshot | null;
       command?: { type: string; payload?: unknown };
@@ -176,6 +172,7 @@ export class SyncController {
       const wasActive = this.isActive;
       this.devices = msg.devices ?? [];
       this.activeDeviceId = msg.activeDeviceId ?? null;
+      this.activeName = msg.activeDeviceName ?? null;
 
       if (this.isRemote && msg.state) {
         // Mirror the active device's playback (no local audio).
