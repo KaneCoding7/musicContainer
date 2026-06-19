@@ -163,9 +163,19 @@ export function attachSync(server: Server): void {
         }
         case "state": {
           if (!deviceId) return;
-          // The first device to report a loaded track claims "active" (only when
-          // none is remembered — otherwise output stays put until a manual claim).
-          if (s.activeDeviceId === null && msg.state?.currentIndex != null) {
+          const activeConn = s.activeDeviceId
+            ? s.devices.get(s.activeDeviceId)
+            : null;
+          const activeOnline =
+            !!activeConn && activeConn.socket.readyState === WebSocket.OPEN;
+          // A client only reports state when it believes it's the audio output.
+          // If no active device is currently connected — none yet, or the
+          // remembered one is a stale/ghost pointer or has gone offline — adopt
+          // the reporting device as active so "who's playing" tracks reality
+          // (and other devices mirror it / show "Playing on <it>"). We do NOT
+          // steal from a live active device; moving output between connected
+          // devices is what claim ("Play here") is for.
+          if (!activeOnline && msg.state?.currentIndex != null) {
             setActiveDevice(userId, s, deviceId);
           }
           if (s.activeDeviceId !== deviceId) return; // only the active device sets state
