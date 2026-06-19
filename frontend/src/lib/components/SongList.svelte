@@ -222,7 +222,7 @@
       {#if selecting}<span class="col-index"></span>{/if}
       <span class="head-title">Title</span>
       <div class="row-end">
-        <span class="col-date">Date added</span>
+        <span class="head-date">Added</span>
         <span class="col-plays">Plays</span>
         <span class="col-dur"><Icon name="schedule" size={18} /></span>
         <span class="col-like"></span>
@@ -572,6 +572,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* Header label for the date column: aligned over .col-date but inheriting the
+     list-head typography so it matches the "Title" header. */
+  .head-date {
+    width: 7.5rem;
+    text-align: right;
   }
   .col-dur {
     width: 3rem;
