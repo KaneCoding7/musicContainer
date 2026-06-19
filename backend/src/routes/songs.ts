@@ -39,6 +39,11 @@ import {
   enableSongPublicLink,
   getSongPublicToken,
 } from "../functional/publicShares.js";
+import {
+  getPlaybackState,
+  setPlaybackState,
+  clearPlaybackState,
+} from "../functional/playbackState.js";
 import { statusForError } from "../functional/result.js";
 import { extractMetadata } from "../metadata.js";
 import { measureLoudness } from "../loudness.js";
@@ -54,6 +59,38 @@ export const songsRouter = Router();
 const importLimiter = rateLimit({ windowMs: 60_000, max: 12 });
 const uploadLimiter = rateLimit({ windowMs: 60_000, max: 120 });
 const heavyLimiter = rateLimit({ windowMs: 60_000, max: 20 });
+
+// GET /api/playback-state — the caller's last now-playing snapshot for
+// cross-device resume (or null).
+songsRouter.get("/playback-state", (req, res) => {
+  const row = getPlaybackState(getDb(), req.userId!);
+  if (!row) return res.json({ state: null });
+  try {
+    return res.json({
+      state: JSON.parse(row.snapshot),
+      updatedAt: row.updatedAt,
+    });
+  } catch {
+    return res.json({ state: null });
+  }
+});
+
+// PUT /api/playback-state — save (or clear) the caller's now-playing snapshot.
+songsRouter.put("/playback-state", (req, res) => {
+  const state = req.body?.state;
+  if (state === null || state === undefined) {
+    clearPlaybackState(getDb(), req.userId!);
+    return res.json({ ok: true });
+  }
+  const updatedAt = Number(req.body?.updatedAt);
+  if (typeof state !== "object" || !Number.isFinite(updatedAt)) {
+    return res
+      .status(400)
+      .json({ error: { code: "validation", message: "Invalid state" } });
+  }
+  setPlaybackState(getDb(), req.userId!, JSON.stringify(state), updatedAt);
+  return res.json({ ok: true });
+});
 
 // Store uploads on disk with a generated, collision-free filename while
 // preserving the original extension.

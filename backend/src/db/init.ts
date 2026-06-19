@@ -180,6 +180,16 @@ export function migrate(database: Database.Database): void {
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       PRIMARY KEY (user_id, artist)
     );
+
+    -- Last now-playing snapshot per user (queue, current track, position, etc.),
+    -- so playback can resume where it left off on ANY device. Stored as a JSON
+    -- blob; updated_at (epoch ms) lets the client pick the freshest of this and
+    -- its local copy.
+    CREATE TABLE IF NOT EXISTS playback_state (
+      user_id    TEXT PRIMARY KEY,
+      snapshot   TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
 
   // Metadata columns added post-MVP (Cycle 9). Added conditionally so existing
