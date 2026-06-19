@@ -44,8 +44,16 @@ import { extractMetadata } from "../metadata.js";
 import { measureLoudness } from "../loudness.js";
 import { streamSongFile } from "../stream.js";
 import { serveArt } from "../thumbnails.js";
+import { rateLimit } from "../rate-limit.js";
+import { assertSafeRemoteUrl } from "../url-safety.js";
 
 export const songsRouter = Router();
+
+// Per-IP throttles on the expensive endpoints (each spawns yt-dlp/spotdl/ffmpeg
+// or accepts large uploads), so they can't be hammered into a resource-DoS.
+const importLimiter = rateLimit({ windowMs: 60_000, max: 12 });
+const uploadLimiter = rateLimit({ windowMs: 60_000, max: 120 });
+const heavyLimiter = rateLimit({ windowMs: 60_000, max: 20 });
 
 // Store uploads on disk with a generated, collision-free filename while
 // preserving the original extension.
@@ -273,7 +281,7 @@ songsRouter.delete("/artists/image", (req, res) => {
 });
 
 // POST /api/upload — upload a single audio file (extracts embedded metadata).
-songsRouter.post("/upload", (req, res) => {
+songsRouter.post("/upload", uploadLimiter, (req, res) => {
   upload.single("file")(req, res, async (uploadErr: unknown) => {
     if (uploadErr) {
       const message =
@@ -350,6 +358,9 @@ function runYtDlp(
         "--audio-format",
         "mp3",
         "--embed-thumbnail",
+        // Cap per-item download size so one huge link can't fill the disk.
+        "--max-filesize",
+        "600M",
         ...(playlist
           ? [
               "--yes-playlist",
@@ -486,7 +497,7 @@ function runSpotdl(
 // POST /api/import-link — download a link's audio (yt-dlp, or spotdl for Spotify
 // links) and ingest it into the library. Streams NDJSON progress lines so the
 // client can show a progress bar, ending with a {done} or {error} line.
-songsRouter.post("/import-link", async (req, res) => {
+songsRouter.post("/import-link", importLimiter, async (req, res) => {
   const url =
     typeof req.body?.url === "string" ? (req.body.url as string).trim() : "";
   const playlist = req.body?.playlist === true;
@@ -496,6 +507,21 @@ songsRouter.post("/import-link", async (req, res) => {
     return res.status(400).json({
       error: { code: "validation", message: "A valid link is required" },
     });
+  }
+  // SSRF guard: don't let the importer reach internal/private addresses. The
+  // spotify: scheme has no host (resolved by spotdl via Spotify's API), so it
+  // only applies to http(s) links.
+  if (/^https?:\/\//i.test(url)) {
+    try {
+      await assertSafeRemoteUrl(url);
+    } catch (e) {
+      return res.status(400).json({
+        error: {
+          code: "validation",
+          message: e instanceof Error ? e.message : "That link is not allowed",
+        },
+      });
+    }
   }
 
   res.setHeader("Content-Type", "application/x-ndjson");
@@ -659,12 +685,19 @@ function run(cmd: string, args: string[], cwd?: string): Promise<void> {
 // GET /api/songs/:id/frames — for a link-imported track, download a low-res copy
 // of the source video and return evenly-spaced frames (as data URLs) to offer as
 // alternative cover art.
-songsRouter.get("/songs/:id/frames", async (req, res) => {
+songsRouter.get("/songs/:id/frames", heavyLimiter, async (req, res) => {
   const id = Number(req.params.id);
   const src = getSongSource(getDb(), id, req.userId!);
   if (!src) {
     return res.status(404).json({
       error: { code: "not_found", message: "No source video for this track" },
+    });
+  }
+  try {
+    await assertSafeRemoteUrl(src.sourceUrl);
+  } catch {
+    return res.status(400).json({
+      error: { code: "validation", message: "Source link is not allowed" },
     });
   }
 
@@ -761,7 +794,7 @@ songsRouter.get("/songs/:id/frames", async (req, res) => {
 // tracks not yet analyzed (backfill, used to normalize the existing library).
 // Processes a bounded batch per call so a huge library can't tie up a request;
 // the client calls repeatedly until `remaining` reaches 0.
-songsRouter.post("/songs/analyze-loudness", async (req, res) => {
+songsRouter.post("/songs/analyze-loudness", heavyLimiter, async (req, res) => {
   const pending = listSongsNeedingLoudness(getDb(), req.userId!);
   const batch = pending.slice(0, 10);
   let analyzed = 0;
