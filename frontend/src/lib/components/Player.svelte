@@ -1,7 +1,6 @@
 <script lang="ts">
   import { mount, unmount } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
-  import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import MiniPlayer from "$lib/components/MiniPlayer.svelte";
   import QueueView from "$lib/components/QueueView.svelte";
   import { artUrl, streamUrl, thumbUrl } from "$lib/services/songService";
@@ -927,9 +926,6 @@
         {:else}
           <Icon name="music_note" size={20} />
         {/if}
-        {#if vm.isPlaying}
-          <span class="np-eq"><EqualizerBars size={16} /></span>
-        {/if}
       </span>
       <span class="np-meta">
         <span class="np-title" title={song.originalFilename}
@@ -1298,7 +1294,6 @@
     transition: none; /* follow the finger 1:1 while dragging */
   }
   .np-art {
-    position: relative;
     width: 40px;
     height: 40px;
     flex-shrink: 0;
@@ -1309,16 +1304,6 @@
     border-radius: 0.35rem;
     color: var(--dim);
     overflow: hidden;
-  }
-  /* Animated "now playing" sound-wave over the art while audio is playing. */
-  .np-eq {
-    position: absolute;
-    inset: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.4);
-    color: #fff;
   }
   .np-art img {
     width: 100%;
