@@ -126,8 +126,10 @@
     color: inherit;
     font: inherit;
   }
-  .card:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .card:hover {
+      background: var(--hover);
+    }
   }
   .cover {
     aspect-ratio: 1;
@@ -166,8 +168,10 @@
     margin-bottom: 1rem;
     font: inherit;
   }
-  .back:hover {
-    color: var(--text);
+  @media (hover: hover) {
+    .back:hover {
+      color: var(--text);
+    }
   }
   .album-head {
     display: flex;
@@ -223,8 +227,10 @@
     text-align: left;
     cursor: pointer;
   }
-  .track:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .track:hover {
+      background: var(--hover);
+    }
   }
   .num {
     width: 1.5rem;

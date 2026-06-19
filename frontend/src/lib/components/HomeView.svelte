@@ -150,12 +150,16 @@
     color: var(--dim);
     transition: transform 0.12s;
   }
-  .head-title:hover {
-    color: var(--accent-text);
+  @media (hover: hover) {
+    .head-title:hover {
+      color: var(--accent-text);
+    }
   }
-  .head-title:hover :global(.material-symbols-rounded:last-child) {
-    color: var(--accent-text);
-    transform: translateX(2px);
+  @media (hover: hover) {
+    .head-title:hover :global(.material-symbols-rounded:last-child) {
+      color: var(--accent-text);
+      transform: translateX(2px);
+    }
   }
   .cards {
     display: grid;
@@ -179,8 +183,10 @@
     color: inherit;
     font: inherit;
   }
-  .card:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .card:hover {
+      background: var(--hover);
+    }
   }
   .cover {
     position: relative;
@@ -212,8 +218,10 @@
     opacity: 0;
     transition: opacity 0.12s ease;
   }
-  .card:hover .play-overlay {
-    opacity: 1;
+  @media (hover: hover) {
+    .card:hover .play-overlay {
+      opacity: 1;
+    }
   }
   .c-name {
     font-weight: 600;

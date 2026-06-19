@@ -358,8 +358,10 @@
     color: inherit;
     font: inherit;
   }
-  .card:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .card:hover {
+      background: var(--hover);
+    }
   }
   .avatar {
     position: relative;
@@ -390,8 +392,10 @@
     color: #fff;
     cursor: pointer;
   }
-  .avatar-edit:hover {
-    background: rgba(0, 0, 0, 0.55);
+  @media (hover: hover) {
+    .avatar-edit:hover {
+      background: rgba(0, 0, 0, 0.55);
+    }
   }
   .card-name {
     font-weight: 600;
@@ -416,8 +420,10 @@
     margin-bottom: 1rem;
     font: inherit;
   }
-  .back:hover {
-    color: var(--text);
+  @media (hover: hover) {
+    .back:hover {
+      color: var(--text);
+    }
   }
   .head {
     display: flex;
@@ -451,8 +457,10 @@
     color: var(--accent-text);
     border-color: var(--accent);
   }
-  .share-artist:hover:not(:disabled) {
-    background: var(--hover);
+  @media (hover: hover) {
+    .share-artist:hover:not(:disabled) {
+      background: var(--hover);
+    }
   }
   .share-url {
     display: flex;
@@ -538,8 +546,10 @@
     text-align: left;
     cursor: pointer;
   }
-  .track:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .track:hover {
+      background: var(--hover);
+    }
   }
   .thumb {
     position: relative;
@@ -570,9 +580,14 @@
     opacity: 0;
     transition: opacity 0.12s;
   }
-  .track:hover .thumb-play,
   li.current:not(.playing) .thumb-play {
     opacity: 1;
+  }
+
+  @media (hover: hover) {
+    .track:hover .thumb-play {
+      opacity: 1;
+    }
   }
   .thumb-wave {
     position: absolute;
@@ -584,8 +599,10 @@
     background: rgba(0, 0, 0, 0.45);
     transition: opacity 0.12s;
   }
-  .track:hover .thumb-wave {
-    opacity: 0;
+  @media (hover: hover) {
+    .track:hover .thumb-wave {
+      opacity: 0;
+    }
   }
   .t-meta {
     display: flex;

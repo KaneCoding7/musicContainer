@@ -534,8 +534,10 @@
     cursor: pointer;
     font-weight: 600;
   }
-  button:hover:not(:disabled) {
-    background: var(--accent-hover);
+  @media (hover: hover) {
+    button:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
   }
   button:disabled {
     opacity: 0.5;
@@ -553,8 +555,10 @@
     margin-bottom: 1rem;
     font: inherit;
   }
-  .back:hover {
-    color: var(--text);
+  @media (hover: hover) {
+    .back:hover {
+      color: var(--text);
+    }
   }
   .cards {
     display: grid;
@@ -573,8 +577,10 @@
     cursor: pointer;
     text-align: left;
   }
-  .cards .card:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .cards .card:hover {
+      background: var(--hover);
+    }
   }
   .cover {
     aspect-ratio: 1;
@@ -662,12 +668,16 @@
     padding: 0.35rem 0.5rem;
     border-radius: 0.4rem;
   }
-  .head-action:hover {
-    background: var(--surface-2);
+  @media (hover: hover) {
+    .head-action:hover {
+      background: var(--surface-2);
+    }
   }
-  .head-action.danger:hover {
-    background: var(--danger-bg);
-    color: var(--danger-text);
+  @media (hover: hover) {
+    .head-action.danger:hover {
+      background: var(--danger-bg);
+      color: var(--danger-text);
+    }
   }
   .head-action.on {
     background: var(--active-bg);
@@ -796,9 +806,11 @@
     padding: 0.3rem;
     border-radius: 0.3rem;
   }
-  .revoke:hover {
-    background: var(--danger-bg);
-    color: var(--danger-text);
+  @media (hover: hover) {
+    .revoke:hover {
+      background: var(--danger-bg);
+      color: var(--danger-text);
+    }
   }
   .public-row {
     display: flex;
@@ -830,8 +842,10 @@
     font-size: 0.8rem;
     cursor: pointer;
   }
-  .link-toggle:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .link-toggle:hover {
+      background: var(--hover);
+    }
   }
   .link-toggle.on {
     background: var(--active-bg);
@@ -872,8 +886,10 @@
     font-size: 0.8rem;
     cursor: pointer;
   }
-  .public-url .copy:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .public-url .copy:hover {
+      background: var(--hover);
+    }
   }
   h3 {
     margin: 0 0 0.5rem;
@@ -904,8 +920,10 @@
     font-weight: 500;
     padding: 0.6rem 0.5rem;
   }
-  .play-btn:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .play-btn:hover {
+      background: var(--hover);
+    }
   }
   .handle {
     display: inline-flex;
@@ -946,9 +964,14 @@
     opacity: 0;
     transition: opacity 0.12s;
   }
-  .play-btn:hover .thumb-play,
   li.current:not(.playing) .thumb-play {
     opacity: 1;
+  }
+
+  @media (hover: hover) {
+    .play-btn:hover .thumb-play {
+      opacity: 1;
+    }
   }
   .thumb-wave {
     position: absolute;
@@ -960,8 +983,10 @@
     background: rgba(0, 0, 0, 0.45);
     transition: opacity 0.12s;
   }
-  .play-btn:hover .thumb-wave {
-    opacity: 0;
+  @media (hover: hover) {
+    .play-btn:hover .thumb-wave {
+      opacity: 0;
+    }
   }
   .name {
     flex: 1;
@@ -1002,9 +1027,11 @@
     cursor: pointer;
     padding: 0.4rem 0.6rem;
   }
-  .remove:hover {
-    background: var(--danger-bg);
-    color: var(--danger-text);
+  @media (hover: hover) {
+    .remove:hover {
+      background: var(--danger-bg);
+      color: var(--danger-text);
+    }
   }
   .add-block {
     margin-top: 1rem;
@@ -1023,8 +1050,10 @@
     font-size: 0.85rem;
     cursor: pointer;
   }
-  .add-toggle:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .add-toggle:hover {
+      background: var(--hover);
+    }
   }
   .add-search {
     width: 100%;
@@ -1082,9 +1111,11 @@
     border-radius: 0.35rem;
     cursor: pointer;
   }
-  .ar-add:hover {
-    background: var(--active-bg);
-    color: var(--accent);
+  @media (hover: hover) {
+    .ar-add:hover {
+      background: var(--active-bg);
+      color: var(--accent);
+    }
   }
   .muted {
     color: var(--muted);

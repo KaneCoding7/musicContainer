@@ -211,9 +211,11 @@
     padding: 0.4rem 0.5rem;
     border-radius: 0.35rem;
   }
-  .dots:hover {
-    background: var(--surface-2);
-    color: var(--text);
+  @media (hover: hover) {
+    .dots:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
   }
   .menu {
     position: absolute;
@@ -251,9 +253,11 @@
     text-decoration: none;
     cursor: pointer;
   }
-  .menu button:hover,
-  .menu .item:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .menu button:hover,
+    .menu .item:hover {
+      background: var(--hover);
+    }
   }
   .menu .danger {
     color: var(--danger-text);

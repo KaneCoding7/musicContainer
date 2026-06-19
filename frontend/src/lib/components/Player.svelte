@@ -1148,9 +1148,11 @@
     padding: 0.4rem;
     border-radius: 0.5rem;
   }
-  .np-collapse:hover {
-    background: var(--surface-2);
-    color: var(--text);
+  @media (hover: hover) {
+    .np-collapse:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
   }
   .np-queue {
     position: absolute;
@@ -1164,9 +1166,11 @@
     padding: 0.4rem;
     border-radius: 0.5rem;
   }
-  .np-queue:hover {
-    background: var(--surface-2);
-    color: var(--text);
+  @media (hover: hover) {
+    .np-queue:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
   }
   .npf-queue {
     position: absolute;
@@ -1310,8 +1314,10 @@
     padding: 0.4rem;
     border-radius: 50%;
   }
-  .npf-controls button:hover {
-    background: var(--surface-2);
+  @media (hover: hover) {
+    .npf-controls button:hover {
+      background: var(--surface-2);
+    }
   }
   .npf-controls .npf-play {
     color: var(--accent-text);
@@ -1404,8 +1410,10 @@
     padding: 0.3rem;
     border-radius: 0.4rem;
   }
-  .controls button:hover {
-    background: var(--surface-2);
+  @media (hover: hover) {
+    .controls button:hover {
+      background: var(--surface-2);
+    }
   }
   .controls .play {
     color: var(--accent-text);
@@ -1476,8 +1484,10 @@
     text-align: left;
     cursor: pointer;
   }
-  .sleep-menu button:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .sleep-menu button:hover {
+      background: var(--hover);
+    }
   }
   .sleep-menu button.on {
     color: var(--accent-text);
@@ -1508,9 +1518,11 @@
     border-radius: 0.4rem;
     margin-right: 0.25rem;
   }
-  .queue-toggle:hover {
-    background: var(--surface-2);
-    color: var(--text);
+  @media (hover: hover) {
+    .queue-toggle:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
   }
   .queue-toggle.active {
     color: var(--accent-text);

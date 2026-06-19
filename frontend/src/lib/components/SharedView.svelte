@@ -279,8 +279,10 @@
     color: inherit;
     font: inherit;
   }
-  .card:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .card:hover {
+      background: var(--hover);
+    }
   }
   .cover {
     aspect-ratio: 1;
@@ -323,8 +325,10 @@
     margin-bottom: 1rem;
     font: inherit;
   }
-  .back:hover {
-    color: var(--text);
+  @media (hover: hover) {
+    .back:hover {
+      color: var(--text);
+    }
   }
   .head {
     display: flex;
@@ -367,8 +371,10 @@
     font-weight: 600;
     cursor: pointer;
   }
-  .play-all:hover {
-    background: var(--accent-hover);
+  @media (hover: hover) {
+    .play-all:hover {
+      background: var(--accent-hover);
+    }
   }
   .shuffle-all {
     display: inline-flex;
@@ -383,8 +389,10 @@
     font-weight: 600;
     cursor: pointer;
   }
-  .shuffle-all:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .shuffle-all:hover {
+      background: var(--hover);
+    }
   }
   .save-btn {
     display: inline-flex;
@@ -399,8 +407,10 @@
     font-weight: 600;
     cursor: pointer;
   }
-  .save-btn:hover:not(:disabled) {
-    background: var(--hover);
+  @media (hover: hover) {
+    .save-btn:hover:not(:disabled) {
+      background: var(--hover);
+    }
   }
   .save-btn.on {
     background: var(--active-bg);
@@ -435,9 +445,11 @@
     padding: 0.4rem 0.6rem;
     border-radius: 0.35rem;
   }
-  .remove:hover {
-    background: var(--surface-2);
-    color: var(--text);
+  @media (hover: hover) {
+    .remove:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
   }
   .to-lib {
     flex-shrink: 0;
@@ -450,9 +462,11 @@
     padding: 0.4rem 0.6rem;
     border-radius: 0.35rem;
   }
-  .to-lib:hover:not(:disabled) {
-    background: var(--surface-2);
-    color: var(--accent-text);
+  @media (hover: hover) {
+    .to-lib:hover:not(:disabled) {
+      background: var(--surface-2);
+      color: var(--accent-text);
+    }
   }
   .to-lib.done {
     color: var(--accent-text);
@@ -516,8 +530,10 @@
     text-align: left;
     cursor: pointer;
   }
-  .track:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .track:hover {
+      background: var(--hover);
+    }
   }
   .thumb {
     position: relative;

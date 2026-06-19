@@ -127,9 +127,11 @@
     padding: 0.2rem;
     border-radius: 0.3rem;
   }
-  .x:hover {
-    background: var(--surface-2);
-    color: var(--text);
+  @media (hover: hover) {
+    .x:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
   }
   .hint {
     margin: 0.25rem 0 1rem;
@@ -165,14 +167,18 @@
     background: var(--surface-2);
     cursor: pointer;
   }
-  .frame:hover {
-    border-color: var(--accent);
+  @media (hover: hover) {
+    .frame:hover {
+      border-color: var(--accent);
+    }
   }
   .frame.thumb {
     border-color: var(--border-strong);
   }
-  .frame.thumb:hover {
-    border-color: var(--accent);
+  @media (hover: hover) {
+    .frame.thumb:hover {
+      border-color: var(--accent);
+    }
   }
   .frame img {
     width: 100%;

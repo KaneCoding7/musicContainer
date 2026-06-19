@@ -326,8 +326,10 @@
     cursor: pointer;
     padding: 0.2rem;
   }
-  .in-btn:hover:not(:disabled) {
-    color: var(--accent);
+  @media (hover: hover) {
+    .in-btn:hover:not(:disabled) {
+      color: var(--accent);
+    }
   }
   .in-btn:disabled {
     opacity: 0.45;
@@ -357,8 +359,10 @@
     font-size: 0.82rem;
     cursor: pointer;
   }
-  .ghost:hover:not(:disabled) {
-    background: var(--hover);
+  @media (hover: hover) {
+    .ghost:hover:not(:disabled) {
+      background: var(--hover);
+    }
   }
   .ghost:disabled {
     opacity: 0.6;
@@ -379,8 +383,10 @@
     font-size: 0.85rem;
     cursor: pointer;
   }
-  .signout:hover {
-    background: var(--danger-bg);
-    border-color: var(--danger-bg);
+  @media (hover: hover) {
+    .signout:hover {
+      background: var(--danger-bg);
+      border-color: var(--danger-bg);
+    }
   }
 </style>

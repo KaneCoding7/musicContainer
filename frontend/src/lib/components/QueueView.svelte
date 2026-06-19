@@ -146,9 +146,11 @@
     font-size: 0.78rem;
     font-variant-numeric: tabular-nums;
   }
-  .remove:hover {
-    background: var(--surface-2);
-    color: var(--text);
+  @media (hover: hover) {
+    .remove:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
   }
   .row {
     flex: 1;
@@ -164,11 +166,15 @@
     text-align: left;
     cursor: pointer;
   }
-  .row:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .row:hover {
+      background: var(--hover);
+    }
   }
-  li.current .row:hover {
-    background: var(--active-bg);
+  @media (hover: hover) {
+    li.current .row:hover {
+      background: var(--active-bg);
+    }
   }
   .thumb {
     position: relative;

@@ -60,16 +60,20 @@
     background: var(--accent);
     color: #fff;
   }
-  .play:hover {
-    background: var(--accent-hover);
+  @media (hover: hover) {
+    .play:hover {
+      background: var(--accent-hover);
+    }
   }
   .shuffle {
     background: var(--surface-2);
     color: var(--text);
     border: 1px solid var(--border-strong);
   }
-  .shuffle:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .shuffle:hover {
+      background: var(--hover);
+    }
   }
   /* Compact: icon-only round buttons for tight headers. */
   .compact button {

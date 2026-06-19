@@ -348,8 +348,10 @@
     font-weight: 500;
     cursor: pointer;
   }
-  .ghost:hover {
-    background: var(--border-strong);
+  @media (hover: hover) {
+    .ghost:hover {
+      background: var(--border-strong);
+    }
   }
   .sort {
     display: inline-flex;
@@ -412,8 +414,10 @@
     color: var(--text);
     border: 1px solid var(--border-strong);
   }
-  .selbar button.ghost:hover:not(:disabled) {
-    background: var(--border-strong);
+  @media (hover: hover) {
+    .selbar button.ghost:hover:not(:disabled) {
+      background: var(--border-strong);
+    }
   }
   .selbar button.ghost.active {
     background: var(--accent);
@@ -520,11 +524,15 @@
   li.current {
     background: var(--active-bg);
   }
-  li.song-row:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    li.song-row:hover {
+      background: var(--hover);
+    }
   }
-  li.current:hover {
-    background: var(--active-bg);
+  @media (hover: hover) {
+    li.current:hover {
+      background: var(--active-bg);
+    }
   }
   .col-index {
     display: inline-flex;
@@ -560,8 +568,10 @@
     font-size: 0.95rem;
     text-decoration: none;
   }
-  .action:hover {
-    background: var(--surface-2);
+  @media (hover: hover) {
+    .action:hover {
+      background: var(--surface-2);
+    }
   }
   /* Fixed widths keep the header labels lined up over their values. */
   .col-date {
@@ -632,9 +642,14 @@
     opacity: 0;
     transition: opacity 0.12s;
   }
-  li.song-row:hover .thumb-play,
   li.current:not(.playing) .thumb-play {
     opacity: 1;
+  }
+
+  @media (hover: hover) {
+    li.song-row:hover .thumb-play {
+      opacity: 1;
+    }
   }
   /* The playing track shows the live sound-wave by default; hovering hides it
      so the play/pause control underneath is reachable. */
@@ -648,8 +663,10 @@
     background: rgba(0, 0, 0, 0.45);
     transition: opacity 0.12s;
   }
-  li.song-row:hover .thumb-wave {
-    opacity: 0;
+  @media (hover: hover) {
+    li.song-row:hover .thumb-wave {
+      opacity: 0;
+    }
   }
   .meta {
     flex: 1;

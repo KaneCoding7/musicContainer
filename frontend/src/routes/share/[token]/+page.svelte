@@ -250,8 +250,10 @@
     font-weight: 600;
     cursor: pointer;
   }
-  .play-all:hover {
-    background: var(--accent-hover);
+  @media (hover: hover) {
+    .play-all:hover {
+      background: var(--accent-hover);
+    }
   }
   ol {
     list-style: none;
@@ -279,8 +281,10 @@
     text-align: left;
     cursor: pointer;
   }
-  .row:hover {
-    background: var(--hover);
+  @media (hover: hover) {
+    .row:hover {
+      background: var(--hover);
+    }
   }
   .num {
     width: 1.5rem;
@@ -366,8 +370,10 @@
   .controls .pp {
     color: var(--accent-text);
   }
-  .controls button:hover {
-    background: var(--surface-2);
+  @media (hover: hover) {
+    .controls button:hover {
+      background: var(--surface-2);
+    }
   }
   .seek {
     display: flex;

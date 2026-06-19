@@ -195,16 +195,20 @@
     background: var(--accent);
     color: #fff;
   }
-  button.primary:hover {
-    background: var(--accent-hover);
+  @media (hover: hover) {
+    button.primary:hover {
+      background: var(--accent-hover);
+    }
   }
   button.ghost {
     background: var(--surface-2);
     color: var(--text);
     font-weight: 500;
   }
-  button.ghost:hover {
-    background: var(--border-strong);
+  @media (hover: hover) {
+    button.ghost:hover {
+      background: var(--border-strong);
+    }
   }
   .muted {
     color: var(--muted);
