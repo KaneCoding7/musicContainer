@@ -2,9 +2,13 @@
   "name": "Music Server",
   "short_name": "Music",
   "description": "Your personal music server",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "launch_handler": {
+    "client_mode": ["focus-existing", "auto"]
+  },
   "background_color": "#0f0f12",
   "theme_color": "#6d28d9",
   "icons": [
