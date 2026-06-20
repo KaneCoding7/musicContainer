@@ -404,6 +404,101 @@
     updatePositionState();
   }
 
+  // Point the element at the *current* song and start it immediately, in the
+  // caller's own call stack. The reactive $effect above also loads the current
+  // song, but it runs asynchronously (a microtask later). That async gap is the
+  // reason playback dies after a track when the phone is locked: iOS/Android
+  // only let a backgrounded tab keep audio going if play() is called
+  // synchronously within the `ended` event — once a tick passes, the autoplay
+  // grant is gone, play() is rejected, and we strand the queue waiting for a
+  // screen touch. Calling this straight from the `ended`/`error` handlers keeps
+  // the next track inside that same media-event tick. The effect's
+  // `el.src !== url` guard then sees the src already set and does nothing, so
+  // there's no double-load.
+  function playCurrent() {
+    const el = audio;
+    const id = vm.currentSong?.id;
+    if (!el || id == null || !active) return;
+    const url = streamUrl(id);
+    if (el.src !== url) {
+      prefetchCtrl?.abort(); // don't let a prefetch starve the new track's buffer
+      el.src = url;
+      el.load();
+    }
+    tryResume(el);
+  }
+
+  // A track reached its natural end: honor the sleep timer / repeat-one, else
+  // advance the queue. Shared by the element's `ended` event and the stall
+  // watchdog below (some browsers stall at EOF and never fire `ended`).
+  function handleTrackEnd() {
+    if (vm.sleepAtTrackEnd) {
+      vm.isPlaying = false;
+      vm.cancelSleep();
+      return;
+    }
+    if (vm.repeat === "one" && audio) {
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+      return;
+    }
+    if (vm.next()) playCurrent();
+    else vm.isPlaying = false;
+  }
+
+  // A track failed to play (network drop or decode error). Don't silently pause
+  // and strand the queue, and don't loop a broken file under repeat-one — just
+  // skip to the next track, exactly like a normal end-of-track advance.
+  function handleTrackError() {
+    if (vm.sleepAtTrackEnd) {
+      vm.isPlaying = false;
+      vm.cancelSleep();
+      return;
+    }
+    if (vm.next()) playCurrent();
+    else vm.isPlaying = false;
+  }
+
+  // Safety net for the "song finishes but the next one never starts" hang.
+  // Occasionally a stream stalls in the final fraction of a second and the
+  // browser never emits `ended`, leaving us paused mid-queue. While we're
+  // supposed to be playing, watch for the play head sitting still right at the
+  // end and treat it as a finished track. The conditions are deliberately tight
+  // (at the very end, and not progressing for two consecutive checks) so a
+  // normally-playing track — which always advances `currentTime` — is untouched.
+  let lastWatchdogTime = -1;
+  let watchdogStalls = 0;
+  $effect(() => {
+    const el = audio;
+    if (!el || !active) return;
+    const iv = setInterval(() => {
+      if (el.paused || el.ended || el.seeking || seeking) {
+        watchdogStalls = 0;
+        lastWatchdogTime = el.currentTime;
+        return;
+      }
+      if (!duration || !isFinite(duration)) return;
+      if (el.currentTime !== lastWatchdogTime) {
+        lastWatchdogTime = el.currentTime;
+        watchdogStalls = 0;
+        return;
+      }
+      // The play head hasn't moved since the last check while we're meant to be
+      // playing. Only act on it when we're effectively at the end of the track.
+      watchdogStalls += 1;
+      if (duration - el.currentTime <= 1.5 && watchdogStalls >= 2) {
+        watchdogStalls = 0;
+        lastWatchdogTime = -1;
+        handleTrackEnd();
+      }
+    }, 1000);
+    return () => {
+      clearInterval(iv);
+      watchdogStalls = 0;
+      lastWatchdogTime = -1;
+    };
+  });
+
   // Apply a seek requested from the mini player.
   $effect(() => {
     const t = vm.seekRequest;
@@ -778,18 +873,11 @@
     }
     vm.isPlaying = false;
   }}
-  onended={() => {
-    if (vm.sleepAtTrackEnd) {
-      vm.isPlaying = false;
-      vm.cancelSleep();
-      return;
-    }
-    if (vm.repeat === "one" && audio) {
-      audio.currentTime = 0;
-      audio.play().catch(() => {});
-    } else if (!vm.next()) {
-      vm.isPlaying = false;
-    }
+  onended={handleTrackEnd}
+  onerror={() => {
+    // Only react while we're the active output and actually trying to play, so
+    // a benign error on a backgrounded/remote element can't skip the queue.
+    if (active && vm.isPlaying) handleTrackError();
   }}
 ></audio>
 
