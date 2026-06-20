@@ -697,10 +697,13 @@
       flex-basis: 100%;
       max-width: none;
     }
-    /* Track on the left, controls on the right (flex handles the split). Date +
-       plays are dropped to keep rows readable on phones. */
+    /* Track on the left, controls on the right (flex handles the split). Date,
+       plays and duration are dropped to keep rows readable on phones — hide
+       both the body cells and their header labels so the columns line up. */
     .col-date,
-    .col-plays {
+    .head-date,
+    .col-plays,
+    .col-dur {
       display: none;
     }
     .row {
