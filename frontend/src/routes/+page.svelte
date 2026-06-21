@@ -86,6 +86,16 @@
   const artistOpen = $derived(
     view === "artists" && !!page.url.searchParams.get("artist"),
   );
+
+  // The content area is its own scroll container and navigation uses noScroll,
+  // so opening an artist would otherwise inherit the grid's scroll position and
+  // land you part-way down the track list. Reset it to the top when a detail
+  // opens.
+  let contentEl = $state<HTMLElement | null>(null);
+  $effect(() => {
+    if (artistOpen) contentEl?.scrollTo(0, 0);
+  });
+
   let queueOpen = $state(false);
   let sidebarOpen = $state(false); // mobile nav drawer
   let theme = $state<"dark" | "light">("dark");
@@ -352,7 +362,7 @@
       </div>
     </aside>
 
-    <main class="content">
+    <main class="content" bind:this={contentEl}>
       {#if vm.error}
         <p class="error">{vm.error}</p>
       {/if}

@@ -229,26 +229,33 @@
       <h3>{current.name}</h3>
       <p class="muted">{trackLabel(current.songs)}</p>
       <div class="head-actions">
-        <PlayActions {vm} songs={current.songs} />
+        <PlayActions {vm} songs={current.songs} compactMobile />
         {#if current.songs.length > 1}
           <button
             class="edit-order"
             class:on={reordering}
             onclick={() => (reordering = !reordering)}
+            title={reordering ? "Done" : "Edit order"}
           >
             <Icon name={reordering ? "check" : "edit"} size={16} />
-            {reordering ? "Done" : "Edit"}
+            <span class="btn-label">{reordering ? "Done" : "Edit"}</span>
           </button>
         {/if}
         {#if reordering && current.name !== NO_ARTIST && customImages.has(current.name)}
-          <button class="edit-order" onclick={clearArtistImage}>
-            <Icon name="hide_image" size={16} /> Remove image
+          <button class="edit-order" onclick={clearArtistImage} title="Remove image">
+            <Icon name="hide_image" size={16} />
+            <span class="btn-label">Remove image</span>
           </button>
         {/if}
         {#if current.name !== NO_ARTIST}
-          <button class="share-artist" onclick={toggleArtistShare} disabled={shareBusy}>
+          <button
+            class="share-artist"
+            onclick={toggleArtistShare}
+            disabled={shareBusy}
+            title={shareToken ? "Public · turn off" : "Share artist"}
+          >
             <Icon name="public" size={16} />
-            {shareToken ? "Public · turn off" : "Share artist"}
+            <span class="btn-label">{shareToken ? "Public · turn off" : "Share artist"}</span>
           </button>
         {/if}
       </div>
@@ -272,7 +279,11 @@
         class:current={isCurrent}
         class:playing={isCurrent && vm.isPlaying}
         data-reorder-index={i}
-        use:swipeQueue={{ onQueue: () => vm.playNext(song), disabled: reordering }}
+        use:swipeQueue={{
+          onQueue: () => vm.addToQueue(song),
+          onLike: () => vm.toggleLike(song.id),
+          disabled: reordering,
+        }}
       >
         {#if reordering}
           <span
@@ -425,18 +436,33 @@
       color: var(--text);
     }
   }
-  /* On mobile the top bar already shows "Artists" and the OS/browser back
-     gesture returns to the list, so the in-page back button is redundant. */
-  @media (max-width: 768px) {
-    .back {
-      display: none;
-    }
-  }
   .head {
     display: flex;
     gap: 1.25rem;
     align-items: center;
     margin-bottom: 1.5rem;
+  }
+  /* On mobile, stack the avatar on top with the name and all action buttons
+     centered in a row beneath it. */
+  @media (max-width: 768px) {
+    .head {
+      flex-direction: column;
+      text-align: center;
+      gap: 0.85rem;
+    }
+    .head-actions {
+      justify-content: center;
+    }
+    /* Icon-only round buttons on mobile so Play / Shuffle / Edit / Share all fit
+       on one row under the avatar. */
+    .share-artist,
+    .edit-order {
+      padding: 0.5rem;
+      border-radius: 50%;
+    }
+    .btn-label {
+      display: none;
+    }
   }
   .head-actions {
     display: flex;

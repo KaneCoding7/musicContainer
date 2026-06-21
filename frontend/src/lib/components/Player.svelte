@@ -509,6 +509,20 @@
     }
   });
 
+  // Remote device: it outputs no audio, so `ontimeupdate` never fires and the
+  // seek bar's local `currentTime`/`duration` would stay frozen. Mirror the
+  // active device's synced position/duration (kept live by the sync broadcasts
+  // and the per-second interpolation in +page.svelte) so the bar tracks
+  // playback. Skip while the user is scrubbing here so a drag isn't yanked back.
+  $effect(() => {
+    if (active) return;
+    const pos = vm.position;
+    const dur = vm.duration;
+    if (seeking) return;
+    currentTime = pos;
+    duration = dur;
+  });
+
   function togglePlay() {
     vm.togglePlay();
   }

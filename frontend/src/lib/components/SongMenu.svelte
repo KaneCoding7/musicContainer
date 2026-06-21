@@ -145,6 +145,14 @@
           </div>
         {/if}
       {:else}
+        <button
+          class="like"
+          class:liked={song.liked}
+          onclick={() => { vm.toggleLike(song.id); close(); }}
+        >
+          <Icon name="favorite" fill={song.liked} size={18} />
+          {song.liked ? "Unlike" : "Like"}
+        </button>
         <button onclick={() => { vm.playNext(song); close(); }}>
           <Icon name="playlist_play" size={18} /> Play next
         </button>
@@ -261,6 +269,10 @@
   }
   .menu .danger {
     color: var(--danger-text);
+  }
+  /* Liked state: fill the heart red, matching the rest of the app. */
+  .menu .like.liked {
+    color: #ef4444;
   }
   /* Add-to-playlist submenu */
   .menu .back {
