@@ -547,7 +547,7 @@
     display: flex;
     align-items: center;
     gap: 0.85rem;
-    padding: 0.9rem 0;
+    padding: 1.3rem 0;
     background: transparent;
     border: none;
     color: inherit;
