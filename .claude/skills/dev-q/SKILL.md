@@ -1,5 +1,5 @@
 ---
-name: dev-queue
+name: dev-q
 description: Coordinator for the musicContainer two-bot dev system. Manage a file-based task queue, dispatch the musiccontainer-dev bot in the background to do the work, surface the dev bot's questions to the user, and record answers. Invoke when the user wants to queue dev work, check status, answer the dev bot's questions, or run the dev loop.
 ---
 

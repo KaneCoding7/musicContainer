@@ -3,7 +3,7 @@
 A two-bot system for running dev work on this repo:
 
 - **Coordinator** — your interactive Claude Code session, driven by the
-  `/dev-queue` skill (`.claude/skills/dev-queue/`). You talk to it; it owns a task
+  `/dev-q` skill (`.claude/skills/dev-q/`). You talk to it; it owns a task
   queue, dispatches the dev bot, surfaces the dev bot's questions to you, and
   records your answers.
 - **Dev bot** — the `musiccontainer-dev` agent (`.claude/agents/`). The coordinator
@@ -41,7 +41,7 @@ inbox ──dispatch──► doing ──success──► done   (PR opened)
 
 ## Using it
 
-Run Claude Code from the repo root so the `/dev-queue` skill and
+Run Claude Code from the repo root so the `/dev-q` skill and
 `musiccontainer-dev` agent are discovered, then talk to the coordinator:
 
 - "Add a task: …" → queues it
