@@ -25,6 +25,7 @@ import type { Song } from "$lib/types";
 export interface PlaybackSnapshot {
   queue: Song[];
   currentIndex: number | null;
+  queuedCount: number;
   position: number;
   duration: number;
   isPlaying: boolean;
@@ -116,6 +117,23 @@ export class SongViewModel {
   // playlist's songs (in order).
   queue = $state<Song[]>([]);
   currentIndex = $state<number | null>(null);
+  // Spotify-style manual queue: the number of hand-queued tracks sitting
+  // immediately after the current one. "Play next" inserts at the front of this
+  // block, "Add to queue" appends to its end; both play before the rest of the
+  // original context resumes. Kept in sync as tracks advance / the queue is
+  // edited; clampQueued() guards the invariant.
+  queuedCount = $state(0);
+
+  // Index one past the manual-queue block (where "Add to queue" inserts).
+  private get manualEnd(): number {
+    return this.currentIndex === null ? 0 : this.currentIndex + 1 + this.queuedCount;
+  }
+  // Keep queuedCount within the tracks that actually follow the current one.
+  private clampQueued(): void {
+    const after =
+      this.currentIndex === null ? 0 : this.queue.length - 1 - this.currentIndex;
+    this.queuedCount = Math.max(0, Math.min(this.queuedCount, after));
+  }
   isPlaying = $state(false);
 
   // Playback modes (Cycle 7).
@@ -245,7 +263,9 @@ export class SongViewModel {
       this.shuffle = true;
       if (this.currentIndex === null || this.queue.length <= 1) return;
       this.preShuffleQueue = [...this.queue];
-      const at = this.currentIndex + 1;
+      // Keep the current track AND the hand-queued block fixed; shuffle only the
+      // rest of the context after them.
+      const at = this.manualEnd;
       this.queue = [
         ...this.queue.slice(0, at),
         ...this.shuffled(this.queue.slice(at)),
@@ -320,6 +340,7 @@ export class SongViewModel {
       this.queue = songs;
       this.currentIndex = index;
     }
+    this.queuedCount = 0; // fresh context — nothing hand-queued yet
     this.isPlaying = true;
   }
 
@@ -347,19 +368,25 @@ export class SongViewModel {
     this.playQueue(this.songs, index);
   }
 
-  // Appends a song to the queue. If nothing is playing, starts it.
+  // Adds a song to the END of the manual queue — after the current track and
+  // any already-queued/play-next songs, but before the rest of the context.
+  // If nothing is playing, starts it.
   addToQueue(song: Song): void {
     if (this.remoteSink?.("addToQueue", { song })) return;
     if (this.currentIndex === null) {
       this.queue = [song];
       this.currentIndex = 0;
       this.isPlaying = true;
+      this.queuedCount = 0;
     } else {
-      this.queue = [...this.queue, song];
+      const at = this.manualEnd;
+      this.queue = [...this.queue.slice(0, at), song, ...this.queue.slice(at)];
+      this.queuedCount += 1;
     }
   }
 
-  // Inserts a song to play right after the current track.
+  // Inserts a song at the FRONT of the manual queue — it plays right after the
+  // current track, ahead of anything already queued.
   playNext(song: Song): void {
     if (this.remoteSink?.("playNext", { song })) return;
     if (this.currentIndex === null) {
@@ -372,6 +399,7 @@ export class SongViewModel {
       song,
       ...this.queue.slice(at),
     ];
+    this.queuedCount += 1;
   }
 
   // Removes the queue entry at index, keeping the current track stable.
@@ -379,6 +407,11 @@ export class SongViewModel {
     if (this.remoteSink?.("removeFromQueue", { index })) return;
     if (index < 0 || index >= this.queue.length) return;
     const removingCurrent = index === this.currentIndex;
+    // Was the removed entry one of the hand-queued tracks after the current one?
+    const inManual =
+      this.currentIndex !== null &&
+      index > this.currentIndex &&
+      index <= this.currentIndex + this.queuedCount;
     this.queue = this.queue.filter((_, i) => i !== index);
     if (this.currentIndex === null) return;
     if (this.queue.length === 0) {
@@ -390,6 +423,8 @@ export class SongViewModel {
     } else if (index < this.currentIndex) {
       this.currentIndex -= 1;
     }
+    if (inManual) this.queuedCount -= 1;
+    this.clampQueued();
   }
 
   // Moves a queue entry, keeping the current track pointer correct.
@@ -417,6 +452,7 @@ export class SongViewModel {
       if (to <= c) c += 1;
     }
     this.currentIndex = c;
+    this.clampQueued();
   }
 
   // Toggles a song's liked flag (optimistic; reverts on failure).
@@ -467,6 +503,7 @@ export class SongViewModel {
     return {
       queue: this.queue,
       currentIndex: this.currentIndex,
+      queuedCount: this.queuedCount,
       // Untracked so a reactive pusher doesn't re-run on every timeupdate.
       position: untrack(() => this.position),
       duration: this.duration,
@@ -480,11 +517,13 @@ export class SongViewModel {
   applyRemoteState(s: PlaybackSnapshot): void {
     this.queue = s.queue;
     this.currentIndex = s.currentIndex;
+    this.queuedCount = s.queuedCount ?? 0;
     this.isPlaying = s.isPlaying;
     this.shuffle = s.shuffle;
     this.repeat = s.repeat;
     this.position = s.position;
     this.duration = s.duration;
+    this.clampQueued();
   }
 
   // Replaces a song everywhere it appears (library + queue) with an updated copy.
@@ -539,6 +578,10 @@ export class SongViewModel {
 
     const queueIdx = this.queue.findIndex((s) => s.id === id);
     if (queueIdx !== -1) {
+      const inManual =
+        this.currentIndex !== null &&
+        queueIdx > this.currentIndex &&
+        queueIdx <= this.currentIndex + this.queuedCount;
       this.queue = this.queue.filter((s) => s.id !== id);
       if (wasCurrent) {
         // Stop playback; the loaded track no longer exists.
@@ -548,6 +591,8 @@ export class SongViewModel {
         // Keep pointing at the same song now that earlier entries shifted.
         this.currentIndex -= 1;
       }
+      if (inManual) this.queuedCount -= 1;
+      this.clampQueued();
     }
   }
 
@@ -559,7 +604,12 @@ export class SongViewModel {
       this.isPlaying = false;
       return false;
     }
+    // Advancing one step consumes the first manual-queue track; a wrap (repeat
+    // all) starts a fresh pass with no pending manual queue.
+    const stepped = n === this.currentIndex! + 1;
     this.currentIndex = n;
+    if (stepped) this.queuedCount = Math.max(0, this.queuedCount - 1);
+    else this.queuedCount = 0;
     this.isPlaying = true;
     return true;
   }
@@ -572,11 +622,13 @@ export class SongViewModel {
     if (this.currentIndex === null) return false;
     if (this.currentIndex > 0) {
       this.currentIndex -= 1;
+      this.queuedCount = 0;
       this.isPlaying = true;
       return true;
     }
     if (this.repeat === "all") {
       this.currentIndex = this.queue.length - 1;
+      this.queuedCount = 0;
       this.isPlaying = true;
       return true;
     }
@@ -602,11 +654,13 @@ export class SongViewModel {
     }
     if (this.currentIndex > 0) {
       this.currentIndex -= 1;
+      this.queuedCount = 0;
       this.isPlaying = true;
       return true;
     }
     if (this.repeat === "all") {
       this.currentIndex = this.queue.length - 1;
+      this.queuedCount = 0;
       this.isPlaying = true;
       return true;
     }
@@ -628,6 +682,7 @@ export class SongViewModel {
     return {
       queue: this.queue,
       currentIndex: this.currentIndex,
+      queuedCount: this.queuedCount,
       isPlaying: this.isPlaying,
       shuffle: this.shuffle,
       repeat: this.repeat,
@@ -648,6 +703,9 @@ export class SongViewModel {
       typeof ci === "number" && ci >= 0 && ci < queue.length ? ci : 0;
     this.queue = queue;
     this.currentIndex = idx;
+    this.queuedCount =
+      typeof s.queuedCount === "number" ? s.queuedCount : 0;
+    this.clampQueued();
     this.shuffle = !!s.shuffle;
     this.repeat =
       s.repeat === "all" || s.repeat === "one"

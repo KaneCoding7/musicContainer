@@ -225,7 +225,6 @@
         <span class="head-date">Added</span>
         <span class="col-plays">Plays</span>
         <span class="col-dur"><Icon name="schedule" size={18} /></span>
-        <span class="col-like"></span>
         <span class="col-menu"></span>
       </div>
     </div>
@@ -237,7 +236,10 @@
           class:current={isCurrent}
           class:playing={isCurrent && vm.isPlaying}
           class:selected={selected.has(song.id)}
-          use:swipeQueue={{ onQueue: () => vm.playNext(song) }}
+          use:swipeQueue={{
+            onQueue: () => vm.addToQueue(song),
+            onLike: () => vm.toggleLike(song.id),
+          }}
         >
           {#if selecting}
             <span class="col-index">
@@ -301,14 +303,6 @@
             <span class="col-dur dur">
               {song.duration ? formatDuration(song.duration) : "—"}
             </span>
-            <button
-              class="col-like action like"
-              class:liked={song.liked}
-              title={song.liked ? "Unlike" : "Like"}
-              aria-label={song.liked ? "Unlike song" : "Like song"}
-              onclick={() => vm.toggleLike(song.id)}
-              ><Icon name="favorite" fill={song.liked} size={20} /></button
-            >
             <SongMenu {vm} {song} onEdit={onUpdate} onDelete={onDelete} />
           </div>
         </li>
@@ -330,6 +324,7 @@
   .toolbar {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 0.75rem;
@@ -339,7 +334,7 @@
     align-items: center;
     gap: 0.4rem;
     flex-shrink: 0;
-    padding: 0.5rem 1rem;
+    padding: 0.3rem 0.9rem;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
     border-radius: 2rem;
@@ -358,7 +353,7 @@
     align-items: center;
     gap: 0.35rem;
     flex-shrink: 0;
-    padding: 0.4rem 0.9rem;
+    padding: 0.3rem 0.9rem;
     background: var(--surface-2);
     border: 1px solid var(--border-strong);
     border-radius: 2rem;
@@ -458,7 +453,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.5rem 1.1rem;
+    padding: 0.3rem 1.1rem;
     background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: 2rem;
@@ -495,24 +490,21 @@
   .row-end {
     display: flex;
     align-items: center;
-    gap: 0.9rem;
+    gap: 1.6rem;
     flex-shrink: 0;
   }
   .list-head {
     padding: 0 0.75rem 0.5rem;
     border-bottom: 1px solid var(--border-strong);
     color: var(--muted);
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    letter-spacing: 0;
   }
-  .list-head .col-dur {
+  .list-head .col-dur,
+  .list-head .col-plays {
     display: inline-flex;
     justify-content: flex-end;
-  }
-  .col-like {
-    width: 2.25rem;
   }
   .col-menu {
     width: 2.25rem;
@@ -555,29 +547,11 @@
     text-align: left;
     cursor: pointer;
   }
-  .action {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    padding: 0.4rem;
-    border-radius: 0.4rem;
-    font-size: 0.95rem;
-    text-decoration: none;
-  }
-  @media (hover: hover) {
-    .action:hover {
-      background: var(--surface-2);
-    }
-  }
   /* Fixed widths keep the header labels lined up over their values. */
   .col-date {
     width: 7.5rem;
     text-align: right;
-    color: var(--muted);
+    color: var(--dim);
     font-size: 0.8rem;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -594,7 +568,7 @@
     text-align: right;
   }
   .col-dur.dur {
-    color: var(--muted);
+    color: var(--dim);
     font-size: 0.82rem;
     font-variant-numeric: tabular-nums;
   }
@@ -606,12 +580,9 @@
     display: inline-flex;
     align-items: center;
     gap: 0.15rem;
-    color: var(--muted);
+    color: var(--dim);
     font-size: 0.78rem;
     font-variant-numeric: tabular-nums;
-  }
-  .like.liked {
-    color: #ef4444;
   }
   .thumb {
     position: relative;
@@ -708,9 +679,6 @@
     }
     .row {
       gap: 0.6rem;
-    }
-    .action {
-      padding: 0.4rem;
     }
   }
 </style>

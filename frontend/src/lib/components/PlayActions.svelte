@@ -8,20 +8,22 @@
     vm,
     songs,
     compact = false,
+    compactMobile = false,
     shuffle = true,
   }: {
     vm: SongViewModel;
     songs: Song[];
     compact?: boolean;
+    compactMobile?: boolean; // icon-only on mobile only (labels on desktop)
     shuffle?: boolean;
   } = $props();
 </script>
 
 {#if songs.length > 0}
-  <div class="play-actions" class:compact>
-    <button class="play" onclick={() => vm.playList(songs)} title="Play">
+  <div class="play-actions" class:compact class:compact-mobile={compactMobile}>
+    <button class="play" onclick={() => vm.playList(songs)} title="Play" aria-label="Play">
       <Icon name="play_arrow" fill size={compact ? 18 : 20} />
-      {#if !compact}Play{/if}
+      <span class="label">Play</span>
     </button>
     {#if shuffle}
       <button
@@ -31,7 +33,7 @@
         aria-label="Shuffle"
       >
         <Icon name="shuffle" size={compact ? 18 : 20} />
-        {#if !compact}Shuffle{/if}
+        <span class="label">Shuffle</span>
       </button>
     {/if}
   </div>
@@ -79,5 +81,19 @@
   .compact button {
     padding: 0.4rem;
     border-radius: 50%;
+  }
+  .compact .label {
+    display: none;
+  }
+  /* Compact on mobile only: keep the labels on desktop, drop to icon-only pills
+     on small screens so a header row stays tidy. */
+  @media (max-width: 768px) {
+    .compact-mobile button {
+      padding: 0.65rem;
+      border-radius: 50%;
+    }
+    .compact-mobile .label {
+      display: none;
+    }
   }
 </style>

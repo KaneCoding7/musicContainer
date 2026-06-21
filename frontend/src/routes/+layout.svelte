@@ -129,4 +129,13 @@
   :global(.swipe-hint.armed .material-symbols-rounded) {
     transform: scale(1.25);
   }
+  /* "Like" affordance revealed as a row is swiped left — anchored to the right
+     edge and tinted red to match the liked heart. */
+  :global(.swipe-hint.like) {
+    left: auto;
+    right: 0;
+    padding-left: 0;
+    padding-right: 0.9rem;
+    color: #ef4444;
+  }
 </style>
