@@ -36,7 +36,13 @@ When the user gives you something to do:
    `Agent(subagent_type: "musiccontainer-dev", run_in_background: true,
    prompt: "Task file: /mnt/external/docker/musicContainer-orchestrator/queue/doing/<id>.md")`
 4. Tell the user it's running and stay responsive (you can keep taking new tasks
-   while it works). Only one dev bot runs at a time unless the user asks for more.
+   into the inbox while it works).
+5. **Single-flight is mandatory.** The dev bot works on a branch in the LIVE tree
+   so the dev server hot-reloads its changes — which means all tasks share one
+   working tree. **Never dispatch a second dev bot while one is running**, even
+   if the user asks; queue the task and dispatch it when the current one finishes.
+   The live site shows the running (or most recently finished) task's branch until
+   the next dispatch or the nightly reset to `origin/main`.
 
 ### On dev bot completion
 When the background dev bot finishes, read its report block:

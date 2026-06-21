@@ -7,10 +7,11 @@ A two-bot system for running dev work on this repo:
   queue, dispatches the dev bot, surfaces the dev bot's questions to you, and
   records your answers.
 - **Dev bot** — the `musiccontainer-dev` agent (`.claude/agents/`). The coordinator
-  spawns it in the background, one task at a time. It works in an isolated git
-  worktree branched from `origin/main`, ships a **PR** (never commits to main,
-  never touches your live working tree), then either marks the task done or parks
-  it with a question.
+  spawns it in the background, **strictly one task at a time**. It works on a
+  dedicated branch **in the live working tree** so the dev server hot-reloads the
+  change (you see it on the live site as it builds), ships a **PR** (never commits
+  to main), then either marks the task done or parks it with a question. Because
+  all tasks share the one live tree, two dev bots must never run at once.
 
 ## What's tracked here vs. what's runtime
 
