@@ -425,6 +425,13 @@
       color: var(--text);
     }
   }
+  /* On mobile the top bar already shows "Artists" and the OS/browser back
+     gesture returns to the list, so the in-page back button is redundant. */
+  @media (max-width: 768px) {
+    .back {
+      display: none;
+    }
+  }
   .head {
     display: flex;
     gap: 1.25rem;

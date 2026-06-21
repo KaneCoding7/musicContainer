@@ -81,6 +81,11 @@
     }
   }
   const view = $derived(toView(page.url.searchParams.get("view")));
+  // True on the artist *detail* page (an artist is open). Used to drop the
+  // redundant "Artists" heading on mobile, where the top bar already shows it.
+  const artistOpen = $derived(
+    view === "artists" && !!page.url.searchParams.get("artist"),
+  );
   let queueOpen = $state(false);
   let sidebarOpen = $state(false); // mobile nav drawer
   let theme = $state<"dark" | "light">("dark");
@@ -381,7 +386,7 @@
         <h2>Albums</h2>
         <AlbumsView {vm} />
       {:else if view === "artists"}
-        <h2>Artists</h2>
+        <h2 class:detail-hidden={artistOpen}>Artists</h2>
         <ArtistsView {vm} />
       {:else if view === "recent"}
         <h2>Recently Played</h2>
@@ -726,6 +731,11 @@
     }
     .content h2 {
       font-size: 1.2rem;
+    }
+    /* On the artist detail page the top bar already says "Artists", so the
+       section heading is a redundant second copy — drop it on mobile. */
+    .content h2.detail-hidden {
+      display: none;
     }
     .queue-panel {
       max-height: 45vh;
