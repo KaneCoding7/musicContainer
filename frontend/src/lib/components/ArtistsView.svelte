@@ -237,13 +237,13 @@
             onclick={() => (reordering = !reordering)}
             title={reordering ? "Done" : "Edit order"}
           >
-            <Icon name={reordering ? "check" : "edit"} size={16} />
+            <Icon name={reordering ? "check" : "edit"} size={18} />
             <span class="btn-label">{reordering ? "Done" : "Edit"}</span>
           </button>
         {/if}
         {#if reordering && current.name !== NO_ARTIST && customImages.has(current.name)}
           <button class="edit-order" onclick={clearArtistImage} title="Remove image">
-            <Icon name="hide_image" size={16} />
+            <Icon name="hide_image" size={18} />
             <span class="btn-label">Remove image</span>
           </button>
         {/if}
@@ -254,7 +254,7 @@
             disabled={shareBusy}
             title={shareToken ? "Public · turn off" : "Share artist"}
           >
-            <Icon name="public" size={16} />
+            <Icon name="public" size={18} />
             <span class="btn-label">{shareToken ? "Public · turn off" : "Share artist"}</span>
           </button>
         {/if}
@@ -457,7 +457,7 @@
        on one row under the avatar. */
     .share-artist,
     .edit-order {
-      padding: 0.5rem;
+      padding: 0.65rem;
       border-radius: 50%;
     }
     .btn-label {
@@ -538,8 +538,12 @@
     flex-shrink: 0;
   }
   .head h3 {
-    margin: 0 0 0.25rem;
+    margin: 0 0 0.1rem;
     font-size: 1.6rem;
+  }
+  /* Track count sits tight under the name (kill the default paragraph margin). */
+  .head p {
+    margin: 0 0 0.6rem;
   }
   ol {
     list-style: none;

@@ -89,7 +89,7 @@
      on small screens so a header row stays tidy. */
   @media (max-width: 768px) {
     .compact-mobile button {
-      padding: 0.4rem;
+      padding: 0.65rem;
       border-radius: 50%;
     }
     .compact-mobile .label {
