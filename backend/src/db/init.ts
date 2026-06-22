@@ -7,6 +7,8 @@ import { dirname, join } from "node:path";
 const DATA_DIR = process.env.DATA_DIR ?? join(process.cwd(), "..", "data");
 export const MUSIC_DIR = join(DATA_DIR, "music");
 export const ART_DIR = join(DATA_DIR, "art");
+// Short looping "canvas" clips cut from a track's source video (link imports).
+export const CLIPS_DIR = join(DATA_DIR, "clips");
 const DB_PATH = join(DATA_DIR, "app.db");
 
 let db: Database.Database | null = null;
@@ -18,6 +20,7 @@ export function getDb(): Database.Database {
 
   mkdirSync(MUSIC_DIR, { recursive: true });
   mkdirSync(ART_DIR, { recursive: true });
+  mkdirSync(CLIPS_DIR, { recursive: true });
   mkdirSync(dirname(DB_PATH), { recursive: true });
 
   db = new Database(DB_PATH);
@@ -256,6 +259,11 @@ export function migrate(database: Database.Database): void {
   // to offer as alternative cover art. Null for file uploads.
   if (!columns.includes("source_url")) {
     database.exec("ALTER TABLE songs ADD COLUMN source_url TEXT");
+  }
+  // Filename of a cached looping "canvas" clip cut from the source video, shown
+  // in the expanded player. Null until generated (lazily on first expand).
+  if (!columns.includes("clip_filename")) {
+    database.exec("ALTER TABLE songs ADD COLUMN clip_filename TEXT");
   }
   const plColumns = (
     database.prepare("PRAGMA table_info(playlists)").all() as { name: string }[]

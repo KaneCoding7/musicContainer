@@ -65,10 +65,11 @@ interface SongRow {
   loudness: number | null;
   sort_order: number | null;
   source_url: string | null;
+  clip_filename: string | null;
 }
 
 const SONG_COLUMNS =
-  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness, sort_order, source_url";
+  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness, sort_order, source_url, clip_filename";
 
 function rowToSong(row: SongRow): Song {
   return {
@@ -86,6 +87,7 @@ function rowToSong(row: SongRow): Song {
     loudness: row.loudness,
     sortOrder: row.sort_order,
     hasSource: row.source_url !== null,
+    hasClip: row.clip_filename !== null,
     sourceUrl: row.source_url,
   };
 }
@@ -446,6 +448,49 @@ export function resolveSongArtById(
   return ok({ path, contentType });
 }
 
+// Records a generated canvas clip's filename for a song (owner-scoped). Returns
+// the updated song plus the previous clip filename (if any) so the caller can
+// delete the replaced file from disk.
+export function setSongClip(
+  db: Database,
+  id: number,
+  userId: string,
+  clipFilename: string | null
+): Result<{ song: Song; oldClip: string | null }> {
+  const existing = getSong(db, id, userId);
+  if (!existing.ok) return existing;
+  try {
+    const row = db
+      .prepare("SELECT clip_filename FROM songs WHERE id = ? AND user_id = ?")
+      .get(id, userId) as { clip_filename: string | null } | undefined;
+    db.prepare(
+      "UPDATE songs SET clip_filename = ? WHERE id = ? AND user_id = ?"
+    ).run(clipFilename, id, userId);
+    const updated = getSong(db, id, userId);
+    if (!updated.ok) return updated;
+    return ok({ song: updated.value, oldClip: row?.clip_filename ?? null });
+  } catch (e) {
+    return err("internal", `Failed to set clip: ${(e as Error).message}`);
+  }
+}
+
+// Resolves a song's canvas clip file by id WITHOUT an ownership check (access is
+// gated by canAccessSong at the route, matching the art/stream media routes).
+export function resolveSongClipById(
+  db: Database,
+  id: number,
+  clipsDir: string
+): Result<{ path: string }> {
+  const row = db
+    .prepare("SELECT clip_filename FROM songs WHERE id = ?")
+    .get(id) as { clip_filename: string | null } | undefined;
+  if (!row) return err("not_found", `Song ${id} not found`);
+  if (!row.clip_filename) return err("not_found", "Song has no clip");
+  const path = join(clipsDir, row.clip_filename);
+  if (!existsSync(path)) return err("not_found", "Clip file missing on disk");
+  return ok({ path });
+}
+
 // Updates a song's editable metadata (name, artist, album). Only fields that
 // are provided are changed; the stored audio file on disk is untouched.
 export function updateSong(
@@ -628,15 +673,20 @@ export function deleteSong(
   id: number,
   musicDir: string,
   artDir: string,
-  userId: string
+  userId: string,
+  clipsDir?: string
 ): Result<void> {
   const songResult = getSong(db, id, userId);
   if (!songResult.ok) return songResult;
 
-  // Capture the art filename before deleting the row.
-  const artRow = db
-    .prepare("SELECT art_filename FROM songs WHERE id = ? AND user_id = ?")
-    .get(id, userId) as { art_filename: string | null } | undefined;
+  // Capture the art + clip filenames before deleting the row.
+  const fileRow = db
+    .prepare(
+      "SELECT art_filename, clip_filename FROM songs WHERE id = ? AND user_id = ?"
+    )
+    .get(id, userId) as
+    | { art_filename: string | null; clip_filename: string | null }
+    | undefined;
 
   try {
     db.prepare("DELETE FROM songs WHERE id = ? AND user_id = ?").run(id, userId);
@@ -650,7 +700,10 @@ export function deleteSong(
       }
     };
     removeFile(join(musicDir, songResult.value.filename));
-    if (artRow?.art_filename) removeFile(join(artDir, artRow.art_filename));
+    if (fileRow?.art_filename) removeFile(join(artDir, fileRow.art_filename));
+    if (clipsDir && fileRow?.clip_filename) {
+      removeFile(join(clipsDir, fileRow.clip_filename));
+    }
     return ok(undefined);
   } catch (e) {
     return err("internal", `Failed to delete song: ${(e as Error).message}`);

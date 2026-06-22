@@ -3,7 +3,13 @@
   import Icon from "$lib/components/Icon.svelte";
   import MiniPlayer from "$lib/components/MiniPlayer.svelte";
   import QueueView from "$lib/components/QueueView.svelte";
-  import { artUrl, streamUrl, thumbUrl } from "$lib/services/songService";
+  import {
+    artUrl,
+    clipUrl,
+    generateClip,
+    streamUrl,
+    thumbUrl,
+  } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
   import type { Song } from "$lib/types";
 
@@ -537,6 +543,23 @@
     if (!expanded) queueSheet = false;
   });
 
+  // Canvas clip: when the full-screen view is open for a link-imported track
+  // that doesn't have a clip yet, generate one in the background (cached on the
+  // server). Once ready, replaceSong flips hasClip and the video fades in. Track
+  // attempted ids so we don't re-request a song that failed or is in flight.
+  const clipTried = new Set<number>();
+  $effect(() => {
+    if (!expanded || !song) return;
+    if (!song.hasSource || song.hasClip || clipTried.has(song.id)) return;
+    const id = song.id;
+    clipTried.add(id);
+    generateClip(id)
+      .then((updated) => vm.replaceSong(updated))
+      .catch(() => {
+        /* no clip available — the artwork stays as-is */
+      });
+  });
+
   // Esc closes the queue sheet first, then the full-screen now-playing view.
   function onWindowKeydown(e: KeyboardEvent) {
     if (e.key !== "Escape") return;
@@ -914,6 +937,7 @@
 {#if song && expanded}
   <div
     class="np-full"
+    class:np-canvas={song.hasClip}
     class:np-dragging={npDragging}
     ontouchstart={npTouchStart}
     ontouchmove={npTouchMove}
@@ -921,6 +945,23 @@
     ontouchcancel={npTouchEnd}
     style="transform: translateY({dragY}px); opacity: {1 - Math.min(dragY / 500, 0.6)}"
   >
+    {#if song.hasClip}
+      <!-- Looping canvas clip from the source video: a muted, full-bleed
+           backdrop behind the artwork/controls. Keyed on id so it reloads on
+           track change. A scrim keeps the foreground readable. -->
+      {#key song.id}
+        <video
+          class="npf-canvas"
+          src={clipUrl(song.id)}
+          autoplay
+          loop
+          muted
+          playsinline
+          preload="auto"
+        ></video>
+      {/key}
+      <div class="npf-canvas-scrim"></div>
+    {/if}
     <button class="np-collapse" onclick={() => (expanded = false)} aria-label="Close">
       <Icon name="keyboard_arrow_down" size={28} />
     </button>
@@ -1237,6 +1278,49 @@
   }
   .np-full.np-dragging {
     transition: none; /* follow the finger 1:1 while dragging */
+  }
+  /* Looping canvas clip backdrop. Negative z-index keeps it behind the artwork,
+     meta and controls (which stay non-positioned / auto-z) without having to
+     raise each of them; pointer-events:none lets swipe gestures pass through. */
+  .npf-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: -1;
+    pointer-events: none;
+    animation: npf-fade 0.6s ease both;
+  }
+  .npf-canvas-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(
+      rgba(0, 0, 0, 0.5),
+      rgba(0, 0, 0, 0.4) 35%,
+      rgba(0, 0, 0, 0.72)
+    );
+  }
+  @keyframes npf-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  /* With a video backdrop the foreground must read on a dark scrim regardless of
+     the light/dark theme, so force light text + a soft shadow for the canvas. */
+  .np-full.np-canvas {
+    color: #fff;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+  }
+  .np-full.np-canvas :global(.npf-meta h2),
+  .np-full.np-canvas :global(.npf-artist),
+  .np-full.np-canvas :global(.npf-album) {
+    color: #fff;
   }
   .np-collapse {
     position: absolute;

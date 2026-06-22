@@ -317,6 +317,22 @@ export function streamUrl(songId: number): string {
   return withToken(`${apiBase()}/api/songs/${songId}/stream`);
 }
 
+// URL for a song's looping canvas clip (only meaningful when song.hasClip).
+export function clipUrl(songId: number): string {
+  return withToken(`${apiBase()}/api/songs/${songId}/clip`);
+}
+
+// Generates (and caches server-side) the canvas clip for a link-imported song,
+// returning the updated song (now with hasClip=true). Idempotent.
+export async function generateClip(songId: number): Promise<Song> {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}/clip`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).song as Song;
+}
+
 // Returns the download URL for a song (sets Content-Disposition: attachment).
 export function downloadUrl(songId: number): string {
   return withToken(`${apiBase()}/api/songs/${songId}/download`);

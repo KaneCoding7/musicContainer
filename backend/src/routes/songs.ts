@@ -6,17 +6,19 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   unlinkSync,
 } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { Router } from "express";
 import multer from "multer";
-import { ART_DIR, getDb, MUSIC_DIR } from "../db/init.js";
+import { ART_DIR, CLIPS_DIR, getDb, MUSIC_DIR } from "../db/init.js";
 import {
   copySongToLibrary,
   deleteSong,
   finalizeSongs,
+  getSong,
   getSongSource,
   listPendingSongs,
   listSongs,
@@ -24,9 +26,11 @@ import {
   recordPlay,
   recordSong,
   resolveSongArtById,
+  resolveSongClipById,
   resolveSongFileById,
   setLiked,
   setSongArt,
+  setSongClip,
   setSongLoudness,
   setSongsOrder,
   updateSong,
@@ -827,6 +831,138 @@ songsRouter.get("/songs/:id/frames", heavyLimiter, async (req, res) => {
   }
 });
 
+// POST /api/songs/:id/clip — generate (and cache) a short looping "canvas" clip
+// from the track's source video, shown in the expanded player. Downloads only a
+// ~7s window of low-res video (yt-dlp --download-sections) starting ~25% in,
+// then re-encodes it to a small, muted, web-friendly mp4. Idempotent: if a clip
+// already exists it's returned as-is.
+const CLIP_LEN = 7; // seconds
+songsRouter.post("/songs/:id/clip", heavyLimiter, async (req, res) => {
+  const id = Number(req.params.id);
+  const db = getDb();
+
+  // Already generated? Return the current song unchanged.
+  const current = getSong(db, id, req.userId!);
+  if (current.ok && current.value.hasClip) {
+    return res.json({ song: current.value });
+  }
+
+  const src = getSongSource(db, id, req.userId!);
+  if (!src) {
+    return res.status(404).json({
+      error: { code: "not_found", message: "No source video for this track" },
+    });
+  }
+  try {
+    await assertSafeRemoteUrl(src.sourceUrl);
+  } catch {
+    return res.status(400).json({
+      error: { code: "validation", message: "Source link is not allowed" },
+    });
+  }
+
+  // Start ~25% in (a representative-but-not-intro moment), clamped so the window
+  // fits within a known duration. Unknown duration → a small fixed offset.
+  const dur = src.duration ?? 0;
+  const start =
+    dur > CLIP_LEN + 2
+      ? Math.min(dur * 0.25, dur - CLIP_LEN - 1)
+      : Math.min(5, Math.max(0, dur - 1));
+  const fmt = (s: number) => new Date(s * 1000).toISOString().substr(11, 8);
+
+  const work = mkdtempSync(join(dirname(MUSIC_DIR), "clip-"));
+  try {
+    // Download just the needed section as low-res video (no audio needed).
+    await run(
+      "yt-dlp",
+      [
+        // Prefer a ~540p rendition (nice as a backdrop, still small once we only
+        // pull a ~7s section); fall back through best available.
+        "-f",
+        "bv*[ext=mp4]/bv*/b[ext=mp4]/b",
+        "-S",
+        "res:540",
+        "--no-playlist",
+        "--force-keyframes-at-cuts",
+        "--download-sections",
+        `*${fmt(start)}-${fmt(start + CLIP_LEN)}`,
+        "-o",
+        "vid.%(ext)s",
+        src.sourceUrl,
+      ],
+      work
+    );
+    const files = readdirSync(work);
+    const vid = files.find((f) => /^vid\.(mp4|mkv|webm|m4v|flv)$/i.test(f));
+    if (!vid) {
+      return res.status(422).json({
+        error: { code: "validation", message: "Couldn't fetch the video" },
+      });
+    }
+
+    // Re-encode: strip audio, downscale to 720px wide (even dims), cap length,
+    // loop-friendly faststart. yuv420p for broad browser support.
+    const outName = `${randomUUID()}.mp4`;
+    const outPath = join(work, outName);
+    await run("ffmpeg", [
+      "-y",
+      "-i",
+      join(work, vid),
+      "-t",
+      String(CLIP_LEN),
+      "-an",
+      "-vf",
+      "scale='min(720,iw)':-2",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "26",
+      "-pix_fmt",
+      "yuv420p",
+      "-movflags",
+      "+faststart",
+      outPath,
+    ]);
+    if (!existsSync(outPath)) {
+      return res.status(422).json({
+        error: { code: "validation", message: "Couldn't build the clip" },
+      });
+    }
+
+    // Persist into the clips dir, record it, and clean up any replaced file.
+    renameSync(outPath, join(CLIPS_DIR, outName));
+    const result = setSongClip(db, id, req.userId!, outName);
+    if (!result.ok) {
+      unlinkSync(join(CLIPS_DIR, outName));
+      return res
+        .status(statusForError(result.error.code))
+        .json({ error: result.error });
+    }
+    if (result.value.oldClip) {
+      const old = join(CLIPS_DIR, result.value.oldClip);
+      if (existsSync(old)) {
+        try {
+          unlinkSync(old);
+        } catch {
+          /* best-effort */
+        }
+      }
+    }
+    return res.json({ song: result.value.song });
+  } catch (e) {
+    return res.status(422).json({
+      error: {
+        code: "validation",
+        message: e instanceof Error ? e.message : "Failed to build the clip",
+      },
+    });
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+});
+
 // POST /api/songs/analyze-loudness — measure loudness for any of the user's
 // tracks not yet analyzed (backfill, used to normalize the existing library).
 // Processes a bounded batch per call so a huge library can't tie up a request;
@@ -942,7 +1078,8 @@ songsRouter.delete("/songs/:id", (req, res) => {
     Number(req.params.id),
     MUSIC_DIR,
     ART_DIR,
-    req.userId!
+    req.userId!,
+    CLIPS_DIR
   );
   if (!result.ok) {
     return res
@@ -968,6 +1105,27 @@ songsRouter.get("/songs/:id/art", async (req, res) => {
       .json({ error: result.error });
   }
   await serveArt(req, res, result.value.path, result.value.contentType, req.query.size);
+});
+
+// GET /api/songs/:id/clip — serve the cached looping canvas clip (mp4). Access
+// is gated like the other media routes; sendFile handles Range requests so the
+// <video> element can buffer/loop smoothly.
+songsRouter.get("/songs/:id/clip", (req, res) => {
+  const id = Number(req.params.id);
+  if (!canAccessSong(getDb(), req.userId!, id)) {
+    return res
+      .status(404)
+      .json({ error: { code: "not_found", message: `Song ${id} not found` } });
+  }
+  const result = resolveSongClipById(getDb(), id, CLIPS_DIR);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.sendFile(result.value.path, {
+    headers: { "Content-Type": "video/mp4", "Cache-Control": "private, max-age=86400" },
+  });
 });
 
 // GET /api/songs/:id/download — download the original audio file.
