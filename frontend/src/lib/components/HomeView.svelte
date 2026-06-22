@@ -107,7 +107,7 @@
       </div>
       <div class="cards artists">
         {#each mostPlayedArtists as a (a.name)}
-          <button class="card" onclick={() => openArtist(a.name)}>
+          <button class="card card-btn" onclick={() => openArtist(a.name)}>
             <span class="cover round">
               {#if a.artId !== null}
                 <img src={thumbUrl(a.artId, 512)} alt="" />
