@@ -19,12 +19,16 @@
     onEdit,
     onDelete,
     onChanged,
+    onRemoveFromPlaylist,
   }: {
     vm: SongViewModel;
     song: Song;
     onEdit?: (id: number, fields: SongMetadata) => void | Promise<void>;
     onDelete?: (id: number) => void | Promise<void>;
     onChanged?: () => void | Promise<void>;
+    // When set (i.e. shown within a playlist), adds a "Remove from playlist"
+    // item that calls this instead of deleting the song from the library.
+    onRemoveFromPlaylist?: () => void | Promise<void>;
   } = $props();
 
   let open = $state(false);
@@ -163,6 +167,11 @@
         <button onclick={openPlaylists}>
           <Icon name="playlist_add" size={18} /> Add to playlist
         </button>
+        {#if onRemoveFromPlaylist}
+          <button onclick={() => { onRemoveFromPlaylist?.(); close(); }}>
+            <Icon name="playlist_remove" size={18} /> Remove from playlist
+          </button>
+        {/if}
         <button onclick={() => { editing = true; close(); }}>
           <Icon name="edit" size={18} /> Edit
         </button>

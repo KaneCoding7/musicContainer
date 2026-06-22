@@ -446,6 +446,7 @@
               <SongMenu
                 vm={songVm}
                 {song}
+                onRemoveFromPlaylist={() => vm.removeSong(song.id)}
                 onChanged={() => {
                   if (vm.selectedId !== null) vm.select(vm.selectedId);
                 }}
