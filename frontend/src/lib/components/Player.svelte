@@ -1294,16 +1294,17 @@
        these maxes, so the element box == the visible clip — which lets the edge
        mask below line up exactly. */
     left: 50%;
-    top: 40%;
+    top: 33%;
     transform: translate(-50%, -50%);
-    /* Scale UP to fill the available area (full screen minus a small margin)
-       while keeping the clip's true aspect ratio (read from the video into
-       --clip-ar; defaults to 16:9). The element box thus matches the visible
-       clip exactly, so the edge mask lines up — and it's as large as before. */
+    /* Scale UP to fill the upper area while keeping the clip's true aspect ratio
+       (read from the video into --clip-ar; defaults to 16:9). The height is
+       capped to the top ~66vh so the clip stays in the upper region and the
+       bottom (heavy black + controls) is reserved exactly as before. The element
+       box matches the visible clip, so the edge mask lines up. */
     aspect-ratio: var(--clip-ar, 1.7778);
     width: min(
       calc(100vw - clamp(3rem, 12vw, 8rem)),
-      calc(var(--clip-ar, 1.7778) * (100vh - clamp(3rem, 10vh, 8rem)))
+      calc(var(--clip-ar, 1.7778) * 66vh)
     );
     height: auto;
     /* Feather the top + sides (small fixed band) so the clip fades into the
