@@ -1287,7 +1287,11 @@
     inset: 0;
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    /* Show the whole frame at its true aspect ratio (no crop/zoom); the
+       letterboxed area blends into the dark backdrop. Sit it a bit above center
+       so it lives in the clear zone above the controls. */
+    object-fit: contain;
+    object-position: center 40%;
     z-index: -1;
     pointer-events: none;
     animation: npf-fade 0.6s ease both;
