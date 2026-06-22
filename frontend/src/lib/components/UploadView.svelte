@@ -410,10 +410,9 @@
   .upload-view {
     max-width: min(1100px, 100%);
   }
-  /* Keep the upload/import controls at a comfortable reading width; the review
-     table below is free to use the full width. */
+  /* Import controls match the review table width (full width). */
   .import-box {
-    max-width: 640px;
+    max-width: 100%;
   }
   /* "Bulletproof" hidden file input opened by the for-associated dropzone label
      — the pattern iOS Safari reliably honors. */
