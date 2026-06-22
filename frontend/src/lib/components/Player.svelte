@@ -1298,9 +1298,11 @@
     z-index: -1;
     pointer-events: none;
     background: linear-gradient(
-      rgba(0, 0, 0, 0.5),
-      rgba(0, 0, 0, 0.4) 35%,
-      rgba(0, 0, 0, 0.72)
+      to bottom,
+      rgba(0, 0, 0, 0.45) 0%,
+      rgba(0, 0, 0, 0.3) 30%,
+      rgba(0, 0, 0, 0.6) 62%,
+      rgba(0, 0, 0, 0.95) 100%
     );
   }
   @keyframes npf-fade {
