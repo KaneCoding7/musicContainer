@@ -1297,12 +1297,14 @@
     inset: 0;
     z-index: -1;
     pointer-events: none;
+    /* Top ~60% stays clear to show the clip; the bottom ~25% ramps hard to near
+       black, both as a base for the controls and to mask burned-in subtitles. */
     background: linear-gradient(
       to bottom,
-      rgba(0, 0, 0, 0.45) 0%,
-      rgba(0, 0, 0, 0.3) 30%,
-      rgba(0, 0, 0, 0.6) 62%,
-      rgba(0, 0, 0, 0.95) 100%
+      transparent 0%,
+      transparent 60%,
+      rgba(0, 0, 0, 0.45) 75%,
+      rgba(0, 0, 0, 0.97) 100%
     );
   }
   @keyframes npf-fade {
@@ -1330,10 +1332,9 @@
   .np-full.np-canvas {
     justify-content: flex-end;
     gap: 1rem;
-    /* Sit the cluster in the lower-middle rather than jammed to the very bottom,
-       so it clears burned-in subtitles/captions that live along the bottom edge
-       of many videos. */
-    padding-bottom: clamp(4rem, 16vh, 11rem);
+    /* Drop the cluster down into the dark bottom band (the heavy scrim there
+       masks any burned-in subtitles), off the very edge for breathing room. */
+    padding-bottom: clamp(2.5rem, 8vh, 6rem);
   }
   .np-full.np-canvas :global(.npf-art) {
     display: none;
