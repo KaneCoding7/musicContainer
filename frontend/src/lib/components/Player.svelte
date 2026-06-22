@@ -1300,12 +1300,24 @@
     /* The whole backdrop gently fades to black top-to-bottom, then ramps
        dramatically over the bottom ~15% to a solid black base so the controls
        always read well (and burned-in subtitles get masked). */
+    /* Many closely-spaced stops on a smooth (bell-shaped slope) curve so the
+       darkening rate changes gradually — avoids the visible banding/Mach lines
+       that appear where a few-stop gradient changes slope abruptly. */
     background: linear-gradient(
       to bottom,
       rgba(0, 0, 0, 0.2) 0%,
-      rgba(0, 0, 0, 0.45) 45%,
-      rgba(0, 0, 0, 0.92) 72%,
-      rgba(0, 0, 0, 1) 88%,
+      rgba(0, 0, 0, 0.23) 10%,
+      rgba(0, 0, 0, 0.27) 20%,
+      rgba(0, 0, 0, 0.33) 30%,
+      rgba(0, 0, 0, 0.4) 40%,
+      rgba(0, 0, 0, 0.48) 48%,
+      rgba(0, 0, 0, 0.57) 55%,
+      rgba(0, 0, 0, 0.67) 62%,
+      rgba(0, 0, 0, 0.77) 69%,
+      rgba(0, 0, 0, 0.87) 76%,
+      rgba(0, 0, 0, 0.94) 82%,
+      rgba(0, 0, 0, 0.98) 88%,
+      rgba(0, 0, 0, 1) 94%,
       rgba(0, 0, 0, 1) 100%
     );
   }
