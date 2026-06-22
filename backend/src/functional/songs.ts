@@ -86,6 +86,7 @@ function rowToSong(row: SongRow): Song {
     loudness: row.loudness,
     sortOrder: row.sort_order,
     hasSource: row.source_url !== null,
+    sourceUrl: row.source_url,
   };
 }
 

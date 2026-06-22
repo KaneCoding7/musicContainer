@@ -130,6 +130,20 @@
     }
   }
 
+  // Source link (e.g. the YouTube URL a track was imported from). Read-only —
+  // shown and copyable, but not editable.
+  let sourceCopied = $state(false);
+  async function copySource() {
+    if (!song.sourceUrl) return;
+    try {
+      await navigator.clipboard.writeText(song.sourceUrl);
+      sourceCopied = true;
+      setTimeout(() => (sourceCopied = false), 1500);
+    } catch {
+      /* ignore */
+    }
+  }
+
   async function save() {
     if (!name.trim()) return;
     // Apply a previewed video frame as the cover, if one was selected.
@@ -237,6 +251,21 @@
       Album
       <input bind:value={album} placeholder="No album" />
     </label>
+
+    {#if song.sourceUrl}
+      <div class="source-block">
+        <span class="source-label"><Icon name="link" size={18} /> Source link</span>
+        <div class="source-url">
+          <a class="url" href={song.sourceUrl} target="_blank" rel="noopener noreferrer">
+            {song.sourceUrl}
+          </a>
+          <button type="button" class="copy" onclick={copySource}>
+            <Icon name={sourceCopied ? "check" : "content_copy"} size={16} />
+            {sourceCopied ? "Copied" : "Copy"}
+          </button>
+        </div>
+      </div>
+    {/if}
 
     <div class="public-block">
       <div class="public-head">
@@ -405,6 +434,55 @@
     border-radius: 0.5rem;
     color: var(--text);
     font: inherit;
+  }
+  .source-block {
+    margin-bottom: 0.75rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--surface-2);
+  }
+  .source-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .source-url {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+  .source-url .url {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: ui-monospace, monospace;
+    font-size: 0.78rem;
+    color: var(--accent-text);
+    text-decoration: none;
+  }
+  @media (hover: hover) {
+    .source-url .url:hover {
+      text-decoration: underline;
+    }
+  }
+  .source-url .copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.6rem;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+  @media (hover: hover) {
+    .source-url .copy:hover {
+      background: var(--border-strong);
+    }
   }
   .public-block {
     margin-bottom: 0.5rem;
