@@ -32,6 +32,18 @@
   const metaKey = (s: { originalFilename: string; artist: string | null }) =>
     `${norm(s.originalFilename)}|${norm(s.artist)}`;
 
+  // A stable id for a source link so re-imports match even if the URL has extra
+  // params (e.g. &list=) or the track was later renamed. YouTube → the 11-char
+  // video id; otherwise the URL minus its query/fragment.
+  const srcId = (url: string | null | undefined): string | null => {
+    if (!url) return null;
+    const yt = url.match(
+      /(?:[?&]v=|youtu\.be\/|\/shorts\/|\/embed\/)([A-Za-z0-9_-]{11})/
+    );
+    if (yt) return `yt:${yt[1]}`;
+    return url.split(/[?#]/)[0].toLowerCase().replace(/\/+$/, "");
+  };
+
   // Staged ids the user chose to "keep both" on — treated as new, no longer flagged.
   let acceptedDups = $state<Set<number>>(new Set());
 
@@ -44,22 +56,25 @@
     dupMsgTimer = setTimeout(() => (dupMsg = null), 5000);
   }
 
-  // Map of staged-song id -> the existing library song it duplicates.
+  // Map of staged-song id -> the existing library song it duplicates. Matches on
+  // the source video id (robust to URL params / renames) OR title + artist.
   const duplicates = $derived.by(() => {
     const byKey = new Map<string, (typeof vm.songs)[number]>();
     const bySrc = new Map<string, (typeof vm.songs)[number]>();
     for (const s of vm.songs) {
       byKey.set(metaKey(s), s);
-      if (s.sourceUrl) bySrc.set(s.sourceUrl, s);
+      const sid = srcId(s.sourceUrl);
+      if (sid) bySrc.set(sid, s);
     }
     const result = new Map<number, (typeof vm.songs)[number]>();
     for (const s of vm.staged) {
+      const sid = srcId(s.sourceUrl);
       const match =
-        (s.sourceUrl && bySrc.get(s.sourceUrl)) || byKey.get(metaKey(s)) || null;
+        (sid && bySrc.get(sid)) || byKey.get(metaKey(s)) || null;
       if (match) result.set(s.id, match);
       // Index this staged item too, so a later identical one in the batch flags.
       if (!byKey.has(metaKey(s))) byKey.set(metaKey(s), s);
-      if (s.sourceUrl && !bySrc.has(s.sourceUrl)) bySrc.set(s.sourceUrl, s);
+      if (sid && !bySrc.has(sid)) bySrc.set(sid, s);
     }
     return result;
   });
