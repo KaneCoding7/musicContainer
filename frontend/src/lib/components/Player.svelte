@@ -566,6 +566,27 @@
       });
   });
 
+  // Smart canvas fit: fill the screen (cover) only when the clip and the screen
+  // are similar shapes; otherwise fit the whole clip (contain). On a tall phone
+  // a 16:9 clip with cover would crop the sides hard ("super zoomed in"), so it
+  // falls back to contain there. Reactive to clip aspect + viewport size.
+  let clipAR = $state(0); // current clip's width/height (0 until metadata loads)
+  let winW = $state(0);
+  let winH = $state(0);
+  // Reset the aspect when the track changes so a stale value can't briefly
+  // mis-fit the next clip before its metadata loads.
+  $effect(() => {
+    song?.id;
+    clipAR = 0;
+  });
+  const clipFit = $derived.by(() => {
+    if (!clipAR || !winW || !winH) return "contain";
+    const viewAR = winW / winH;
+    // Fraction of the clip still visible along the cropped axis under cover.
+    const visible = Math.min(clipAR, viewAR) / Math.max(clipAR, viewAR);
+    return visible >= 0.62 ? "cover" : "contain";
+  });
+
   // Esc closes the queue sheet first, then the full-screen now-playing view.
   function onWindowKeydown(e: KeyboardEvent) {
     if (e.key !== "Escape") return;
@@ -892,7 +913,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onWindowKeydown} />
+<svelte:window onkeydown={onWindowKeydown} bind:innerWidth={winW} bind:innerHeight={winH} />
 
 <audio
   bind:this={audio}
@@ -964,13 +985,10 @@
           muted
           playsinline
           preload="auto"
+          style="object-fit: {clipFit}"
           onloadedmetadata={(e) => {
-            // Smart fit: widescreen clips fill the screen (cover, full-bleed);
-            // square/vertical clips fit whole (contain) so heads aren't cropped.
             const v = e.currentTarget;
-            if (v.videoWidth && v.videoHeight)
-              v.style.objectFit =
-                v.videoWidth / v.videoHeight >= 1.5 ? "cover" : "contain";
+            if (v.videoWidth && v.videoHeight) clipAR = v.videoWidth / v.videoHeight;
           }}
         ></video>
       {/key}
