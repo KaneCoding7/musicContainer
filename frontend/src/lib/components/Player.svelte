@@ -1373,7 +1373,7 @@
     gap: 1rem;
     /* Drop the cluster down into the dark bottom band (the heavy scrim there
        masks any burned-in subtitles), off the very edge for breathing room. */
-    padding-bottom: clamp(1rem, 3.5vh, 3rem);
+    padding-bottom: clamp(2rem, 6vh, 5rem);
   }
   .np-full.np-canvas :global(.npf-art) {
     display: none;
