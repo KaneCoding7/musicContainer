@@ -1306,15 +1306,16 @@
       calc(var(--clip-ar, 1.7778) * (100vh - clamp(3rem, 10vh, 8rem)))
     );
     height: auto;
-    /* Feather just the very edges (a small fixed band) so the clip fades into
-       the black backdrop on every side without eating into the picture. */
+    /* Feather the top + sides (small fixed band) so the clip fades into the
+       black backdrop there; leave the bottom un-faded so it meets the heavy
+       black scrim exactly as before. */
     -webkit-mask-image:
       linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent),
-      linear-gradient(to bottom, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
+      linear-gradient(to bottom, transparent, #000 2.5rem, #000 100%);
     -webkit-mask-composite: source-in;
     mask-image:
       linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent),
-      linear-gradient(to bottom, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
+      linear-gradient(to bottom, transparent, #000 2.5rem, #000 100%);
     mask-composite: intersect;
     z-index: -1;
     pointer-events: none;
