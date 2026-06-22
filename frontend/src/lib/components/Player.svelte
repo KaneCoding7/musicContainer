@@ -1305,10 +1305,11 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    /* Bottom-anchor the title/controls cluster in BOTH modes (clip and album
-       art) so the controls always sit at the same level. The art (when shown)
-       stacks above; the clip is a full-screen backdrop behind. */
-    justify-content: flex-end;
+    /* Album-art mode: art + name/artist are centered in the upper space while
+       the seek + controls stay pinned at the bottom (auto-margins below).
+       Clip mode: the whole title/controls cluster sits at the bottom. Either
+       way the controls land at the same bottom level. */
+    justify-content: flex-start;
     gap: 1rem;
     padding: 2rem 1.5rem;
     padding-bottom: clamp(1rem, 3.5vh, 3rem);
@@ -1415,10 +1416,18 @@
     color: #fff;
   }
   /* With a clip playing the album-art card is hidden so it isn't sitting on top
-     of the video (the bottom-anchoring of the controls now lives on the base
-     .np-full, so both modes share the same control level). */
+     of the video; the title + controls cluster is pinned to the bottom. */
   .np-full.np-canvas :global(.npf-art) {
     display: none;
+  }
+  .np-full.np-canvas :global(.npf-meta) {
+    margin-top: auto; /* push meta+seek+controls to the bottom over the clip */
+  }
+  /* Album-art mode: equal auto-margins above the art and above the seek bar
+     center the art+meta group while leaving seek+controls pinned to the bottom. */
+  .np-full:not(.np-canvas) :global(.npf-art),
+  .np-full:not(.np-canvas) :global(.npf-seek) {
+    margin-top: auto;
   }
   .np-collapse {
     position: absolute;
