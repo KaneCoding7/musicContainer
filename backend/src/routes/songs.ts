@@ -1113,13 +1113,16 @@ songsRouter.delete("/songs/:id", (req, res) => {
 // cached square thumbnail (used by list/mini-player views).
 songsRouter.get("/songs/:id/art", async (req, res) => {
   const id = Number(req.params.id);
+  // Missing/deleted art returns 204 (No Content), not 404. A stale play queue or
+  // a cached page can request art for songs that no longer exist; a flood of
+  // those 404s gets the client's IP flagged as a scanner (http-probing) and
+  // banned by the edge. 204 is harmless to the <img> and never trips that.
   if (!canAccessSong(getDb(), req.userId!, id)) {
-    return res
-      .status(404)
-      .json({ error: { code: "not_found", message: `Song ${id} not found` } });
+    return res.status(204).end();
   }
   const result = resolveSongArtById(getDb(), id, ART_DIR);
   if (!result.ok) {
+    if (result.error.code === "not_found") return res.status(204).end();
     return res
       .status(statusForError(result.error.code))
       .json({ error: result.error });
@@ -1132,13 +1135,14 @@ songsRouter.get("/songs/:id/art", async (req, res) => {
 // <video> element can buffer/loop smoothly.
 songsRouter.get("/songs/:id/clip", (req, res) => {
   const id = Number(req.params.id);
+  // 204 (not 404) for missing/deleted clips — same reasoning as the art route:
+  // stale references shouldn't generate 404s that get the IP flagged/banned.
   if (!canAccessSong(getDb(), req.userId!, id)) {
-    return res
-      .status(404)
-      .json({ error: { code: "not_found", message: `Song ${id} not found` } });
+    return res.status(204).end();
   }
   const result = resolveSongClipById(getDb(), id, CLIPS_DIR);
   if (!result.ok) {
+    if (result.error.code === "not_found") return res.status(204).end();
     return res
       .status(statusForError(result.error.code))
       .json({ error: result.error });
