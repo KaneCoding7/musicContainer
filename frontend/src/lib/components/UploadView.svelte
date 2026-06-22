@@ -19,6 +19,70 @@
 
   const audioRe = /\.(mp3|wav)$/i;
 
+  // --- Duplicate detection (client-side) ---------------------------------
+  // A staged track is flagged as a duplicate if it matches a track already in
+  // the library (or an earlier track in this same batch) by source link, or by
+  // normalized title + artist.
+  const norm = (s: string | null | undefined) =>
+    (s ?? "")
+      .toLowerCase()
+      .replace(/\.(mp3|wav)$/i, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  const metaKey = (s: { originalFilename: string; artist: string | null }) =>
+    `${norm(s.originalFilename)}|${norm(s.artist)}`;
+
+  // Staged ids the user chose to "keep both" on — treated as new, no longer flagged.
+  let acceptedDups = $state<Set<number>>(new Set());
+
+  // Map of staged-song id -> the existing library song it duplicates.
+  const duplicates = $derived.by(() => {
+    const byKey = new Map<string, (typeof vm.songs)[number]>();
+    const bySrc = new Map<string, (typeof vm.songs)[number]>();
+    for (const s of vm.songs) {
+      byKey.set(metaKey(s), s);
+      if (s.sourceUrl) bySrc.set(s.sourceUrl, s);
+    }
+    const result = new Map<number, (typeof vm.songs)[number]>();
+    for (const s of vm.staged) {
+      const match =
+        (s.sourceUrl && bySrc.get(s.sourceUrl)) || byKey.get(metaKey(s)) || null;
+      if (match) result.set(s.id, match);
+      // Index this staged item too, so a later identical one in the batch flags.
+      if (!byKey.has(metaKey(s))) byKey.set(metaKey(s), s);
+      if (s.sourceUrl && !bySrc.has(s.sourceUrl)) bySrc.set(s.sourceUrl, s);
+    }
+    return result;
+  });
+
+  // Unresolved duplicates (excluding ones the user accepted as "keep both").
+  const activeDups = $derived(
+    new Map([...duplicates].filter(([id]) => !acceptedDups.has(id)))
+  );
+  const dupCount = $derived(activeDups.size);
+
+  // Replace: delete the existing library copy and keep this new import (which
+  // then becomes the library version on finalize). Drops the dup flag.
+  async function replaceDuplicate(stagedId: number) {
+    const match = duplicates.get(stagedId);
+    if (!match) return;
+    await vm.remove(match.id);
+  }
+
+  // Keep both: accept this import as a separate new track (un-flag it).
+  function keepBoth(stagedId: number) {
+    acceptedDups = new Set(acceptedDups).add(stagedId);
+  }
+
+  // Keep all duplicates as new tracks (accept every flagged one at once).
+  function keepAllDuplicates() {
+    acceptedDups = new Set([...acceptedDups, ...activeDups.keys()]);
+  }
+
+  async function removeDuplicates() {
+    for (const id of [...activeDups.keys()]) await vm.removeStaged(id);
+  }
+
   async function handleFiles(list: FileList | null | undefined) {
     if (!list) return;
     const files = [...list].filter(
@@ -231,9 +295,26 @@
         <h3>Review {vm.staged.length} upload{vm.staged.length === 1 ? "" : "s"}</h3>
         <p class="review-sub">Edit or remove, then add them to your library.</p>
       </div>
+      {#if dupCount > 0}
+        <div class="dup-banner">
+          <span class="dup-banner-text">
+            <Icon name="content_copy" size={18} />
+            {dupCount}
+            {dupCount === 1 ? "track is" : "tracks are"} already in your library
+          </span>
+          <span class="dup-banner-actions">
+            <button class="dup-keep" onclick={keepAllDuplicates}>
+              Keep all as new
+            </button>
+            <button class="dup-remove" onclick={removeDuplicates}>
+              Delete duplicate{dupCount === 1 ? "" : "s"}
+            </button>
+          </span>
+        </div>
+      {/if}
       <ul class="staged-list">
         {#each vm.staged as s (s.id)}
-          <li class="staged">
+          <li class="staged" class:is-dup={activeDups.has(s.id)}>
             <span class="sthumb">
               {#if s.hasArt}
                 <img src={thumbUrl(s.id, 96)} alt="" />
@@ -242,13 +323,38 @@
               {/if}
             </span>
             <div class="smeta">
-              <span class="stitle">{s.originalFilename}</span>
+              <span class="stitle">
+                {s.originalFilename}
+                {#if activeDups.has(s.id)}
+                  <span
+                    class="dup-tag"
+                    title={`Already in your library: ${activeDups.get(s.id)?.originalFilename}`}
+                  >Duplicate</span>
+                {/if}
+              </span>
               <span class="ssub">{subtitle(s.artist, s.album)}</span>
             </div>
+            {#if activeDups.has(s.id)}
+              <button
+                class="dup-act"
+                title="Replace the existing library copy with this import"
+                onclick={() => replaceDuplicate(s.id)}>Replace</button
+              >
+              <button
+                class="dup-act"
+                title="Keep both — add this as a new track"
+                onclick={() => keepBoth(s.id)}>Keep both</button
+              >
+            {/if}
             <button class="sbtn" title="Edit" aria-label="Edit" onclick={() => (editingId = s.id)}>
               <Icon name="edit" size={18} />
             </button>
-            <button class="sbtn danger" title="Remove" aria-label="Remove" onclick={() => vm.removeStaged(s.id)}>
+            <button
+              class="sbtn danger"
+              title={activeDups.has(s.id) ? "Delete this duplicate" : "Remove"}
+              aria-label="Remove"
+              onclick={() => vm.removeStaged(s.id)}
+            >
               <Icon name="close" size={18} />
             </button>
           </li>
@@ -515,12 +621,98 @@
     margin: 0;
     padding: 0;
   }
+  /* Duplicate banner + per-row badge */
+  .dup-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 0.75rem;
+    margin: 0 1rem 0.25rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--danger-bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+  }
+  .dup-banner-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--danger-text);
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .dup-banner-actions {
+    display: inline-flex;
+    gap: 0.5rem;
+  }
+  .dup-keep,
+  .dup-remove {
+    padding: 0.35rem 0.7rem;
+    border-radius: 0.4rem;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border-strong);
+  }
+  .dup-keep {
+    background: transparent;
+    color: var(--text);
+  }
+  .dup-remove {
+    background: var(--danger-text);
+    color: #fff;
+    border-color: var(--danger-text);
+  }
+  @media (hover: hover) {
+    .dup-keep:hover {
+      background: var(--surface-2);
+    }
+    .dup-remove:hover {
+      filter: brightness(1.1);
+    }
+  }
+  .dup-tag {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 0.3rem;
+    background: var(--danger-bg);
+    color: var(--danger-text);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    vertical-align: middle;
+  }
+  .dup-act {
+    flex-shrink: 0;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 0.4rem;
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  @media (hover: hover) {
+    .dup-act:hover {
+      background: var(--hover);
+    }
+  }
   .staged {
     display: flex;
     align-items: center;
-    gap: 0.7rem;
+    gap: 0.5rem;
     padding: 0.5rem 1rem;
     border-top: 1px solid var(--surface-2);
+  }
+  /* Tint duplicate rows so they stand out in the list. */
+  .staged.is-dup {
+    background: color-mix(in srgb, var(--danger-bg) 35%, transparent);
   }
   .sthumb {
     display: flex;
