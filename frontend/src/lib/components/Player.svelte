@@ -958,6 +958,11 @@
           muted
           playsinline
           preload="auto"
+          onloadedmetadata={(e) => {
+            const v = e.currentTarget;
+            if (v.videoWidth && v.videoHeight)
+              v.style.setProperty("--clip-ar", String(v.videoWidth / v.videoHeight));
+          }}
         ></video>
       {/key}
       <div class="npf-canvas-scrim"></div>
@@ -1291,13 +1296,16 @@
     left: 50%;
     top: 40%;
     transform: translate(-50%, -50%);
-    width: auto;
+    /* Scale UP to fill the available area (full screen minus a small margin)
+       while keeping the clip's true aspect ratio (read from the video into
+       --clip-ar; defaults to 16:9). The element box thus matches the visible
+       clip exactly, so the edge mask lines up — and it's as large as before. */
+    aspect-ratio: var(--clip-ar, 1.7778);
+    width: min(
+      calc(100vw - clamp(3rem, 12vw, 8rem)),
+      calc(var(--clip-ar, 1.7778) * (100vh - clamp(3rem, 10vh, 8rem)))
+    );
     height: auto;
-    /* Same available area as before (full screen minus a small margin) so the
-       clip renders at the same size it was; it just auto-sizes to its own aspect
-       so the element box matches the visible clip for the edge mask. */
-    max-width: calc(100% - clamp(3rem, 12vw, 8rem));
-    max-height: calc(100% - clamp(3rem, 10vh, 8rem));
     /* Feather just the very edges (a small fixed band) so the clip fades into
        the black backdrop on every side without eating into the picture. */
     -webkit-mask-image:
