@@ -341,13 +341,16 @@ songsRouter.post("/upload", uploadLimiter, (req, res) => {
 
     const result = recordSong(getDb(), {
       filename: req.file.filename,
-      originalFilename: req.file.originalname,
+      // Prefer an embedded title (so a song downloaded from another instance
+      // keeps its name) but fall back to the uploaded filename.
+      originalFilename: meta.title?.trim() || req.file.originalname,
       userId: req.userId!,
       artist: meta.artist,
       album: meta.album,
       artFilename: meta.artFilename,
       duration: meta.duration,
       pending: true, // awaits review before joining the library
+      sourceUrl: meta.sourceUrl, // recovered from the comment tag, if present
     });
 
     if (!result.ok) {
@@ -1170,8 +1173,13 @@ songsRouter.get("/songs/:id/clip", (req, res) => {
   });
 });
 
-// GET /api/songs/:id/download — download the original audio file.
-songsRouter.get("/songs/:id/download", (req, res) => {
+// GET /api/songs/:id/download — download the audio with the current library
+// metadata embedded (title, artist, album, cover art, and the source link in
+// the comment tag) so it round-trips: download here, upload to another instance
+// of this app, and the name/artist/album/art/link come along. MP3 only (clean
+// ID3 + cover support); other formats download as-is. Falls back to the raw
+// file if tagging fails so downloads never break.
+songsRouter.get("/songs/:id/download", async (req, res) => {
   const id = Number(req.params.id);
   if (!canAccessSong(getDb(), req.userId!, id)) {
     return res
@@ -1184,7 +1192,65 @@ songsRouter.get("/songs/:id/download", (req, res) => {
       .status(statusForError(result.error.code))
       .json({ error: result.error });
   }
-  return res.download(result.value.path, result.value.originalFilename);
+  const { path: audioPath, originalFilename } = result.value;
+
+  if (extname(originalFilename).toLowerCase() !== ".mp3") {
+    return res.download(audioPath, originalFilename);
+  }
+
+  const row = getDb()
+    .prepare(
+      "SELECT original_filename, artist, album, source_url, art_filename FROM songs WHERE id = ?"
+    )
+    .get(id) as
+    | {
+        original_filename: string;
+        artist: string | null;
+        album: string | null;
+        source_url: string | null;
+        art_filename: string | null;
+      }
+    | undefined;
+
+  const work = mkdtempSync(join(dirname(MUSIC_DIR), "dl-"));
+  const cleanup = () => {
+    try {
+      rmSync(work, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
+  };
+  try {
+    const title = (row?.original_filename ?? originalFilename).replace(
+      /\.[^.]+$/,
+      ""
+    );
+    const artPath = row?.art_filename ? join(ART_DIR, row.art_filename) : null;
+    const hasArt = !!artPath && existsSync(artPath);
+    const out = join(work, "tagged.mp3");
+    const args = ["-y", "-i", audioPath];
+    if (hasArt) args.push("-i", artPath!);
+    args.push("-map", "0:a");
+    if (hasArt) args.push("-map", "1:0");
+    args.push("-c:a", "copy");
+    if (hasArt) args.push("-c:v", "mjpeg", "-disposition:v:0", "attached_pic");
+    args.push("-id3v2_version", "3", "-metadata", `title=${title}`);
+    if (row?.artist) args.push("-metadata", `artist=${row.artist}`);
+    if (row?.album) args.push("-metadata", `album=${row.album}`);
+    // Stash the source link in a custom TXXX:SOURCE_URL frame, base64url-encoded
+    // so the "/" in the URL doesn't get split across frames by ffmpeg/ID3.
+    if (row?.source_url) {
+      const enc = Buffer.from(row.source_url, "utf8").toString("base64url");
+      args.push("-metadata", `SOURCE_URL=${enc}`);
+    }
+    args.push(out);
+    await run("ffmpeg", args);
+    if (!existsSync(out)) throw new Error("tagging produced no file");
+    return res.download(out, originalFilename, () => cleanup());
+  } catch {
+    cleanup();
+    return res.download(audioPath, originalFilename);
+  }
 });
 
 // GET /api/songs/:id/stream — stream an audio file with HTTP Range support
