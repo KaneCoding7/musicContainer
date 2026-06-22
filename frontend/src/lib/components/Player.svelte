@@ -574,7 +574,12 @@
   // mobile browsers need even for muted autoplay.
   function onCanvasLoaded(e: Event) {
     const v = e.currentTarget as HTMLVideoElement;
-    if (v.videoWidth && v.videoHeight && window.innerHeight) {
+    // Phones: always fill edge-to-edge (cover) — the user wants the clip to take
+    // the whole screen even if a wide clip's sides get cropped. Desktop: cover
+    // only when the clip ~matches the viewport, else contain (avoid hard crop).
+    if (window.innerWidth <= 768) {
+      v.style.objectFit = "cover";
+    } else if (v.videoWidth && v.videoHeight && window.innerHeight) {
       const clipAR = v.videoWidth / v.videoHeight;
       const viewAR = window.innerWidth / window.innerHeight;
       const visible = Math.min(clipAR, viewAR) / Math.max(clipAR, viewAR);
@@ -973,20 +978,6 @@
            backdrop behind the artwork/controls. Keyed on id so it reloads on
            track change. A scrim keeps the foreground readable. -->
       {#key song.id}
-        <!-- Phone only: a blurred, screen-filling copy behind the clip so the
-             whole clip (contain, on top) can be shown without leaving big empty
-             bands — fills the vertical space and looks good. -->
-        <video
-          class="npf-canvas-bg"
-          src={clipUrl(song.id)}
-          autoplay
-          loop
-          muted
-          playsinline
-          preload="auto"
-          onloadedmetadata={(e) =>
-            (e.currentTarget as HTMLVideoElement).play?.().catch(() => {})}
-        ></video>
         <video
           class="npf-canvas"
           src={clipUrl(song.id)}
@@ -1335,23 +1326,11 @@
     pointer-events: none;
     animation: npf-fade 0.6s ease both;
   }
-  /* Blurred screen-filling backdrop (phone only) behind the contained clip. */
-  .npf-canvas-bg {
-    display: none;
-  }
+  /* Phones fill edge-to-edge — default to cover so there's no contain flash
+     before the clip's metadata loads. */
   @media (max-width: 768px) {
-    .npf-canvas-bg {
-      display: block;
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
+    .npf-canvas {
       object-fit: cover;
-      filter: blur(28px) brightness(0.55);
-      transform: scale(1.12); /* hide the soft blurred edges */
-      z-index: -2; /* behind the crisp clip (-1) and the scrim */
-      pointer-events: none;
-      animation: npf-fade 0.6s ease both;
     }
   }
   .npf-canvas-scrim {
