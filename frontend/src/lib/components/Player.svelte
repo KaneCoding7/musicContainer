@@ -1284,18 +1284,27 @@
      raise each of them; pointer-events:none lets swipe gestures pass through. */
   .npf-canvas {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    /* Padding (with border-box) shrinks the area the clip renders into, giving
-       breathing room on all sides without moving the full-screen element. */
-    box-sizing: border-box;
-    padding: clamp(1.5rem, 5vh, 4rem) clamp(1.5rem, 6vw, 4rem);
-    /* Show the whole frame at its true aspect ratio (no crop/zoom); the
-       letterboxed area blends into the dark backdrop. Sit it a bit above center
-       so it lives in the clear zone above the controls. */
-    object-fit: contain;
-    object-position: center 40%;
+    /* Centered, sat a bit above the middle so it lives above the controls. The
+       element auto-sizes to the clip's own aspect ratio (no crop/stretch) within
+       these maxes, so the element box == the visible clip — which lets the edge
+       mask below line up exactly. */
+    left: 50%;
+    top: 42%;
+    transform: translate(-50%, -50%);
+    width: auto;
+    height: auto;
+    max-width: calc(100% - clamp(3rem, 12vw, 8rem));
+    max-height: calc(100% - clamp(11rem, 34vh, 22rem));
+    /* Feather all four edges to transparent so the clip fades into the black
+       backdrop on every side (two linear masks intersected). */
+    -webkit-mask-image:
+      linear-gradient(to right, transparent, #000 11%, #000 89%, transparent),
+      linear-gradient(to bottom, transparent, #000 11%, #000 89%, transparent);
+    -webkit-mask-composite: source-in;
+    mask-image:
+      linear-gradient(to right, transparent, #000 11%, #000 89%, transparent),
+      linear-gradient(to bottom, transparent, #000 11%, #000 89%, transparent);
+    mask-composite: intersect;
     z-index: -1;
     pointer-events: none;
     animation: npf-fade 0.6s ease both;
