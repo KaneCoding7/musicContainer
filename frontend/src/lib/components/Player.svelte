@@ -958,6 +958,14 @@
           muted
           playsinline
           preload="auto"
+          onloadedmetadata={(e) => {
+            // Smart fit: widescreen clips fill the screen (cover, full-bleed);
+            // square/vertical clips fit whole (contain) so heads aren't cropped.
+            const v = e.currentTarget;
+            if (v.videoWidth && v.videoHeight)
+              v.style.objectFit =
+                v.videoWidth / v.videoHeight >= 1.5 ? "cover" : "contain";
+          }}
         ></video>
       {/key}
       <div class="npf-canvas-scrim"></div>
@@ -1287,9 +1295,10 @@
     inset: 0;
     width: 100%;
     height: 100%;
-    /* Fit the WHOLE clip on screen (no crop/zoom) regardless of its aspect
-       ratio; the dark scrim fills the leftover space around it. The scrim above
-       darkens the top + sides (corner buttons) and the bottom (controls). */
+    /* Default to contain (fit the whole clip — safe for square/vertical clips
+       and before metadata loads). The video's onloadedmetadata upgrades
+       widescreen clips to cover (full-bleed). The dark scrim fills any leftover
+       space and darkens the top/sides (corner buttons) + bottom (controls). */
     object-fit: contain;
     object-position: center;
     z-index: -1;
