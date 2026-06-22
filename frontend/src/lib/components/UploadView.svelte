@@ -312,13 +312,13 @@
             {dupCount === 1 ? "track is" : "tracks are"} already in your library
           </span>
           <span class="dup-banner-actions">
-            <button class="dup-keep" onclick={replaceAllDuplicates}>
+            <button class="dbtn primary" onclick={replaceAllDuplicates}>
               Replace all
             </button>
-            <button class="dup-keep" onclick={keepAllDuplicates}>
+            <button class="dbtn neutral" onclick={keepAllDuplicates}>
               Keep all as new
             </button>
-            <button class="dup-remove" onclick={removeDuplicates}>
+            <button class="dbtn danger" onclick={removeDuplicates}>
               Delete duplicate{dupCount === 1 ? "" : "s"}
             </button>
           </span>
@@ -643,50 +643,63 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem 0.75rem;
-    margin: 0 1rem 0.25rem;
-    padding: 0.6rem 0.75rem;
-    background: var(--danger-bg);
+    gap: 0.6rem 0.9rem;
+    margin: 0 1rem 0.4rem;
+    padding: 0.7rem 0.9rem;
+    background: var(--surface-2);
     border: 1px solid var(--border-strong);
-    border-radius: 0.5rem;
+    border-radius: 0.6rem;
   }
   .dup-banner-text {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    color: var(--danger-text);
-    font-size: 0.85rem;
+    gap: 0.45rem;
+    color: var(--text);
+    font-size: 0.9rem;
     font-weight: 600;
+  }
+  .dup-banner-text :global(.material-symbols-rounded) {
+    color: var(--accent-text);
   }
   .dup-banner-actions {
     display: inline-flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
-  .dup-keep,
-  .dup-remove {
-    padding: 0.35rem 0.7rem;
-    border-radius: 0.4rem;
+  /* Shared pill button; one accent (primary), one neutral, one danger. */
+  .dbtn {
+    padding: 0.45rem 0.9rem;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
     font: inherit;
-    font-size: 0.8rem;
+    font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
-    border: 1px solid var(--border-strong);
+    transition: background 0.12s ease, border-color 0.12s ease;
   }
-  .dup-keep {
-    background: transparent;
-    color: var(--text);
-  }
-  .dup-remove {
-    background: var(--danger-text);
+  .dbtn.primary {
+    background: var(--accent);
     color: #fff;
+  }
+  .dbtn.neutral {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border-strong);
+  }
+  .dbtn.danger {
+    background: transparent;
+    color: var(--danger-text);
     border-color: var(--danger-text);
   }
   @media (hover: hover) {
-    .dup-keep:hover {
-      background: var(--surface-2);
+    .dbtn.primary:hover {
+      background: var(--accent-hover);
     }
-    .dup-remove:hover {
-      filter: brightness(1.1);
+    .dbtn.neutral:hover {
+      background: var(--hover);
+    }
+    .dbtn.danger:hover {
+      background: var(--danger-bg);
     }
   }
   .dup-tag {
