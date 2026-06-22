@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import Icon from "$lib/components/Icon.svelte";
+  import SongMenu from "$lib/components/SongMenu.svelte";
   import { thumbUrl } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -67,18 +68,23 @@
       </div>
       <div class="cards">
         {#each list as song, i (song.id)}
-          <button class="card" onclick={() => vm.playQueue(list, i)}>
-            <span class="cover">
-              {#if song.hasArt}
-                <img src={thumbUrl(song.id, 512)} alt="" />
-              {:else}
-                <Icon name="music_note" size={26} />
-              {/if}
-              <span class="play-overlay"><Icon name="play_arrow" fill size={26} /></span>
-            </span>
-            <span class="c-name">{song.originalFilename}</span>
-            {#if song.artist}<span class="c-sub">{song.artist}</span>{/if}
-          </button>
+          <!-- Right-click anywhere on the card opens the same menu as the list's
+               ⋮ button; SongMenu wires it up via the data-song-menu-row marker. -->
+          <div class="card" data-song-menu-row>
+            <button class="card-btn" onclick={() => vm.playQueue(list, i)}>
+              <span class="cover">
+                {#if song.hasArt}
+                  <img src={thumbUrl(song.id, 512)} alt="" />
+                {:else}
+                  <Icon name="music_note" size={26} />
+                {/if}
+                <span class="play-overlay"><Icon name="play_arrow" fill size={26} /></span>
+              </span>
+              <span class="c-name">{song.originalFilename}</span>
+              {#if song.artist}<span class="c-sub">{song.artist}</span>{/if}
+            </button>
+            <SongMenu {vm} {song} />
+          </div>
         {/each}
       </div>
     </section>
@@ -171,12 +177,20 @@
     justify-content: start;
   }
   .card {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--surface-2);
+    border-radius: 0.6rem;
+  }
+  .card-btn {
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
+    width: 100%;
+    box-sizing: border-box;
     padding: 0.6rem;
-    background: var(--surface);
-    border: 1px solid var(--surface-2);
+    background: none;
+    border: none;
     border-radius: 0.6rem;
     cursor: pointer;
     text-align: left;
@@ -187,6 +201,16 @@
     .card:hover {
       background: var(--hover);
     }
+  }
+  /* The card's right-click menu has no visible trigger here — the whole card is
+     the target — so hide SongMenu's ⋮ button. The popup/backdrop live elsewhere
+     in the component and still render when right-click opens the menu. */
+  .card :global(.dots) {
+    display: none;
+  }
+  /* The now-empty menu-wrap shouldn't add a stray gap below the card button. */
+  .card :global(.menu-wrap) {
+    position: absolute;
   }
   .cover {
     position: relative;
