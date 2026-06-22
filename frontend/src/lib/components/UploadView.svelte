@@ -56,25 +56,53 @@
     dupMsgTimer = setTimeout(() => (dupMsg = null), 5000);
   }
 
-  // Map of staged-song id -> the existing library song it duplicates. Matches on
-  // the source video id (robust to URL params / renames) OR title + artist.
+  const tokensOf = (s: string | null | undefined) =>
+    norm(s).split(" ").filter(Boolean);
+  // Full-name tokens (artist + title) of a library track — used for the fuzzy
+  // match against an import's verbose title.
+  const nameTokens = (s: { originalFilename: string; artist: string | null }) =>
+    new Set([...tokensOf(s.artist), ...tokensOf(s.originalFilename)]);
+
+  type LibSong = (typeof vm.songs)[number];
+
+  // Map of staged-song id -> the existing track it duplicates. Layered match
+  // (most reliable first): source video id, exact title+artist, exact title,
+  // then fuzzy — the existing track's artist+title tokens all appear inside the
+  // import's (verbose) title (catches renamed library tracks vs raw imports).
   const duplicates = $derived.by(() => {
-    const byKey = new Map<string, (typeof vm.songs)[number]>();
-    const bySrc = new Map<string, (typeof vm.songs)[number]>();
-    for (const s of vm.songs) {
-      byKey.set(metaKey(s), s);
-      const sid = srcId(s.sourceUrl);
-      if (sid) bySrc.set(sid, s);
-    }
-    const result = new Map<number, (typeof vm.songs)[number]>();
+    const byVid = new Map<string, LibSong>();
+    const byTA = new Map<string, LibSong>();
+    const byTitle = new Map<string, LibSong>();
+    const list: { song: LibSong; names: Set<string> }[] = [];
+    const index = (s: LibSong) => {
+      const v = srcId(s.sourceUrl);
+      if (v && !byVid.has(v)) byVid.set(v, s);
+      if (!byTA.has(metaKey(s))) byTA.set(metaKey(s), s);
+      const t = norm(s.originalFilename);
+      if (!byTitle.has(t)) byTitle.set(t, s);
+      list.push({ song: s, names: nameTokens(s) });
+    };
+    for (const s of vm.songs) index(s);
+
+    const result = new Map<number, LibSong>();
     for (const s of vm.staged) {
-      const sid = srcId(s.sourceUrl);
-      const match =
-        (sid && bySrc.get(sid)) || byKey.get(metaKey(s)) || null;
+      const v = srcId(s.sourceUrl);
+      const pTokens = new Set(tokensOf(s.originalFilename));
+      let match: LibSong | null =
+        (v && byVid.get(v)) ||
+        byTA.get(metaKey(s)) ||
+        byTitle.get(norm(s.originalFilename)) ||
+        null;
+      if (!match) {
+        for (const { song, names } of list) {
+          if (names.size >= 2 && [...names].every((t) => pTokens.has(t))) {
+            match = song;
+            break;
+          }
+        }
+      }
       if (match) result.set(s.id, match);
-      // Index this staged item too, so a later identical one in the batch flags.
-      if (!byKey.has(metaKey(s))) byKey.set(metaKey(s), s);
-      if (sid && !bySrc.has(sid)) bySrc.set(sid, s);
+      index(s); // so a later identical item in the same batch also flags
     }
     return result;
   });
