@@ -687,9 +687,9 @@
     border-color: var(--border-strong);
   }
   .dbtn.danger {
-    background: transparent;
-    color: var(--danger-text);
-    border-color: var(--danger-text);
+    background: #dc2626;
+    color: #fff;
+    border-color: #dc2626;
   }
   @media (hover: hover) {
     .dbtn.primary:hover {
@@ -699,7 +699,8 @@
       background: var(--hover);
     }
     .dbtn.danger:hover {
-      background: var(--danger-bg);
+      background: #b91c1c;
+      border-color: #b91c1c;
     }
   }
   .dup-tag {
