@@ -43,8 +43,30 @@
     selected = next;
   }
 
+  // Index (within filteredSongs) of the last plain click — the anchor for a
+  // subsequent shift-click range select.
+  let anchor = $state<number | null>(null);
+
+  // Click in select mode: shift-click selects every row between the anchor and
+  // this one (inclusive), keeping anything already selected; a plain click
+  // toggles just this row and becomes the new anchor.
+  function selectAt(i: number, e: MouseEvent) {
+    const song = vm.filteredSongs[i];
+    if (!song) return;
+    if (e.shiftKey && anchor !== null) {
+      const [lo, hi] = anchor < i ? [anchor, i] : [i, anchor];
+      const next = new Set(selected);
+      for (let k = lo; k <= hi; k++) next.add(vm.filteredSongs[k].id);
+      selected = next;
+    } else {
+      toggleSelect(song.id);
+      anchor = i;
+    }
+  }
+
   function exitSelect() {
     selecting = false;
+    anchor = null;
     selected = new Set();
     addTarget = "";
     addStatus = null;
@@ -248,7 +270,7 @@
                 role="checkbox"
                 aria-checked={selected.has(song.id)}
                 aria-label="Select song"
-                onclick={() => toggleSelect(song.id)}
+                onclick={(e) => selectAt(i, e)}
               >
                 <Icon
                   name={selected.has(song.id)
@@ -261,9 +283,9 @@
           {/if}
           <button
             class="row"
-            onclick={() =>
+            onclick={(e) =>
               selecting
-                ? toggleSelect(song.id)
+                ? selectAt(i, e)
                 : vm.playQueue(vm.filteredSongs, i)}
           >
             <span class="thumb">
@@ -474,6 +496,11 @@
     list-style: none;
     padding: 0;
     margin: 0;
+  }
+  /* In select mode, shift-click range-selects; stop the browser from
+     highlighting the text spanned by the shift-click. */
+  .song-list ul.selecting {
+    user-select: none;
   }
   /* Two sections: the track (art + title + artist) fills the left, the metadata
      group sits on the right, with the flexible space between them. */
