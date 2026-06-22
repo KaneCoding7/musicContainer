@@ -35,6 +35,15 @@
   // Staged ids the user chose to "keep both" on — treated as new, no longer flagged.
   let acceptedDups = $state<Set<number>>(new Set());
 
+  // Transient confirmation shown after a bulk duplicate action.
+  let dupMsg = $state<string | null>(null);
+  let dupMsgTimer: ReturnType<typeof setTimeout> | null = null;
+  function flashDupMsg(text: string) {
+    dupMsg = text;
+    if (dupMsgTimer) clearTimeout(dupMsgTimer);
+    dupMsgTimer = setTimeout(() => (dupMsg = null), 5000);
+  }
+
   // Map of staged-song id -> the existing library song it duplicates.
   const duplicates = $derived.by(() => {
     const byKey = new Map<string, (typeof vm.songs)[number]>();
@@ -76,18 +85,26 @@
 
   // Keep all duplicates as new tracks (accept every flagged one at once).
   function keepAllDuplicates() {
+    const n = activeDups.size;
     acceptedDups = new Set([...acceptedDups, ...activeDups.keys()]);
+    flashDupMsg(`Keeping ${n} as new track${n === 1 ? "" : "s"}.`);
   }
 
   // Replace all: delete every existing library copy that a staged item dupes,
   // keeping the imports. Dedupe match ids so a shared match isn't deleted twice.
   async function replaceAllDuplicates() {
+    const n = activeDups.size;
     const matchIds = [...new Set([...activeDups.values()].map((m) => m.id))];
     for (const id of matchIds) await vm.remove(id);
+    flashDupMsg(
+      `Replaced ${n} — old cop${n === 1 ? "y" : "ies"} removed. Confirm below to add the new version${n === 1 ? "" : "s"}.`
+    );
   }
 
   async function removeDuplicates() {
+    const n = activeDups.size;
     for (const id of [...activeDups.keys()]) await vm.removeStaged(id);
+    flashDupMsg(`Removed ${n} duplicate${n === 1 ? "" : "s"}.`);
   }
 
   async function handleFiles(list: FileList | null | undefined) {
@@ -323,6 +340,9 @@
             </button>
           </span>
         </div>
+      {/if}
+      {#if dupMsg}
+        <p class="dup-done"><Icon name="check_circle" size={18} /> {dupMsg}</p>
       {/if}
       <ul class="staged-list">
         {#each vm.staged as s (s.id)}
@@ -702,6 +722,22 @@
       background: #b91c1c;
       border-color: #b91c1c;
     }
+  }
+  .dup-done {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0 1rem 0.4rem;
+    padding: 0.6rem 0.9rem;
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
+    border: 1px solid var(--accent);
+    border-radius: 0.6rem;
+    color: var(--accent-text);
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .dup-done :global(.material-symbols-rounded) {
+    color: var(--accent-text);
   }
   .dup-tag {
     display: inline-block;
