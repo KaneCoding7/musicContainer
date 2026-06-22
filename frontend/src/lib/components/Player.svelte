@@ -1309,17 +1309,24 @@
     background:
       linear-gradient(
         to bottom,
-        rgba(0, 0, 0, 0.62) 0%,
-        rgba(0, 0, 0, 0.32) 9%,
-        rgba(0, 0, 0, 0.1) 17%,
-        rgba(0, 0, 0, 0) 26%
+        rgba(0, 0, 0, 0.72) 0%,
+        rgba(0, 0, 0, 0.4) 10%,
+        rgba(0, 0, 0, 0.14) 20%,
+        rgba(0, 0, 0, 0) 31%
       ),
       linear-gradient(
         to left,
-        rgba(0, 0, 0, 0.5) 0%,
-        rgba(0, 0, 0, 0.22) 8%,
-        rgba(0, 0, 0, 0.06) 15%,
-        rgba(0, 0, 0, 0) 22%
+        rgba(0, 0, 0, 0.6) 0%,
+        rgba(0, 0, 0, 0.3) 9%,
+        rgba(0, 0, 0, 0.09) 18%,
+        rgba(0, 0, 0, 0) 27%
+      ),
+      linear-gradient(
+        to right,
+        rgba(0, 0, 0, 0.6) 0%,
+        rgba(0, 0, 0, 0.3) 9%,
+        rgba(0, 0, 0, 0.09) 18%,
+        rgba(0, 0, 0, 0) 27%
       ),
       linear-gradient(
         to bottom,
