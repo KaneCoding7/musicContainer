@@ -1498,8 +1498,10 @@
     margin-top: 2rem;
   }
   .npf-art {
-    /* Square stage holding the stacked record cards. */
-    width: min(320px, 70vw);
+    /* Square stage holding the stacked record cards. Matches the width of the
+       seek/controls bar below (min(520px, 90vw)); aspect-ratio keeps it square
+       so the height grows with the width. */
+    width: min(520px, 90vw);
     aspect-ratio: 1;
     position: relative;
   }
