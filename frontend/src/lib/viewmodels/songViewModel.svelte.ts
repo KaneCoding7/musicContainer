@@ -309,10 +309,12 @@ export class SongViewModel {
   }
 
   // The song currently loaded in the player, if any.
-  get currentSong(): Song | null {
-    if (this.currentIndex === null) return null;
-    return this.queue[this.currentIndex] ?? null;
-  }
+  // A $derived (not a getter) so it reliably re-tracks when the queue array is
+  // replaced in place — e.g. replaceSong() updating the *currently playing*
+  // track, which a getter accessed across a component boundary could miss.
+  currentSong = $derived<Song | null>(
+    this.currentIndex === null ? null : this.queue[this.currentIndex] ?? null
+  );
 
   // The track a "next" skip would land on (null at the end with repeat off).
   // Used by the UI to preview the upcoming art during a swipe.
