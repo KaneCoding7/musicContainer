@@ -1303,7 +1303,9 @@
     background: linear-gradient(
       to bottom,
       rgba(0, 0, 0, 0.2) 0%,
-      rgba(0, 0, 0, 0.5) 85%,
+      rgba(0, 0, 0, 0.45) 45%,
+      rgba(0, 0, 0, 0.92) 72%,
+      rgba(0, 0, 0, 1) 88%,
       rgba(0, 0, 0, 1) 100%
     );
   }
