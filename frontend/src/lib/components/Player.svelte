@@ -1297,14 +1297,14 @@
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    /* Top ~60% stays clear to show the clip; the bottom ~25% ramps hard to near
-       black, both as a base for the controls and to mask burned-in subtitles. */
+    /* The whole backdrop gently fades to black top-to-bottom, then ramps
+       dramatically over the bottom ~15% to a solid black base so the controls
+       always read well (and burned-in subtitles get masked). */
     background: linear-gradient(
       to bottom,
-      transparent 0%,
-      transparent 60%,
-      rgba(0, 0, 0, 0.45) 75%,
-      rgba(0, 0, 0, 0.97) 100%
+      rgba(0, 0, 0, 0.2) 0%,
+      rgba(0, 0, 0, 0.5) 85%,
+      rgba(0, 0, 0, 1) 100%
     );
   }
   @keyframes npf-fade {
