@@ -74,7 +74,7 @@
   // no list component has to wire it up. List rows are <li>; card grids (e.g.
   // the Home view) mark their container with data-song-menu-row instead.
   $effect(() => {
-    const row = wrapEl?.closest("li, [data-song-menu-row]");
+    const row = wrapEl?.closest<HTMLElement>("li, [data-song-menu-row]");
     if (!row) return;
     const onContext = (e: MouseEvent) => {
       e.preventDefault();
