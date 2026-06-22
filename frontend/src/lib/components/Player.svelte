@@ -1287,15 +1287,10 @@
     inset: 0;
     width: 100%;
     height: 100%;
-    /* Padding (with border-box) shrinks the area the clip renders into, giving
-       breathing room on all sides without moving the full-screen element. */
-    box-sizing: border-box;
-    padding: clamp(1.5rem, 5vh, 4rem) clamp(1.5rem, 6vw, 4rem);
-    /* Show the whole frame at its true aspect ratio (no crop/zoom); the
-       letterboxed area blends into the dark backdrop. Sit it a bit above center
-       so it lives in the clear zone above the controls. */
-    object-fit: contain;
-    object-position: center 40%;
+    /* Fill the whole screen with the clip. The scrim above darkens the top +
+       right (so the corner buttons read) and the bottom (so the controls read). */
+    object-fit: cover;
+    object-position: center;
     z-index: -1;
     pointer-events: none;
     animation: npf-fade 0.6s ease both;
@@ -1305,29 +1300,44 @@
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    /* The whole backdrop gently fades to black top-to-bottom, then ramps
-       dramatically over the bottom ~15% to a solid black base so the controls
-       always read well (and burned-in subtitles get masked). */
-    /* Many closely-spaced stops on a smooth (bell-shaped slope) curve so the
-       darkening rate changes gradually — avoids the visible banding/Mach lines
-       that appear where a few-stop gradient changes slope abruptly. */
-    background: linear-gradient(
-      to bottom,
-      rgba(0, 0, 0, 0.2) 0%,
-      rgba(0, 0, 0, 0.23) 10%,
-      rgba(0, 0, 0, 0.27) 20%,
-      rgba(0, 0, 0, 0.33) 30%,
-      rgba(0, 0, 0, 0.4) 40%,
-      rgba(0, 0, 0, 0.48) 48%,
-      rgba(0, 0, 0, 0.57) 55%,
-      rgba(0, 0, 0, 0.67) 62%,
-      rgba(0, 0, 0, 0.77) 69%,
-      rgba(0, 0, 0, 0.87) 76%,
-      rgba(0, 0, 0, 0.94) 82%,
-      rgba(0, 0, 0, 0.98) 88%,
-      rgba(0, 0, 0, 1) 94%,
-      rgba(0, 0, 0, 1) 100%
-    );
+    /* Three stacked layers (first = on top):
+       1. top fade — darkens the top so the corner buttons read,
+       2. right-edge fade — darkens the right side,
+       3. the bottom fade (unchanged) — the smooth, bottom-heavy ramp that makes
+          the controls read; left exactly as before.
+       Each has a few intermediate stops to avoid visible banding. */
+    background:
+      linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.62) 0%,
+        rgba(0, 0, 0, 0.32) 9%,
+        rgba(0, 0, 0, 0.1) 17%,
+        rgba(0, 0, 0, 0) 26%
+      ),
+      linear-gradient(
+        to left,
+        rgba(0, 0, 0, 0.5) 0%,
+        rgba(0, 0, 0, 0.22) 8%,
+        rgba(0, 0, 0, 0.06) 15%,
+        rgba(0, 0, 0, 0) 22%
+      ),
+      linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.2) 0%,
+        rgba(0, 0, 0, 0.23) 10%,
+        rgba(0, 0, 0, 0.27) 20%,
+        rgba(0, 0, 0, 0.33) 30%,
+        rgba(0, 0, 0, 0.4) 40%,
+        rgba(0, 0, 0, 0.48) 48%,
+        rgba(0, 0, 0, 0.57) 55%,
+        rgba(0, 0, 0, 0.67) 62%,
+        rgba(0, 0, 0, 0.77) 69%,
+        rgba(0, 0, 0, 0.87) 76%,
+        rgba(0, 0, 0, 0.94) 82%,
+        rgba(0, 0, 0, 0.98) 88%,
+        rgba(0, 0, 0, 1) 94%,
+        rgba(0, 0, 0, 1) 100%
+      );
   }
   @keyframes npf-fade {
     from {
