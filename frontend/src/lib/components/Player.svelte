@@ -1288,9 +1288,11 @@
     width: 100%;
     height: 100%;
     /* Fill the whole screen with the clip. The scrim above darkens the top +
-       sides (so the corner buttons read) and the bottom (so the controls read). */
+       sides (so the corner buttons read) and the bottom (so the controls read).
+       Bias the cover-crop slightly upward so subjects' heads aren't cut off when
+       a non-widescreen clip (e.g. a square 1:1 video) is cropped top/bottom. */
     object-fit: cover;
-    object-position: center;
+    object-position: center 22%;
     z-index: -1;
     pointer-events: none;
     animation: npf-fade 0.6s ease both;
