@@ -159,8 +159,11 @@ export class SongViewModel {
   // pop-out mini player, applied by the main player's audio element.
   duration = $state(0);
   seekRequest = $state<number | null>(null);
-  // Position to seek to when (re)loading a restored track; 0 = start.
+  // Position to seek to when (re)loading a restored track; 0 = start. Tied to a
+  // specific song id so the saved position is only ever applied to its own
+  // track — never leaked onto the next song that happens to load.
   resumeAt = $state(0);
+  resumeSongId = $state<number | null>(null);
   // Set while restoring so the player doesn't log a fresh play for the track
   // it's merely resuming.
   suppressPlayRecord = false;
@@ -713,6 +716,8 @@ export class SongViewModel {
         : "off";
     if (typeof s.volume === "number") this.volume = s.volume;
     this.resumeAt = typeof s.position === "number" ? s.position : 0;
+    // The resume position belongs to the restored current track only.
+    this.resumeSongId = this.resumeAt > 0 ? (queue[idx]?.id ?? null) : null;
     this.suppressPlayRecord = true;
     this.isPlaying = !!s.isPlaying;
     // Restore the sleep timer; re-arm from the saved deadline (pausing now if it

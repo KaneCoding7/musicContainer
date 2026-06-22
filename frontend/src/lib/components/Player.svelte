@@ -401,11 +401,17 @@
   function onLoadedMetadata() {
     duration = audio?.duration ?? 0;
     vm.duration = duration; // for the pop-out mini player
-    // Resume from the saved position after a refresh, then clear the marker.
-    if (audio && vm.resumeAt > 0) {
-      audio.currentTime = Math.min(vm.resumeAt, duration || vm.resumeAt);
-      currentTime = audio.currentTime;
+    // Resume from the saved position after a refresh / cross-device handoff —
+    // but ONLY for the track the position actually belongs to. Consume the
+    // marker on the first load either way, so it can never leak onto the next
+    // song (which would make it start partway through).
+    if (vm.resumeAt > 0) {
+      if (audio && song?.id === vm.resumeSongId) {
+        audio.currentTime = Math.min(vm.resumeAt, duration || vm.resumeAt);
+        currentTime = audio.currentTime;
+      }
       vm.resumeAt = 0;
+      vm.resumeSongId = null;
     }
     updatePositionState();
   }
