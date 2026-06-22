@@ -566,26 +566,22 @@
       });
   });
 
-  // Smart canvas fit: fill the screen (cover) only when the clip and the screen
-  // are similar shapes; otherwise fit the whole clip (contain). On a tall phone
-  // a 16:9 clip with cover would crop the sides hard ("super zoomed in"), so it
-  // falls back to contain there. Reactive to clip aspect + viewport size.
-  let clipAR = $state(0); // current clip's width/height (0 until metadata loads)
-  let winW = $state(0);
-  let winH = $state(0);
-  // Reset the aspect when the track changes so a stale value can't briefly
-  // mis-fit the next clip before its metadata loads.
-  $effect(() => {
-    song?.id;
-    clipAR = 0;
-  });
-  const clipFit = $derived.by(() => {
-    if (!clipAR || !winW || !winH) return "contain";
-    const viewAR = winW / winH;
-    // Fraction of the clip still visible along the cropped axis under cover.
-    const visible = Math.min(clipAR, viewAR) / Math.max(clipAR, viewAR);
-    return visible >= 0.62 ? "cover" : "contain";
-  });
+  // Decide how a canvas clip fits the screen, set imperatively when it loads
+  // (no reactive churn that could restart the <video>). Fill the screen (cover)
+  // only when the clip and the viewport are similar shapes; otherwise fit the
+  // whole clip (contain) — e.g. a 16:9 clip on a tall phone, which cover would
+  // crop hard ("super zoomed in"). Also kick off playback explicitly, which some
+  // mobile browsers need even for muted autoplay.
+  function onCanvasLoaded(e: Event) {
+    const v = e.currentTarget as HTMLVideoElement;
+    if (v.videoWidth && v.videoHeight && window.innerHeight) {
+      const clipAR = v.videoWidth / v.videoHeight;
+      const viewAR = window.innerWidth / window.innerHeight;
+      const visible = Math.min(clipAR, viewAR) / Math.max(clipAR, viewAR);
+      v.style.objectFit = visible >= 0.62 ? "cover" : "contain";
+    }
+    v.play?.().catch(() => {});
+  }
 
   // Esc closes the queue sheet first, then the full-screen now-playing view.
   function onWindowKeydown(e: KeyboardEvent) {
@@ -913,7 +909,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onWindowKeydown} bind:innerWidth={winW} bind:innerHeight={winH} />
+<svelte:window onkeydown={onWindowKeydown} />
 
 <audio
   bind:this={audio}
@@ -985,11 +981,7 @@
           muted
           playsinline
           preload="auto"
-          style="object-fit: {clipFit}"
-          onloadedmetadata={(e) => {
-            const v = e.currentTarget;
-            if (v.videoWidth && v.videoHeight) clipAR = v.videoWidth / v.videoHeight;
-          }}
+          onloadedmetadata={onCanvasLoaded}
         ></video>
       {/key}
       <div class="npf-canvas-scrim"></div>
