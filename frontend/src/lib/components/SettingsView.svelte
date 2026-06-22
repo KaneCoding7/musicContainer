@@ -16,6 +16,7 @@
     theme,
     onToggleTheme,
     onToggleNormalize,
+    onToggleClips,
     onSignOut,
   }: {
     vm: AuthViewModel;
@@ -23,6 +24,7 @@
     theme: "dark" | "light";
     onToggleTheme: () => void;
     onToggleNormalize: () => void;
+    onToggleClips: () => void;
     onSignOut: () => void;
   } = $props();
 
@@ -160,6 +162,19 @@
   </div>
 
   <p class="section">Playback</p>
+  <div class="row">
+    <div class="info">
+      <span class="t">Video clips</span>
+      <span class="sub">Show looping clips in the full-screen player</span>
+    </div>
+    <button
+      class="switch"
+      role="switch"
+      aria-checked={songVm.showClips}
+      aria-label="Video clips"
+      onclick={onToggleClips}><span class="knob"></span></button
+    >
+  </div>
   <div class="row">
     <div class="info">
       <span class="t">Volume normalization</span>

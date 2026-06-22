@@ -5,7 +5,11 @@
     addSongToPlaylist,
     fetchPlaylists,
   } from "$lib/services/playlistService";
-  import { downloadUrl, type SongMetadata } from "$lib/services/songService";
+  import {
+    downloadUrl,
+    setClipEnabled,
+    type SongMetadata,
+  } from "$lib/services/songService";
   import type { Playlist, Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -94,6 +98,17 @@
     return () => row.removeEventListener("contextmenu", onContext);
   });
 
+  async function toggleClip() {
+    close();
+    try {
+      const updated = await setClipEnabled(song.id, song.clipDisabled);
+      vm.replaceSong(updated);
+      await onChanged?.();
+    } catch {
+      /* ignore */
+    }
+  }
+
   async function saveEdit(id: number, fields: SongMetadata) {
     if (onEdit) await onEdit(id, fields);
     else await vm.updateMeta(id, fields);
@@ -170,6 +185,12 @@
         {#if onRemoveFromPlaylist}
           <button onclick={() => { onRemoveFromPlaylist?.(); close(); }}>
             <Icon name="playlist_remove" size={18} /> Remove from playlist
+          </button>
+        {/if}
+        {#if song.hasSource}
+          <button onclick={toggleClip}>
+            <Icon name={song.clipDisabled ? "smart_display" : "videocam_off"} size={18} />
+            {song.clipDisabled ? "Show clip" : "Hide clip"}
           </button>
         {/if}
         <button onclick={() => { editing = true; close(); }}>

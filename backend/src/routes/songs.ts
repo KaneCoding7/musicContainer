@@ -31,6 +31,7 @@ import {
   setLiked,
   setSongArt,
   setSongClip,
+  setSongClipDisabled,
   setSongLoudness,
   setSongsOrder,
   updateSong,
@@ -1128,6 +1129,23 @@ songsRouter.get("/songs/:id/art", async (req, res) => {
       .json({ error: result.error });
   }
   await serveArt(req, res, result.value.path, result.value.contentType, req.query.size);
+});
+
+// PUT /api/songs/:id/clip-enabled — toggle whether this song's clip is shown.
+songsRouter.put("/songs/:id/clip-enabled", (req, res) => {
+  const enabled = req.body?.enabled !== false; // default true
+  const result = setSongClipDisabled(
+    getDb(),
+    Number(req.params.id),
+    req.userId!,
+    !enabled
+  );
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ song: result.value });
 });
 
 // GET /api/songs/:id/clip — serve the cached looping canvas clip (mp4). Access

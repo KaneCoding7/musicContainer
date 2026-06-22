@@ -117,6 +117,11 @@
     localStorage.setItem("normalize", String(vm.normalize));
   }
 
+  function toggleClips() {
+    vm.showClips = !vm.showClips;
+    localStorage.setItem("showClips", String(vm.showClips));
+  }
+
   const nav: { id: View; label: string; icon: string }[] = [
     { id: "home", label: "Home", icon: "home" },
     { id: "songs", label: "All Songs", icon: "library_music" },
@@ -144,6 +149,7 @@
     theme = saved === "light" ? "light" : "dark";
     document.documentElement.dataset.theme = theme;
     vm.normalize = localStorage.getItem("normalize") !== "false"; // default on
+    vm.showClips = localStorage.getItem("showClips") !== "false"; // default on
     await authVm.init();
     if (authVm.isAuthed) {
       loadLibrary();
@@ -415,6 +421,7 @@
           {theme}
           onToggleTheme={toggleTheme}
           onToggleNormalize={toggleNormalize}
+          onToggleClips={toggleClips}
           onSignOut={handleLogout}
         />
       {/if}

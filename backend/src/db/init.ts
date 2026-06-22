@@ -265,6 +265,12 @@ export function migrate(database: Database.Database): void {
   if (!columns.includes("clip_filename")) {
     database.exec("ALTER TABLE songs ADD COLUMN clip_filename TEXT");
   }
+  // Per-song opt-out: when 1, the expanded player won't show this song's clip.
+  if (!columns.includes("clip_disabled")) {
+    database.exec(
+      "ALTER TABLE songs ADD COLUMN clip_disabled INTEGER NOT NULL DEFAULT 0"
+    );
+  }
   const plColumns = (
     database.prepare("PRAGMA table_info(playlists)").all() as { name: string }[]
   ).map((c) => c.name);

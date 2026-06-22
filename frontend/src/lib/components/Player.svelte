@@ -549,13 +549,20 @@
     if (!expanded) queueSheet = false;
   });
 
+  // Whether to actually show a clip: it has one, clips are on globally, and this
+  // song isn't individually opted out.
+  const showClip = $derived(
+    !!song?.hasClip && vm.showClips && !song?.clipDisabled
+  );
+
   // Canvas clip: when the full-screen view is open for a link-imported track
   // that doesn't have a clip yet, generate one in the background (cached on the
   // server). Once ready, replaceSong flips hasClip and the video fades in. Track
   // attempted ids so we don't re-request a song that failed or is in flight.
+  // Skip generation when clips are off globally or disabled for this song.
   const clipTried = new Set<number>();
   $effect(() => {
-    if (!expanded || !song) return;
+    if (!expanded || !song || !vm.showClips || song.clipDisabled) return;
     if (!song.hasSource || song.hasClip || clipTried.has(song.id)) return;
     const id = song.id;
     clipTried.add(id);
@@ -965,7 +972,7 @@
 {#if song && expanded}
   <div
     class="np-full"
-    class:np-canvas={song.hasClip}
+    class:np-canvas={showClip}
     class:np-dragging={npDragging}
     ontouchstart={npTouchStart}
     ontouchmove={npTouchMove}
@@ -973,7 +980,7 @@
     ontouchcancel={npTouchEnd}
     style="transform: translateY({dragY}px); opacity: {1 - Math.min(dragY / 500, 0.6)}"
   >
-    {#if song.hasClip}
+    {#if showClip}
       <!-- Looping canvas clip from the source video: a muted, full-bleed
            backdrop behind the artwork/controls. Keyed on id so it reloads on
            track change. A scrim keeps the foreground readable. -->

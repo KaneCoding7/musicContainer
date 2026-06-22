@@ -322,6 +322,20 @@ export function clipUrl(songId: number): string {
   return withToken(`${apiBase()}/api/songs/${songId}/clip`);
 }
 
+// Enables/disables showing a song's canvas clip; returns the updated song.
+export async function setClipEnabled(
+  songId: number,
+  enabled: boolean
+): Promise<Song> {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}/clip-enabled`, {
+    method: "PUT",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).song as Song;
+}
+
 // Generates (and caches server-side) the canvas clip for a link-imported song,
 // returning the updated song (now with hasClip=true). Idempotent.
 export async function generateClip(songId: number): Promise<Song> {

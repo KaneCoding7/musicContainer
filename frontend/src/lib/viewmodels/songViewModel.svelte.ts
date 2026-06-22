@@ -152,6 +152,9 @@ export class SongViewModel {
   // Volume normalization (loudness leveling) on/off. Persisted by the page.
   normalize = $state(true);
 
+  // Global toggle for the expanded-player canvas clips. Persisted by the page.
+  showClips = $state(true);
+
   // --- Now-playing persistence (survive a page refresh) ---
   // Live playback position in seconds (written by the player on timeupdate).
   position = $state(0);

@@ -24,6 +24,7 @@ interface SongRow {
   sort_order: number | null;
   source_url: string | null;
   clip_filename: string | null;
+  clip_disabled: number;
 }
 
 function rowToPlaylist(row: PlaylistRow): Playlist {
@@ -47,6 +48,7 @@ function rowToSong(row: SongRow): Song {
     sortOrder: row.sort_order,
     hasSource: row.source_url !== null,
     hasClip: row.clip_filename !== null,
+    clipDisabled: row.clip_disabled === 1,
     sourceUrl: row.source_url,
   };
 }
@@ -212,7 +214,7 @@ export function songsInPlaylist(db: Database, playlistId: number): Song[] {
       `SELECT s.id, s.filename, s.original_filename, s.uploaded_at,
               s.artist, s.album, s.art_filename, s.duration,
               s.play_count, s.last_played_at, s.liked, s.loudness, s.sort_order,
-              s.source_url, s.clip_filename, au.name AS added_by_name
+              s.source_url, s.clip_filename, s.clip_disabled, au.name AS added_by_name
        FROM playlist_songs ps
        JOIN songs s ON s.id = ps.song_id
        LEFT JOIN "user" au ON au.id = ps.added_by

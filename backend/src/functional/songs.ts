@@ -66,10 +66,11 @@ interface SongRow {
   sort_order: number | null;
   source_url: string | null;
   clip_filename: string | null;
+  clip_disabled: number;
 }
 
 const SONG_COLUMNS =
-  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness, sort_order, source_url, clip_filename";
+  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness, sort_order, source_url, clip_filename, clip_disabled";
 
 function rowToSong(row: SongRow): Song {
   return {
@@ -88,6 +89,7 @@ function rowToSong(row: SongRow): Song {
     sortOrder: row.sort_order,
     hasSource: row.source_url !== null,
     hasClip: row.clip_filename !== null,
+    clipDisabled: row.clip_disabled === 1,
     sourceUrl: row.source_url,
   };
 }
@@ -471,6 +473,26 @@ export function setSongClip(
     return ok({ song: updated.value, oldClip: row?.clip_filename ?? null });
   } catch (e) {
     return err("internal", `Failed to set clip: ${(e as Error).message}`);
+  }
+}
+
+// Toggles whether a song's clip is shown in the expanded player (owner-scoped).
+export function setSongClipDisabled(
+  db: Database,
+  id: number,
+  userId: string,
+  disabled: boolean
+): Result<Song> {
+  try {
+    const info = db
+      .prepare(
+        "UPDATE songs SET clip_disabled = ? WHERE id = ? AND user_id = ?"
+      )
+      .run(disabled ? 1 : 0, id, userId);
+    if (info.changes === 0) return err("not_found", `Song ${id} not found`);
+    return getSong(db, id, userId);
+  } catch (e) {
+    return err("internal", `Failed to update clip setting: ${(e as Error).message}`);
   }
 }
 
