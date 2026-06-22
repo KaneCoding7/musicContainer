@@ -399,6 +399,10 @@ function runYtDlp(
         "--audio-format",
         "mp3",
         "--embed-thumbnail",
+        // Write a per-item .info.json so we can record each track's OWN video
+        // URL (webpage_url) — otherwise a playlist import would store the same
+        // pasted playlist URL for every track.
+        "--write-info-json",
         // Cap per-item download size so one huge link can't fill the disk.
         "--max-filesize",
         "600M",
@@ -600,6 +604,22 @@ songsRouter.post("/import-link", importLimiter, async (req, res) => {
       const dest = join(MUSIC_DIR, stored);
       copyFileSync(join(work, name), dest);
       const meta = await extractMetadata(dest, ART_DIR);
+      // Each track's own video URL, from its sidecar .info.json (yt-dlp writes
+      // "<title>.info.json" alongside "<title>.mp3"). Falls back to the pasted
+      // URL for a single-video import.
+      let trackUrl: string | null = url;
+      if (!isSpotify) {
+        const infoPath = join(work, name.replace(/\.mp3$/i, ".info.json"));
+        if (existsSync(infoPath)) {
+          try {
+            const info = JSON.parse(readFileSync(infoPath, "utf8"));
+            if (typeof info.webpage_url === "string") trackUrl = info.webpage_url;
+            else if (typeof info.original_url === "string") trackUrl = info.original_url;
+          } catch {
+            /* keep the fallback URL */
+          }
+        }
+      }
       const result = recordSong(getDb(), {
         filename: stored,
         originalFilename: name, // the video title + .mp3
@@ -610,7 +630,7 @@ songsRouter.post("/import-link", importLimiter, async (req, res) => {
         duration: meta.duration,
         pending: true, // awaits review before joining the library
         // Only video links support the "pick frame as art" feature.
-        sourceUrl: isSpotify ? null : url,
+        sourceUrl: isSpotify ? null : trackUrl,
       });
       if (!result.ok) {
         if (existsSync(dest)) {
