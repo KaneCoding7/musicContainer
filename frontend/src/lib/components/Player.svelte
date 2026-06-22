@@ -1298,9 +1298,13 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 1.5rem;
+    /* Bottom-anchor the title/controls cluster in BOTH modes (clip and album
+       art) so the controls always sit at the same level. The art (when shown)
+       stacks above; the clip is a full-screen backdrop behind. */
+    justify-content: flex-end;
+    gap: 1rem;
     padding: 2rem 1.5rem;
+    padding-bottom: clamp(1rem, 3.5vh, 3rem);
     box-sizing: border-box;
     touch-action: none; /* let us own the swipe gestures */
     transition: transform 0.25s ease, opacity 0.25s ease; /* snap-back */
@@ -1403,16 +1407,9 @@
   .np-full.np-canvas :global(.npf-album) {
     color: #fff;
   }
-  /* The clip is the star: hide the album-art card so it isn't sitting on top of
-     the video, and anchor the title/controls to the bottom (Spotify-canvas
-     style) so the clip fills the view above them. */
-  .np-full.np-canvas {
-    justify-content: flex-end;
-    gap: 1rem;
-    /* Drop the cluster down into the dark bottom band (the heavy scrim there
-       masks any burned-in subtitles), off the very edge for breathing room. */
-    padding-bottom: clamp(1rem, 3.5vh, 3rem);
-  }
+  /* With a clip playing the album-art card is hidden so it isn't sitting on top
+     of the video (the bottom-anchoring of the controls now lives on the base
+     .np-full, so both modes share the same control level). */
   .np-full.np-canvas :global(.npf-art) {
     display: none;
   }
