@@ -1322,6 +1322,16 @@
   .np-full.np-canvas :global(.npf-album) {
     color: #fff;
   }
+  /* The clip is the star: hide the album-art card so it isn't sitting on top of
+     the video, and anchor the title/controls to the bottom (Spotify-canvas
+     style) so the clip fills the view above them. */
+  .np-full.np-canvas {
+    justify-content: flex-end;
+    gap: 1rem;
+  }
+  .np-full.np-canvas :global(.npf-art) {
+    display: none;
+  }
   .np-collapse {
     position: absolute;
     top: 1rem;
