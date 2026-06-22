@@ -1284,11 +1284,13 @@
      raise each of them; pointer-events:none lets swipe gestures pass through. */
   .npf-canvas {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    /* Fill the whole screen with the clip. The scrim above darkens the top +
-       right (so the corner buttons read) and the bottom (so the controls read). */
+    /* Fill the screen but stop short of the bottom edge, leaving a margin of
+       black there. The scrim (full-screen) still darkens the top + sides + the
+       bottom so the corner buttons and controls read. */
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 10vh;
     object-fit: cover;
     object-position: center;
     z-index: -1;
@@ -1373,7 +1375,7 @@
     gap: 1rem;
     /* Drop the cluster down into the dark bottom band (the heavy scrim there
        masks any burned-in subtitles), off the very edge for breathing room. */
-    padding-bottom: 10vh;
+    padding-bottom: clamp(1rem, 3.5vh, 3rem);
   }
   .np-full.np-canvas :global(.npf-art) {
     display: none;
