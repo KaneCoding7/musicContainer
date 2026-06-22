@@ -958,11 +958,6 @@
           muted
           playsinline
           preload="auto"
-          onloadedmetadata={(e) => {
-            const v = e.currentTarget;
-            if (v.videoWidth && v.videoHeight)
-              v.style.setProperty("--clip-ar", String(v.videoWidth / v.videoHeight));
-          }}
         ></video>
       {/key}
       <div class="npf-canvas-scrim"></div>
@@ -1289,35 +1284,18 @@
      raise each of them; pointer-events:none lets swipe gestures pass through. */
   .npf-canvas {
     position: absolute;
-    /* Centered, sat a bit above the middle so it lives above the controls. The
-       element auto-sizes to the clip's own aspect ratio (no crop/stretch) within
-       these maxes, so the element box == the visible clip — which lets the edge
-       mask below line up exactly. */
-    left: 50%;
-    top: 33%;
-    transform: translate(-50%, -50%);
-    /* Scale UP to fill the upper area while keeping the clip's true aspect ratio
-       (read from the video into --clip-ar; defaults to 16:9). The height is
-       capped to the top ~66vh so the clip stays in the upper region and the
-       bottom (heavy black + controls) is reserved exactly as before. The element
-       box matches the visible clip, so the edge mask lines up. */
-    aspect-ratio: var(--clip-ar, 1.7778);
-    width: min(
-      calc(100vw - clamp(3rem, 12vw, 8rem)),
-      calc(var(--clip-ar, 1.7778) * 66vh)
-    );
-    height: auto;
-    /* Feather the top + sides (small fixed band) so the clip fades into the
-       black backdrop there; leave the bottom un-faded so it meets the heavy
-       black scrim exactly as before. */
-    -webkit-mask-image:
-      linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent),
-      linear-gradient(to bottom, transparent, #000 2.5rem, #000 100%);
-    -webkit-mask-composite: source-in;
-    mask-image:
-      linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent),
-      linear-gradient(to bottom, transparent, #000 2.5rem, #000 100%);
-    mask-composite: intersect;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    /* Padding (with border-box) shrinks the area the clip renders into, giving
+       breathing room on all sides without moving the full-screen element. */
+    box-sizing: border-box;
+    padding: clamp(1.5rem, 5vh, 4rem) clamp(1.5rem, 6vw, 4rem);
+    /* Show the whole frame at its true aspect ratio (no crop/zoom); the
+       letterboxed area blends into the dark backdrop. Sit it a bit above center
+       so it lives in the clear zone above the controls. */
+    object-fit: contain;
+    object-position: center 40%;
     z-index: -1;
     pointer-events: none;
     animation: npf-fade 0.6s ease both;
