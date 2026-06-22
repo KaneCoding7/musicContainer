@@ -79,6 +79,13 @@
     acceptedDups = new Set([...acceptedDups, ...activeDups.keys()]);
   }
 
+  // Replace all: delete every existing library copy that a staged item dupes,
+  // keeping the imports. Dedupe match ids so a shared match isn't deleted twice.
+  async function replaceAllDuplicates() {
+    const matchIds = [...new Set([...activeDups.values()].map((m) => m.id))];
+    for (const id of matchIds) await vm.remove(id);
+  }
+
   async function removeDuplicates() {
     for (const id of [...activeDups.keys()]) await vm.removeStaged(id);
   }
@@ -189,6 +196,7 @@
     multiple
     onchange={onChange}
   />
+  <div class="import-box">
   <label
     for="audio-file-input"
     class="dropzone"
@@ -288,6 +296,7 @@
       {#if playlistMsg.ok}<Icon name="check_circle" size={18} />{/if}{playlistMsg.text}
     </p>
   {/if}
+  </div>
 
   {#if vm.staged.length > 0}
     <section class="review">
@@ -303,6 +312,9 @@
             {dupCount === 1 ? "track is" : "tracks are"} already in your library
           </span>
           <span class="dup-banner-actions">
+            <button class="dup-keep" onclick={replaceAllDuplicates}>
+              Replace all
+            </button>
             <button class="dup-keep" onclick={keepAllDuplicates}>
               Keep all as new
             </button>
@@ -396,6 +408,11 @@
 
 <style>
   .upload-view {
+    max-width: min(1100px, 100%);
+  }
+  /* Keep the upload/import controls at a comfortable reading width; the review
+     table below is free to use the full width. */
+  .import-box {
     max-width: 640px;
   }
   /* "Bulletproof" hidden file input opened by the for-associated dropzone label
