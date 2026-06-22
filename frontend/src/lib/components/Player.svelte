@@ -1289,21 +1289,24 @@
        these maxes, so the element box == the visible clip — which lets the edge
        mask below line up exactly. */
     left: 50%;
-    top: 42%;
+    top: 40%;
     transform: translate(-50%, -50%);
     width: auto;
     height: auto;
+    /* Same available area as before (full screen minus a small margin) so the
+       clip renders at the same size it was; it just auto-sizes to its own aspect
+       so the element box matches the visible clip for the edge mask. */
     max-width: calc(100% - clamp(3rem, 12vw, 8rem));
-    max-height: calc(100% - clamp(11rem, 34vh, 22rem));
-    /* Feather all four edges to transparent so the clip fades into the black
-       backdrop on every side (two linear masks intersected). */
+    max-height: calc(100% - clamp(3rem, 10vh, 8rem));
+    /* Feather just the very edges (a small fixed band) so the clip fades into
+       the black backdrop on every side without eating into the picture. */
     -webkit-mask-image:
-      linear-gradient(to right, transparent, #000 11%, #000 89%, transparent),
-      linear-gradient(to bottom, transparent, #000 11%, #000 89%, transparent);
+      linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent),
+      linear-gradient(to bottom, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
     -webkit-mask-composite: source-in;
     mask-image:
-      linear-gradient(to right, transparent, #000 11%, #000 89%, transparent),
-      linear-gradient(to bottom, transparent, #000 11%, #000 89%, transparent);
+      linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent),
+      linear-gradient(to bottom, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
     mask-composite: intersect;
     z-index: -1;
     pointer-events: none;
