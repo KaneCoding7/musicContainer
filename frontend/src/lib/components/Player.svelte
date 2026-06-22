@@ -973,6 +973,20 @@
            backdrop behind the artwork/controls. Keyed on id so it reloads on
            track change. A scrim keeps the foreground readable. -->
       {#key song.id}
+        <!-- Phone only: a blurred, screen-filling copy behind the clip so the
+             whole clip (contain, on top) can be shown without leaving big empty
+             bands — fills the vertical space and looks good. -->
+        <video
+          class="npf-canvas-bg"
+          src={clipUrl(song.id)}
+          autoplay
+          loop
+          muted
+          playsinline
+          preload="auto"
+          onloadedmetadata={(e) =>
+            (e.currentTarget as HTMLVideoElement).play?.().catch(() => {})}
+        ></video>
         <video
           class="npf-canvas"
           src={clipUrl(song.id)}
@@ -1320,6 +1334,25 @@
     z-index: -1;
     pointer-events: none;
     animation: npf-fade 0.6s ease both;
+  }
+  /* Blurred screen-filling backdrop (phone only) behind the contained clip. */
+  .npf-canvas-bg {
+    display: none;
+  }
+  @media (max-width: 768px) {
+    .npf-canvas-bg {
+      display: block;
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: blur(28px) brightness(0.55);
+      transform: scale(1.12); /* hide the soft blurred edges */
+      z-index: -2; /* behind the crisp clip (-1) and the scrim */
+      pointer-events: none;
+      animation: npf-fade 0.6s ease both;
+    }
   }
   .npf-canvas-scrim {
     position: absolute;
