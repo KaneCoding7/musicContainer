@@ -1328,6 +1328,10 @@
   .np-full.np-canvas {
     justify-content: flex-end;
     gap: 1rem;
+    /* Sit the cluster in the lower-middle rather than jammed to the very bottom,
+       so it clears burned-in subtitles/captions that live along the bottom edge
+       of many videos. */
+    padding-bottom: clamp(4rem, 16vh, 11rem);
   }
   .np-full.np-canvas :global(.npf-art) {
     display: none;
