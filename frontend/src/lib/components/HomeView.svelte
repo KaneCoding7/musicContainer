@@ -8,7 +8,7 @@
 
   let { vm }: { vm: SongViewModel } = $props();
 
-  const LIMIT = 8;
+  const LIMIT = 10;
   const recentlyAdded = $derived(vm.recentlyAdded.slice(0, LIMIT));
   const mostPlayed = $derived(vm.mostPlayed.slice(0, LIMIT));
   const recentlyPlayed = $derived(vm.recentlyPlayed.slice(0, LIMIT));
