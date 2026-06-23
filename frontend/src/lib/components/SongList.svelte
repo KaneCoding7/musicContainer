@@ -346,7 +346,7 @@
   .toolbar {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 0.75rem;
