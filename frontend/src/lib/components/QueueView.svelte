@@ -67,12 +67,6 @@
             <span class="badge">Now playing</span>
           {/if}
         </button>
-        <span
-          class="plays"
-          title={`${song.playCount} play${song.playCount === 1 ? "" : "s"}`}
-        >
-          <Icon name="play_arrow" size={13} />{song.playCount}
-        </span>
         <SongMenu {vm} {song} />
         <button
           class="remove"
@@ -128,15 +122,6 @@
     cursor: pointer;
     padding: 0.4rem 0.6rem;
     border-radius: 0.35rem;
-  }
-  .plays {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.15rem;
-    flex-shrink: 0;
-    color: var(--muted);
-    font-size: 0.78rem;
-    font-variant-numeric: tabular-nums;
   }
   @media (hover: hover) {
     .remove:hover {
