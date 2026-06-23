@@ -13,6 +13,7 @@
 {#if vm.likedSongs.length === 0}
   <p class="muted">No liked songs yet. Tap the heart on a song to like it.</p>
 {:else}
+  <div class="liked">
   <div class="actions-bar"><PlayActions {vm} songs={vm.likedSongs} /></div>
   <ul>
     {#each vm.likedSongs as song, i (song.id)}
@@ -55,9 +56,29 @@
       </li>
     {/each}
   </ul>
+  </div>
 {/if}
 
 <style>
+  /* Mobile: fill the screen, keep the play-actions header fixed and scroll the
+     list (mirrors the All Songs view). */
+  @media (max-width: 768px) {
+    .liked {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .liked > .actions-bar {
+      flex-shrink: 0;
+    }
+    .liked ul {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+  }
   .actions-bar {
     margin-bottom: 1rem;
   }
