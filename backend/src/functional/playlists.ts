@@ -92,6 +92,8 @@ export function createPlaylist(
 interface PlaylistListRow extends PlaylistRow {
   track_count: number;
   cover_song_id: number | null;
+  copied_from: number | null;
+  copied_from_owner: string | null;
 }
 
 // Lists a user's playlists (with track count + cover art song), newest first.
@@ -99,13 +101,16 @@ export function listPlaylists(db: Database, userId: string): Result<Playlist[]> 
   try {
     const rows = db
       .prepare(
-        `SELECT p.id, p.name, p.created_at, p.image_filename,
+        `SELECT p.id, p.name, p.created_at, p.image_filename, p.copied_from,
                 (SELECT COUNT(*) FROM playlist_songs ps WHERE ps.playlist_id = p.id)
                   AS track_count,
                 (SELECT ps.song_id FROM playlist_songs ps
                    JOIN songs s ON s.id = ps.song_id
                    WHERE ps.playlist_id = p.id AND s.art_filename IS NOT NULL
-                   ORDER BY ps.position ASC LIMIT 1) AS cover_song_id
+                   ORDER BY ps.position ASC LIMIT 1) AS cover_song_id,
+                (SELECT u.name FROM playlists op
+                   JOIN "user" u ON u.id = op.user_id
+                   WHERE op.id = p.copied_from) AS copied_from_owner
          FROM playlists p
          WHERE p.user_id = ?
          ORDER BY datetime(p.created_at) DESC, p.id DESC`
@@ -116,6 +121,8 @@ export function listPlaylists(db: Database, userId: string): Result<Playlist[]> 
         ...rowToPlaylist(row),
         trackCount: row.track_count,
         coverSongId: row.cover_song_id,
+        copiedFrom: row.copied_from,
+        copiedFromOwner: row.copied_from_owner,
       }))
     );
   } catch (e) {

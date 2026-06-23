@@ -10,7 +10,7 @@
   import { swipeQueue } from "$lib/actions/swipeQueue";
   import { reorderHandle } from "$lib/actions/reorderHandle";
   import { playlistImageUrl, playlistZipUrl } from "$lib/services/playlistService";
-  import { thumbUrl } from "$lib/services/songService";
+  import { copySongToLibrary, thumbUrl } from "$lib/services/songService";
   import {
     disablePublicLink,
     enablePublicLink,
@@ -203,6 +203,28 @@
     songVm.playQueue(vm.selectedSongs, index);
   }
 
+  // --- Saved-from-a-share playlists ---
+  // A saved copy references the original owner's song rows, so it carries the
+  // same "shared" extras: who-added badges + per-song add-to-my-library.
+  const isSavedCopy = $derived(vm.selected?.copiedFrom != null);
+  let addedToLib = $state<Set<number>>(new Set());
+  let addingLib = $state<number | null>(null);
+  const ownsSong = (id: number) => songVm.songs.some((s) => s.id === id);
+
+  async function addToLibrary(songId: number) {
+    if (addingLib !== null || addedToLib.has(songId)) return;
+    addingLib = songId;
+    try {
+      const copied = await copySongToLibrary(songId);
+      songVm.songs = [copied, ...songVm.songs];
+      addedToLib = new Set([...addedToLib, songId]);
+    } catch (e) {
+      vm.error = e instanceof Error ? e.message : "Failed to add to library";
+    } finally {
+      addingLib = null;
+    }
+  }
+
   // --- Edit-playlist modal (rename + change cover + jump to reorder) ---
   let showEdit = $state(false);
   let editName = $state("");
@@ -339,6 +361,9 @@
           <p class="muted">
             {vm.selectedSongs.length}
             {vm.selectedSongs.length === 1 ? "track" : "tracks"}
+            {#if isSavedCopy && vm.selected.copiedFromOwner}
+              · Saved from {vm.selected.copiedFromOwner}
+            {/if}
           </p>
           <div class="detail-actions">
             {#if reordering}
@@ -503,10 +528,30 @@
                 </span>
                 <span class="name">{song.originalFilename}</span>
               </button>
-              {#if collaborative && song.addedBy}
+              {#if (collaborative || isSavedCopy) && song.addedBy}
                 <span class="added-by" title={`Added by ${song.addedBy}`}>
                   <Icon name="person" size={13} />{song.addedBy}
                 </span>
+              {/if}
+              {#if isSavedCopy && !ownsSong(song.id)}
+                <button
+                  class="to-lib"
+                  class:done={addedToLib.has(song.id)}
+                  class:loading={addingLib === song.id}
+                  title={addedToLib.has(song.id) ? "In your library" : "Add to my library"}
+                  aria-label="Add to my library"
+                  disabled={addingLib !== null || addedToLib.has(song.id)}
+                  onclick={() => addToLibrary(song.id)}
+                >
+                  <Icon
+                    name={addedToLib.has(song.id)
+                      ? "check_circle"
+                      : addingLib === song.id
+                        ? "progress_activity"
+                        : "library_music"}
+                    size={18}
+                  />
+                </button>
               {/if}
               <span
                 class="plays"
@@ -1368,6 +1413,35 @@
     color: var(--muted);
     font-size: 0.78rem;
     font-variant-numeric: tabular-nums;
+  }
+  .to-lib {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.35rem;
+  }
+  @media (hover: hover) {
+    .to-lib:hover:not(:disabled) {
+      background: var(--surface-2);
+      color: var(--accent-text);
+    }
+  }
+  .to-lib.done {
+    color: var(--accent-text);
+    cursor: default;
+  }
+  .to-lib.loading :global(.material-symbols-rounded) {
+    animation: spin 1.2s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   .remove {
     display: inline-flex;
