@@ -11,6 +11,8 @@ data/music/*
 !data/music/.gitkeep
 data/art/*
 !data/art/.gitkeep
+# Cached looping canvas clips (runtime-generated; created on demand)
+data/clips/
 data/*.db
 data/*.db-journal
 data/*.db-wal
