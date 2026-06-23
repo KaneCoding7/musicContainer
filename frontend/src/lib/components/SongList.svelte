@@ -691,15 +691,28 @@
   }
 
   @media (max-width: 768px) {
+    /* Search fills the row with the sort dropdown to its right. */
+    .toolbar {
+      flex-wrap: nowrap;
+    }
     .search {
-      flex-basis: 100%;
+      flex: 1 1 auto;
       max-width: none;
     }
-    /* Track on the left, controls on the right (flex handles the split). Date,
-       plays and duration are dropped to keep rows readable on phones — hide
-       both the body cells and their header labels so the columns line up. */
+    .sort {
+      flex-shrink: 0;
+    }
+    /* Multi-select isn't offered on phones. */
+    .toolbar .ghost,
+    .selbar {
+      display: none;
+    }
+    /* No column headers on phones. */
+    .list-head {
+      display: none;
+    }
+    /* Date, plays and duration body cells are dropped to keep rows readable. */
     .col-date,
-    .head-date,
     .col-plays,
     .col-dur {
       display: none;
