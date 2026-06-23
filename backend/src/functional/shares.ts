@@ -1,6 +1,6 @@
 import type { Database } from "better-sqlite3";
 import type { Playlist, Song } from "../types.js";
-import { getPlaylist, songsInPlaylist } from "./playlists.js";
+import { getPlaylist, isGlobalPlaylist, songsInPlaylist } from "./playlists.js";
 import { isOrgMemberOf, songInUserOrgPlaylist } from "./orgPlaylists.js";
 import { err, ok, type Result } from "./result.js";
 
@@ -17,6 +17,7 @@ export interface SharedPlaylist extends Playlist {
   canEdit: boolean;
   savedCopyId: number | null; // my saved copy's id, if I've saved this one
   isOrg?: boolean; // auto-created org/team playlist (per email domain)
+  isGlobal?: boolean; // shared with every user on the system
 }
 
 function findUserByEmail(
@@ -186,6 +187,62 @@ export function listSharedWithMe(
   }
 }
 
+// Global playlists (shared with everyone), excluding ones the user owns (they
+// see those in their own list) or that are already shared with them directly.
+export function listGlobalPlaylists(
+  db: Database,
+  userId: string
+): Result<SharedPlaylist[]> {
+  try {
+    const rows = db
+      .prepare(
+        `SELECT p.id, p.name, p.created_at, p.image_filename, u.name AS owner_name,
+                (SELECT COUNT(*) FROM playlist_songs x WHERE x.playlist_id = p.id)
+                  AS track_count,
+                (SELECT x.song_id FROM playlist_songs x
+                   JOIN songs s ON s.id = x.song_id
+                   WHERE x.playlist_id = p.id AND s.art_filename IS NOT NULL
+                   ORDER BY x.position ASC LIMIT 1) AS cover_song_id,
+                (SELECT mp.id FROM playlists mp
+                   WHERE mp.user_id = ? AND mp.copied_from = p.id LIMIT 1)
+                  AS saved_copy_id
+         FROM playlists p
+         JOIN "user" u ON u.id = p.user_id
+         WHERE p.is_global = 1
+           AND p.user_id != ?
+           AND NOT EXISTS (SELECT 1 FROM playlist_shares ps
+                            WHERE ps.playlist_id = p.id AND ps.shared_with = ?)
+         ORDER BY datetime(p.created_at) DESC`
+      )
+      .all(userId, userId, userId) as {
+      id: number;
+      name: string;
+      created_at: string;
+      image_filename: string | null;
+      owner_name: string;
+      track_count: number;
+      cover_song_id: number | null;
+      saved_copy_id: number | null;
+    }[];
+    return ok(
+      rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        createdAt: r.created_at,
+        ownerName: r.owner_name,
+        canEdit: true, // global playlists are collaborative
+        trackCount: r.track_count,
+        coverSongId: r.cover_song_id,
+        hasImage: !!r.image_filename,
+        savedCopyId: r.saved_copy_id,
+        isGlobal: true,
+      }))
+    );
+  } catch (e) {
+    return err("internal", `Failed to list global playlists: ${(e as Error).message}`);
+  }
+}
+
 // True if a playlist is shared with the user.
 export function isPlaylistSharedWith(
   db: Database,
@@ -208,7 +265,8 @@ export function getSharedPlaylistSongs(
 ): Result<Song[]> {
   const allowed =
     isPlaylistSharedWith(db, playlistId, userId) ||
-    isOrgMemberOf(db, playlistId, userId);
+    isOrgMemberOf(db, playlistId, userId) ||
+    isGlobalPlaylist(db, playlistId);
   if (!allowed) {
     return err("not_found", `Playlist ${playlistId} not found`);
   }
@@ -362,6 +420,17 @@ export function canAccessSong(
     )
     .get(songId, userId);
   if (shared) return true;
+  // In a global playlist (shared with every user on the system).
+  const global = db
+    .prepare(
+      `SELECT 1 AS x
+       FROM playlist_songs ps
+       JOIN playlists p ON p.id = ps.playlist_id
+       WHERE ps.song_id = ? AND p.is_global = 1
+       LIMIT 1`
+    )
+    .get(songId);
+  if (global) return true;
   // In an org/team playlist the user belongs to (same email domain).
   return songInUserOrgPlaylist(db, userId, songId);
 }

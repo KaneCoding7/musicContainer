@@ -33,4 +33,5 @@ export interface Playlist {
   copiedFrom?: number | null; // source playlist id, if saved from a share
   copiedFromOwner?: string | null; // name of who owns the source playlist
   shared?: boolean; // owner has shared this with at least one other user
+  isGlobal?: boolean; // shared with every user on the system
 }

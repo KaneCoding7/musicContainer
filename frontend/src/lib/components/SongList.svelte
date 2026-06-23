@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
+  import Dropdown from "$lib/components/Dropdown.svelte";
   import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
@@ -24,6 +25,18 @@
     onBulkAdd?: (playlistId: number, songIds: number[]) => Promise<number>;
     onBulkEdit?: (ids: number[], fields: SongMetadata) => Promise<number>;
   } = $props();
+
+  // Sort options for the custom dropdown.
+  const SORT_OPTIONS: { value: string; label: string }[] = [
+    { value: "added", label: "Recently added" },
+    { value: "name", label: "Name (A–Z)" },
+    { value: "plays", label: "Most played" },
+    { value: "duration", label: "Duration" },
+  ];
+  // Playlists as dropdown options (bulk "add to playlist").
+  const playlistOptions = $derived(
+    playlists.map((p) => ({ value: String(p.id), label: p.name }))
+  );
 
   // Collapsible search: a lone icon until clicked, then a search field expands.
   let searchOpen = $state(false);
@@ -183,15 +196,14 @@
           />
         {/if}
       </div>
-      <label class="sort icon-btn" title="Sort">
-        <Icon name="sort" size={20} />
-        <select bind:value={vm.sortBy} aria-label="Sort songs">
-          <option value="added">Recently added</option>
-          <option value="name">Name (A–Z)</option>
-          <option value="plays">Most played</option>
-          <option value="duration">Duration</option>
-        </select>
-      </label>
+      <Dropdown
+        icon="sort"
+        ariaLabel="Sort songs"
+        align="right"
+        options={SORT_OPTIONS}
+        value={vm.sortBy}
+        onSelect={(v) => (vm.sortBy = v as typeof vm.sortBy)}
+      />
       {#if (onBulkAdd && playlists.length > 0) || onBulkEdit}
         <button
           class="icon-btn select-btn"
@@ -210,12 +222,13 @@
       <div class="selbar">
         <span class="count">{selected.size} selected</span>
         {#if onBulkAdd && playlists.length > 0}
-          <select bind:value={addTarget}>
-            <option value="" disabled selected>Add to playlist…</option>
-            {#each playlists as p (p.id)}
-              <option value={String(p.id)}>{p.name}</option>
-            {/each}
-          </select>
+          <Dropdown
+            placeholder="Add to playlist…"
+            ariaLabel="Add selected to playlist"
+            options={playlistOptions}
+            value={addTarget}
+            onSelect={(v) => (addTarget = v)}
+          />
           <button onclick={addSelected} disabled={!addTarget || selected.size === 0}>
             Add
           </button>
@@ -436,28 +449,6 @@
       background: var(--border-strong);
     }
   }
-  /* Sort is an icon-only button (uses .icon-btn for the circle); the native
-     select sits invisibly on top so a click opens the system dropdown. */
-  .sort {
-    position: relative;
-  }
-  .sort select {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    opacity: 0;
-    border: none;
-    cursor: pointer;
-  }
-  .sort select {
-    background: transparent;
-    border: none;
-    color: var(--text);
-    font: inherit;
-    cursor: pointer;
-    outline: none;
-  }
   .selbar {
     display: flex;
     align-items: center;
@@ -470,13 +461,6 @@
   }
   .selbar .count {
     font-weight: 600;
-  }
-  .selbar select {
-    padding: 0.4rem 0.6rem;
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: 0.4rem;
-    color: var(--text);
   }
   .selbar button {
     padding: 0.4rem 0.9rem;
@@ -802,22 +786,6 @@
     .search {
       flex: 1 1 auto;
       max-width: none;
-    }
-    /* Compact sort: show just the icon; the native <select> overlays it
-       invisibly so tapping the icon still opens the order picker. */
-    .sort {
-      flex-shrink: 0;
-      position: relative;
-      gap: 0;
-      padding: 0.4rem 0.55rem;
-    }
-    .sort select {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
-      cursor: pointer;
     }
     /* Multi-select isn't offered on phones. */
     .toolbar .select-btn,
