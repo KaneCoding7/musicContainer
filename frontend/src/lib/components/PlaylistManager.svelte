@@ -563,16 +563,18 @@
       aria-label="Create playlist"
     >
       <h3>New playlist</h3>
+      <p class="modal-sub">Give it a name, and an optional cover.</p>
       <label class="img-pick">
-        <span class="img-preview">
+        <span class="img-preview" class:empty={!newImagePreview}>
           {#if newImagePreview}
             <img src={newImagePreview} alt="" />
+            <span class="img-edit"><Icon name="edit" size={18} /></span>
           {:else}
-            <Icon name="add_photo_alternate" size={28} />
+            <Icon name="add_photo_alternate" size={30} />
           {/if}
         </span>
         <input type="file" accept="image/*" onchange={onPickImage} />
-        <span class="img-hint">{newImage ? "Change image" : "Add image (optional)"}</span>
+        <span class="img-hint">{newImage ? "Change cover" : "Add cover (optional)"}</span>
       </label>
       <input
         class="name-input"
@@ -639,49 +641,85 @@
     position: fixed;
     inset: 0;
     z-index: 60;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 1rem;
+    animation: modal-fade 0.15s ease;
   }
   .modal {
-    width: min(380px, 100%);
+    width: min(400px, 100%);
     box-sizing: border-box;
     background: var(--surface);
     border: 1px solid var(--border-strong);
-    border-radius: 0.75rem;
-    padding: 1.25rem;
+    border-radius: 1rem;
+    padding: 1.5rem;
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    animation: modal-pop 0.18s cubic-bezier(0.22, 1, 0.36, 1);
   }
   .modal h3 {
     margin: 0;
+    font-size: 1.3rem;
+  }
+  .modal-sub {
+    margin: 0 0 0.5rem;
+    color: var(--muted);
+    font-size: 0.85rem;
     text-align: center;
   }
   .img-pick {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.5rem;
     cursor: pointer;
   }
   .img-preview {
-    width: 120px;
-    height: 120px;
+    position: relative;
+    width: 150px;
+    height: 150px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--surface-2);
-    border-radius: 0.6rem;
+    border-radius: 0.85rem;
     color: var(--dim);
     overflow: hidden;
+    transition: border-color 0.12s ease, color 0.12s ease;
+  }
+  .img-preview.empty {
+    border: 2px dashed var(--border-strong);
+  }
+  @media (hover: hover) {
+    .img-pick:hover .img-preview.empty {
+      border-color: var(--accent);
+      color: var(--accent-text);
+    }
   }
   .img-preview img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  .img-edit {
+    position: absolute;
+    right: 0.4rem;
+    bottom: 0.4rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
   }
   .img-pick input[type="file"] {
     display: none;
@@ -690,13 +728,51 @@
     color: var(--muted);
     font-size: 0.82rem;
   }
+  .modal .name-input {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 0.5rem;
+    padding: 0.65rem 0.9rem;
+    font-size: 1rem;
+    text-align: center;
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.6rem;
+    color: var(--text);
+  }
+  .modal .name-input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
   .modal-actions {
     display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
+    gap: 0.6rem;
+    width: 100%;
+    margin-top: 0.75rem;
+  }
+  .modal-actions button {
+    flex: 1;
+    padding: 0.6rem;
   }
   .modal-actions .secondary {
-    background: var(--border-strong);
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  @media (hover: hover) {
+    .modal-actions .secondary:hover {
+      background: var(--border-strong);
+    }
+  }
+  @keyframes modal-fade {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes modal-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.94) translateY(8px);
+    }
   }
   @media (max-width: 768px) {
     .search {
