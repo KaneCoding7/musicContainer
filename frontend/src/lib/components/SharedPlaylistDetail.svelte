@@ -8,14 +8,12 @@
   import { copySongToLibrary, thumbUrl } from "$lib/services/songService";
   import {
     addSongToPlaylist,
-    deletePlaylist,
     playlistImageUrl,
     playlistZipUrl,
     removeSongFromPlaylist,
     reorderPlaylist,
   } from "$lib/services/playlistService";
   import {
-    copySharedPlaylist,
     fetchSharedPlaylistSongs,
     type SharedPlaylist,
   } from "$lib/services/shareService";
@@ -27,13 +25,11 @@
     playlist,
     onClose,
     onChanged,
-    onSaved,
   }: {
     songVm: SongViewModel;
     playlist: SharedPlaylist;
     onClose: () => void;
     onChanged?: () => void; // bump the grid (track counts) after an edit
-    onSaved?: () => void; // refresh both lists after save/unsave to my playlists
   } = $props();
 
   let songs = $state<Song[]>([]);
@@ -43,9 +39,6 @@
   let addQuery = $state("");
   let addedToLib = $state<Set<number>>(new Set());
   let addingLib = $state<number | null>(null);
-  // My saved copy of this shared playlist (null = not saved).
-  let saving = $state(false);
-  let savedCopyId = $state<number | null>(null);
 
   // (Re)load songs only when the open playlist actually changes — not when the
   // parent merely hands us a fresh object for the same playlist (e.g. after a
@@ -59,7 +52,6 @@
     reordering = false;
     addOpen = false;
     addQuery = "";
-    savedCopyId = playlist.savedCopyId;
     fetchSharedPlaylistSongs(id)
       .then((s) => (songs = s))
       .catch(
@@ -82,27 +74,6 @@
       error = e instanceof Error ? e.message : "Failed to add to library";
     } finally {
       addingLib = null;
-    }
-  }
-
-  // Toggles this shared playlist in/out of my own playlists (a saved copy).
-  async function toggleSave() {
-    if (saving) return;
-    saving = true;
-    error = null;
-    try {
-      if (savedCopyId !== null) {
-        await deletePlaylist(savedCopyId);
-        savedCopyId = null;
-      } else {
-        const copy = await copySharedPlaylist(playlist.id);
-        savedCopyId = copy.id;
-      }
-      onSaved?.();
-    } catch (e) {
-      error = e instanceof Error ? e.message : "Failed to update your playlists";
-    } finally {
-      saving = false;
     }
   }
 
@@ -200,15 +171,6 @@
         {songs.length === 1 ? "track" : "tracks"}
       </p>
       <div class="detail-actions">
-        <button
-          class="head-action"
-          class:on={savedCopyId !== null}
-          title={savedCopyId !== null ? "Remove from my playlists" : "Add to my playlists"}
-          aria-label={savedCopyId !== null ? "Remove from my playlists" : "Add to my playlists"}
-          onclick={toggleSave}
-          disabled={saving}
-          ><Icon name={savedCopyId !== null ? "bookmark_added" : "bookmark_add"} size={20} /></button
-        >
         {#if playlist.canEdit && songs.length > 1}
           <button
             class="head-action"
@@ -458,10 +420,6 @@
   .head-action.on {
     background: var(--active-bg);
     color: var(--accent-text);
-  }
-  .head-action:disabled {
-    opacity: 0.6;
-    cursor: default;
   }
   .actions-bar {
     margin-bottom: 1rem;
