@@ -8,21 +8,40 @@
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
   let { vm }: { vm: SongViewModel } = $props();
+
+  let query = $state("");
+  const filtered = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return vm.likedSongs;
+    return vm.likedSongs.filter(
+      (s) =>
+        s.originalFilename.toLowerCase().includes(q) ||
+        (s.artist?.toLowerCase().includes(q) ?? false) ||
+        (s.album?.toLowerCase().includes(q) ?? false)
+    );
+  });
 </script>
 
 {#if vm.likedSongs.length === 0}
   <p class="muted">No liked songs yet. Tap the heart on a song to like it.</p>
 {:else}
   <div class="liked">
-  <div class="actions-bar"><PlayActions {vm} songs={vm.likedSongs} /></div>
+  <div class="actions-bar"><PlayActions {vm} songs={filtered} /></div>
+  <div class="search">
+    <Icon name="search" size={20} />
+    <input type="search" placeholder="Search liked songs…" bind:value={query} />
+  </div>
+  {#if filtered.length === 0}
+    <p class="muted">No liked songs match “{query}”.</p>
+  {:else}
   <ul>
-    {#each vm.likedSongs as song, i (song.id)}
+    {#each filtered as song, i (song.id)}
       {@const isCurrent = song.id === vm.currentSong?.id}
       <li
         class:current={isCurrent}
         use:swipeQueue={{ onQueue: () => vm.playNext(song) }}
       >
-        <button class="row" onclick={() => vm.playQueue(vm.likedSongs, i)}>
+        <button class="row" onclick={() => vm.playQueue(filtered, i)}>
           <span class="thumb">
             {#if song.hasArt}
               <img src={thumbUrl(song.id, 128)} alt="" />
@@ -56,6 +75,7 @@
       </li>
     {/each}
   </ul>
+  {/if}
   </div>
 {/if}
 
@@ -69,8 +89,11 @@
       flex-direction: column;
       min-height: 0;
     }
-    .liked > .actions-bar {
+    .liked > :not(ul) {
       flex-shrink: 0;
+    }
+    .search {
+      max-width: none;
     }
     .liked ul {
       flex: 1 1 auto;
@@ -80,7 +103,32 @@
     }
   }
   .actions-bar {
-    margin-bottom: 1rem;
+    margin-bottom: 0.85rem;
+  }
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 22rem;
+    box-sizing: border-box;
+    padding: 0.3rem 1.1rem;
+    margin-bottom: 0.85rem;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 2rem;
+    color: var(--dim);
+  }
+  .search input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font: inherit;
+  }
+  .search input::placeholder {
+    color: var(--dim);
   }
   ul {
     list-style: none;
