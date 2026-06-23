@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
+  import { page } from "$app/state";
   import Icon from "$lib/components/Icon.svelte";
   import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
@@ -10,7 +12,15 @@
 
   let { vm }: { vm: SongViewModel } = $props();
 
-  let openAlbum = $state<string | null>(null);
+  // The open album is driven by the URL (?album=…) so the browser back button
+  // returns to the album grid instead of the previous view.
+  const openAlbum = $derived(page.url.searchParams.get("album"));
+  function openAlbumView(name: string) {
+    goto(`?view=albums&album=${encodeURIComponent(name)}`, { noScroll: true });
+  }
+  function closeAlbum() {
+    goto("?view=albums", { noScroll: true });
+  }
 
   interface Album {
     name: string;
@@ -47,7 +57,7 @@
   <p class="muted">No songs yet. Upload some to see albums.</p>
 {:else if current}
   <div class="detail">
-  <button class="back" onclick={() => (openAlbum = null)}>
+  <button class="back" onclick={closeAlbum}>
     <Icon name="arrow_back" size={20} /> All albums
   </button>
   <div class="album-head">
@@ -63,6 +73,13 @@
       <p class="muted">{durationLabel(current.songs)}</p>
       <PlayActions {vm} songs={current.songs} />
     </div>
+  </div>
+  <div class="list-head" aria-hidden="true">
+    <div class="head-track">
+      <span class="head-title">Title</span>
+      <span class="head-plays">Plays</span>
+    </div>
+    <span class="head-menu"></span>
   </div>
   <ol>
     {#each current.songs as song, i (song.id)}
@@ -94,7 +111,7 @@
 {:else}
   <div class="grid">
     {#each albums as album (album.name)}
-      <button class="card" onclick={() => (openAlbum = album.name)}>
+      <button class="card" onclick={() => openAlbumView(album.name)}>
         <span class="cover">
           {#if album.artId !== null}
             <img src={thumbUrl(album.artId, 512)} alt="" />
@@ -248,11 +265,42 @@
   .plays {
     display: inline-flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 0.15rem;
+    width: 3rem;
     flex-shrink: 0;
     color: var(--muted);
     font-size: 0.78rem;
     font-variant-numeric: tabular-nums;
+  }
+  /* Column headers (web only). head-track mirrors the .track box (flex:1 +
+     0.75rem side padding) so "Plays" lines up over the play counts. */
+  .list-head {
+    display: flex;
+    align-items: center;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-strong);
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .head-track {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 0.75rem;
+  }
+  .head-title {
+    flex: 1;
+    min-width: 0;
+  }
+  .head-plays {
+    width: 3rem;
+    text-align: right;
+  }
+  .head-menu {
+    width: 2.25rem;
   }
   .t-name {
     overflow: hidden;
@@ -268,6 +316,11 @@
   }
   /* Mobile: album detail keeps its header fixed and scrolls the track list. */
   @media (max-width: 768px) {
+    /* No column headers on phones. Scoped to .detail so it wins regardless of
+       source order. */
+    .detail .list-head {
+      display: none;
+    }
     .detail {
       height: 100%;
       display: flex;

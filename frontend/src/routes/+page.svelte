@@ -83,6 +83,9 @@
   const artistOpen = $derived(
     view === "artists" && !!page.url.searchParams.get("artist"),
   );
+  const albumOpen = $derived(
+    view === "albums" && !!page.url.searchParams.get("album"),
+  );
 
   // The content area is its own scroll container and navigation uses noScroll,
   // so opening an artist would otherwise inherit the grid's scroll position and
@@ -90,7 +93,7 @@
   // opens.
   let contentEl = $state<HTMLElement | null>(null);
   $effect(() => {
-    if (artistOpen) contentEl?.scrollTo(0, 0);
+    if (artistOpen || albumOpen) contentEl?.scrollTo(0, 0);
   });
 
   let queueOpen = $state(false);
@@ -123,10 +126,10 @@
     { id: "home", label: "Home", icon: "home" },
     { id: "songs", label: "All Songs", icon: "library_music" },
     { id: "liked", label: "Liked", icon: "favorite" },
+    { id: "recent", label: "Recently Played", icon: "history" },
     { id: "playlists", label: "Playlists", icon: "queue_music" },
     { id: "albums", label: "Albums", icon: "album" },
     { id: "artists", label: "Artists", icon: "artist" },
-    { id: "recent", label: "Recently Played", icon: "history" },
     { id: "friends", label: "Friends", icon: "group" },
     { id: "invite", label: "Invite", icon: "person_add" },
     { id: "upload", label: "Upload", icon: "upload" },
@@ -392,7 +395,7 @@
         <h2>Playlists</h2>
         <PlaylistManager vm={playlistVm} songVm={vm} />
       {:else if view === "albums"}
-        <h2>Albums</h2>
+        <h2 class:detail-hidden={albumOpen}>Albums</h2>
         <AlbumsView {vm} />
       {:else if view === "artists"}
         <h2 class:detail-hidden={artistOpen}>Artists</h2>

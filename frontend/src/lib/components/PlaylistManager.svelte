@@ -27,6 +27,7 @@
   } from "$lib/services/shareService";
   import type { PlaylistViewModel } from "$lib/viewmodels/playlistViewModel.svelte";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
+  import type { Song } from "$lib/types";
 
   let {
     vm,
@@ -38,8 +39,8 @@
   let addQuery = $state("");
 
   // Search/filter the playlist grid by name. Saved copies of shared playlists
-  // are hidden from "Your playlists" — the shared original lives in the "Shared
-  // with you" section instead (bookmarked), so it isn't duplicated here.
+  // are hidden — the shared original is shown in the grid instead (bookmarked),
+  // so it isn't duplicated here.
   let query = $state("");
   const ownPlaylists = $derived(
     vm.playlists.filter((p) => p.copiedFrom == null)
@@ -51,7 +52,7 @@
       : ownPlaylists;
   });
 
-  // Playlists shared with me, listed alongside my own in a second section.
+  // Playlists shared with me, listed alongside my own in the same grid.
   let shared = $state<SharedPlaylist[]>([]);
   async function loadShared() {
     try {
@@ -252,6 +253,15 @@
   // A saved copy references the original owner's song rows, so it carries the
   // same "shared" extras: who-added badges + per-song add-to-my-library.
   const isSavedCopy = $derived(vm.selected?.copiedFrom != null);
+
+  // Total runtime of the open playlist, e.g. "4h 3m" or "12m" (empty if unknown).
+  const totalDuration = $derived.by(() => {
+    const secs = vm.selectedSongs.reduce((acc, s) => acc + (s.duration ?? 0), 0);
+    if (secs <= 0) return "";
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  });
   let addedToLib = $state<Set<number>>(new Set());
   let addingLib = $state<number | null>(null);
   const ownsSong = (id: number) => songVm.songs.some((s) => s.id === id);
@@ -322,6 +332,13 @@
     }
   }
 
+  // Always confirm before pulling a track out of a playlist.
+  function confirmRemoveSong(song: Song) {
+    if (confirm(`Remove "${song.originalFilename}" from this playlist?`)) {
+      vm.removeSong(song.id);
+    }
+  }
+
   // --- Drag-to-reorder ---
   // Off by default; the Edit button reveals the drag handles. Reordering is
   // pointer-based (works on touch) via the handle.
@@ -337,6 +354,48 @@
 </script>
 
 <div class="playlists">
+  {#snippet detailActions()}
+    <div class="detail-actions">
+      {#if reordering}
+        <button
+          class="head-action on"
+          title="Done reordering"
+          aria-label="Done reordering"
+          onclick={() => (reordering = false)}
+          ><Icon name="check" size={20} /></button
+        >
+      {:else}
+      <button
+        class="head-action"
+        title="Edit playlist"
+        aria-label="Edit playlist"
+        onclick={openEdit}><Icon name="edit" size={20} /></button
+      >
+      {#if vm.selectedSongs.length > 0}
+        <a
+          class="head-action"
+          href={playlistZipUrl(vm.selectedId ?? 0)}
+          title="Download as zip"
+          aria-label="Download playlist as zip"><Icon name="download" size={20} /></a
+        >
+      {/if}
+      <button
+        class="head-action"
+        class:on={shareOpen}
+        title="Share playlist"
+        aria-label="Share playlist"
+        onclick={() => (shareOpen = !shareOpen)}
+        ><Icon name="share" size={20} /></button
+      >
+      <button
+        class="head-action danger"
+        title="Delete playlist"
+        aria-label="Delete playlist"
+        onclick={deleteSelected}><Icon name="delete" size={20} /></button
+      >
+      {/if}
+    </div>
+  {/snippet}
   {#if openId === null && sharedOpenId === null}
   <div class="pl-toolbar">
     <div class="search">
@@ -357,57 +416,57 @@
   {:else if filteredPlaylists.length === 0 && filteredShared.length === 0}
     <p class="muted">No playlists match “{query}”.</p>
   {:else}
-    {#if filteredPlaylists.length > 0}
-      {#if shared.length > 0}<h4 class="section-head">Your playlists</h4>{/if}
-      <div class="cards">
-        {#each filteredPlaylists as playlist (playlist.id)}
-          <button class="card" onclick={() => openPlaylist(playlist.id)}>
-            <span class="cover">
-              {#if playlist.hasImage}
-                <img src={playlistImageUrl(playlist.id, 512, coverBust)} alt="" />
-              {:else if playlist.coverSongId != null}
-                <img src={thumbUrl(playlist.coverSongId, 512)} alt="" />
-              {:else}
-                <Icon name="queue_music" size={26} />
-              {/if}
-            </span>
-            <span class="card-text">
-              <span class="card-name">{playlist.name}</span>
-              <span class="card-sub">
-                {playlist.trackCount ?? 0}
-                {(playlist.trackCount ?? 0) === 1 ? "track" : "tracks"}
+    <div class="cards">
+      {#each filteredPlaylists as playlist (playlist.id)}
+        <button class="card" onclick={() => openPlaylist(playlist.id)}>
+          <span class="cover">
+            {#if playlist.hasImage}
+              <img src={playlistImageUrl(playlist.id, 512, coverBust)} alt="" />
+            {:else if playlist.coverSongId != null}
+              <img src={thumbUrl(playlist.coverSongId, 512)} alt="" />
+            {:else}
+              <Icon name="queue_music" size={26} />
+            {/if}
+            {#if playlist.shared}
+              <span class="shared-badge" title="Shared playlist">
+                <Icon name="group" size={15} />
               </span>
+            {/if}
+          </span>
+          <span class="card-text">
+            <span class="card-name">{playlist.name}</span>
+            <span class="card-sub">
+              {playlist.shared ? "Shared · " : ""}{playlist.trackCount ?? 0}
+              {(playlist.trackCount ?? 0) === 1 ? "track" : "tracks"}
             </span>
-          </button>
-        {/each}
-      </div>
-    {/if}
+          </span>
+        </button>
+      {/each}
 
-    {#if filteredShared.length > 0}
-      <h4 class="section-head">Shared with you</h4>
-      <div class="cards">
-        {#each filteredShared as p (p.id)}
-          <button class="card" onclick={() => openSharedPlaylist(p.id)}>
-            <span class="cover">
-              {#if p.hasImage}
-                <img src={playlistImageUrl(p.id, 512)} alt="" />
-              {:else if p.coverSongId != null}
-                <img src={thumbUrl(p.coverSongId, 512)} alt="" />
-              {:else}
-                <Icon name="queue_music" size={26} />
-              {/if}
+      {#each filteredShared as p (p.id)}
+        <button class="card" onclick={() => openSharedPlaylist(p.id)}>
+          <span class="cover">
+            {#if p.hasImage}
+              <img src={playlistImageUrl(p.id, 512)} alt="" />
+            {:else if p.coverSongId != null}
+              <img src={thumbUrl(p.coverSongId, 512)} alt="" />
+            {:else}
+              <Icon name="queue_music" size={26} />
+            {/if}
+            <span class="shared-badge" title="Shared playlist">
+              <Icon name="group" size={15} />
             </span>
-            <span class="card-text">
-              <span class="card-name">{p.name}</span>
-              <span class="card-sub">
-                by {p.ownerName} · {p.trackCount ?? 0}
-                {(p.trackCount ?? 0) === 1 ? "track" : "tracks"}
-              </span>
+          </span>
+          <span class="card-text">
+            <span class="card-name">{p.name}</span>
+            <span class="card-sub">
+              by {p.ownerName} · {p.trackCount ?? 0}
+              {(p.trackCount ?? 0) === 1 ? "track" : "tracks"}
             </span>
-          </button>
-        {/each}
-      </div>
-    {/if}
+          </span>
+        </button>
+      {/each}
+    </div>
   {/if}
   {/if}
 
@@ -437,136 +496,50 @@
           {/if}
         </span>
         <div class="head-info">
-          <h3>{vm.selected.name}</h3>
+          <h3>
+            <span class="pl-name">{vm.selected.name}</span>
+            {#if collaborative}<span class="edit-tag">collaborative</span>{/if}
+          </h3>
           <p class="muted">
             {vm.selectedSongs.length}
             {vm.selectedSongs.length === 1 ? "track" : "tracks"}
+            {#if totalDuration}· {totalDuration}{/if}
             {#if isSavedCopy && vm.selected.copiedFromOwner}
               · Saved from {vm.selected.copiedFromOwner}
             {/if}
           </p>
-          <div class="detail-actions">
-            {#if reordering}
-              <button
-                class="head-action on"
-                title="Done reordering"
-                aria-label="Done reordering"
-                onclick={() => (reordering = false)}
-                ><Icon name="check" size={20} /></button
-              >
-            {:else}
-            <button
-              class="head-action"
-              title="Edit playlist"
-              aria-label="Edit playlist"
-              onclick={openEdit}><Icon name="edit" size={20} /></button
-            >
-            {#if vm.selectedSongs.length > 0}
-              <a
-                class="head-action"
-                href={playlistZipUrl(vm.selectedId ?? 0)}
-                title="Download as zip"
-                aria-label="Download playlist as zip"><Icon name="download" size={20} /></a
-              >
-            {/if}
-            <button
-              class="head-action"
-              class:on={shareOpen}
-              title="Share playlist"
-              aria-label="Share playlist"
-              onclick={() => (shareOpen = !shareOpen)}
-              ><Icon name="share" size={20} /></button
-            >
-            <button
-              class="head-action danger"
-              title="Delete playlist"
-              aria-label="Delete playlist"
-              onclick={deleteSelected}><Icon name="delete" size={20} /></button
-            >
-            {/if}
+          {#if vm.selectedId !== null}
+            <PlaylistMembers playlistId={vm.selectedId} refresh={memberRefresh} />
+          {/if}
+          <!-- Mobile: icons stay in the header under the people pill. -->
+          <div class="head-actions-mobile">
+            {@render detailActions()}
           </div>
         </div>
       </div>
 
-      {#if vm.selectedSongs.length > 0}
-        <div class="actions-bar">
-          <PlayActions vm={songVm} songs={vm.selectedSongs} />
-        </div>
-      {/if}
-
-      {#if vm.selectedId !== null}
-        <PlaylistMembers playlistId={vm.selectedId} refresh={memberRefresh} />
-      {/if}
-
-      {#if shareOpen}
-        <div class="share-panel">
-          <p class="sp-section">Invite people</p>
-          <UserAutocomplete
-            placeholder="Search by name or email…"
-            onSelect={(u) => doShare(u.email)}
-          />
-          <label class="sp-option">
-            <input type="checkbox" bind:checked={shareCanEdit} />
-            <span>
-              <span class="opt-title">Can edit</span>
-              <span class="opt-sub">Let them add &amp; remove tracks</span>
-            </span>
-          </label>
-          {#if shareError}<p class="sp-error">{shareError}</p>{/if}
-
-          <p class="sp-section">People with access</p>
-          {#if shares.length > 0}
-            <ul class="people">
-              {#each shares as u (u.id)}
-                <li>
-                  <span class="avatar">{u.name.slice(0, 1).toUpperCase()}</span>
-                  <span class="who">
-                    <span class="who-name">
-                      {u.name}
-                      <span class="role" class:view={!u.canEdit}>
-                        {u.canEdit ? "Editor" : "Viewer"}
-                      </span>
-                    </span>
-                    <span class="who-email">{u.email}</span>
-                  </span>
-                  <button
-                    class="revoke"
-                    title="Remove access"
-                    aria-label="Remove access"
-                    onclick={() => revoke(u.id)}><Icon name="close" size={18} /></button
-                  >
-                </li>
-              {/each}
-            </ul>
-          {:else}
-            <p class="sp-empty">Not shared with anyone yet.</p>
-          {/if}
-
-          <p class="sp-section">Public link</p>
-          <div class="public-row">
-            <span class="public-desc">
-              <Icon name="public" size={18} />
-              <span>Anyone with the link can listen — no account needed.</span>
-            </span>
-            <button class="link-toggle" class:on={publicToken} onclick={togglePublic}>
-              {publicToken ? "Turn off" : "Create link"}
-            </button>
+      <!-- Desktop: Play/Shuffle on the left, the edit icons pushed to the
+           right of the same row. On mobile this row is just Play/Shuffle. -->
+      <div class="toolbar-row">
+        {#if vm.selectedSongs.length > 0}
+          <div class="actions-bar">
+            <PlayActions vm={songVm} songs={vm.selectedSongs} />
           </div>
-          {#if publicToken}
-            <div class="public-url">
-              <span class="url">{publicLink(publicToken)}</span>
-              <button class="copy" onclick={copyPublic}>
-                <Icon name={publicCopied ? "check" : "content_copy"} size={16} />
-                {publicCopied ? "Copied" : "Copy"}
-              </button>
-            </div>
-          {/if}
+        {/if}
+        <div class="head-actions-desktop">
+          {@render detailActions()}
         </div>
-      {/if}
+      </div>
 
       {#if vm.selectedSongs.length === 0}
         <p class="muted">No songs in this playlist yet.</p>
       {:else}
+        <div class="list-head" aria-hidden="true">
+          <span class="head-title">Title</span>
+          <span class="head-plays">Plays</span>
+          <span class="head-menu"></span>
+          <span class="head-remove"></span>
+        </div>
         <ol>
           {#each vm.selectedSongs as song, i (song.id)}
             {@const isCurrent = song.id === songVm.currentSong?.id}
@@ -642,7 +615,7 @@
               <SongMenu
                 vm={songVm}
                 {song}
-                onRemoveFromPlaylist={() => vm.removeSong(song.id)}
+                onRemoveFromPlaylist={() => confirmRemoveSong(song)}
                 onChanged={() => {
                   if (vm.selectedId !== null) vm.select(vm.selectedId);
                 }}
@@ -651,7 +624,7 @@
                 class="remove"
                 title="Remove from playlist"
                 aria-label="Remove from playlist"
-                onclick={() => vm.removeSong(song.id)}
+                onclick={() => confirmRemoveSong(song)}
                 ><Icon name="close" size={20} /></button
               >
             </li>
@@ -817,6 +790,102 @@
           {savingEdit ? "Saving…" : "Save"}
         </button>
       </div>
+    </div>
+  </div>
+{/if}
+
+{#if shareOpen && vm.selected}
+  <div
+    class="modal-backdrop"
+    role="button"
+    tabindex="-1"
+    onclick={(e) => e.target === e.currentTarget && (shareOpen = false)}
+    onkeydown={(e) => e.key === "Escape" && (shareOpen = false)}
+  >
+    <div
+      class="dialog"
+      role="dialog"
+      tabindex="-1"
+      aria-modal="true"
+      aria-label="Share playlist"
+    >
+      <div class="dialog-head">
+        <h3>Share “{vm.selected.name}”</h3>
+        <button
+          class="dialog-close"
+          title="Close"
+          aria-label="Close"
+          onclick={() => (shareOpen = false)}><Icon name="close" size={20} /></button
+        >
+      </div>
+
+      <p class="sp-section">Invite people</p>
+      <UserAutocomplete
+        placeholder="Search by name or email…"
+        onSelect={(u) => doShare(u.email)}
+      />
+      <div class="sp-option">
+        <span class="sp-option-text">
+          <span class="opt-title">Can edit</span>
+          <span class="opt-sub">Let them add &amp; remove tracks</span>
+        </span>
+        <button
+          class="switch"
+          role="switch"
+          aria-checked={shareCanEdit}
+          aria-label="Can edit"
+          onclick={() => (shareCanEdit = !shareCanEdit)}><span class="knob"></span></button
+        >
+      </div>
+      {#if shareError}<p class="sp-error">{shareError}</p>{/if}
+
+      <p class="sp-section">People with access</p>
+      {#if shares.length > 0}
+        <ul class="people">
+          {#each shares as u (u.id)}
+            <li>
+              <span class="avatar">{u.name.slice(0, 1).toUpperCase()}</span>
+              <span class="who">
+                <span class="who-name">
+                  {u.name}
+                  <span class="role" class:view={!u.canEdit}>
+                    {u.canEdit ? "Editor" : "Viewer"}
+                  </span>
+                </span>
+                <span class="who-email">{u.email}</span>
+              </span>
+              <button
+                class="revoke"
+                title="Remove access"
+                aria-label="Remove access"
+                onclick={() => revoke(u.id)}><Icon name="close" size={18} /></button
+              >
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <p class="sp-empty">Not shared with anyone yet.</p>
+      {/if}
+
+      <p class="sp-section">Public link</p>
+      <div class="public-row">
+        <span class="public-desc">
+          <Icon name="public" size={18} />
+          <span>Anyone with the link can listen — no account needed.</span>
+        </span>
+        <button class="link-toggle" class:on={publicToken} onclick={togglePublic}>
+          {publicToken ? "Turn off" : "Create link"}
+        </button>
+      </div>
+      {#if publicToken}
+        <div class="public-url">
+          <span class="url">{publicLink(publicToken)}</span>
+          <button class="copy" onclick={copyPublic}>
+            <Icon name={publicCopied ? "check" : "content_copy"} size={16} />
+            {publicCopied ? "Copied" : "Copy"}
+          </button>
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -1030,19 +1099,15 @@
     padding: 0.25rem 0;
     margin-bottom: 1rem;
     font: inherit;
+    -webkit-tap-highlight-color: transparent;
   }
-  @media (hover: hover) {
-    .back:hover {
-      color: var(--text);
-    }
-  }
-  .section-head {
-    margin: 0 0 0.6rem;
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--dim);
+  .back:hover,
+  .back:focus,
+  .back:focus-visible,
+  .back:active {
+    background: transparent;
+    color: var(--muted);
+    outline: none;
   }
   .cards {
     display: grid;
@@ -1067,6 +1132,7 @@
     }
   }
   .cover {
+    position: relative;
     aspect-ratio: 1;
     display: flex;
     align-items: center;
@@ -1075,6 +1141,18 @@
     border-radius: 0.4rem;
     color: var(--dim);
     overflow: hidden;
+  }
+  .shared-badge {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.2rem;
+    border-radius: 0.35rem;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
   }
   .cover img {
     width: 100%;
@@ -1096,8 +1174,41 @@
     color: var(--muted);
     font-size: 0.8rem;
   }
-  .actions-bar {
+  /* Desktop: Play/Shuffle (left) and the edit icons (right) share one row. */
+  .toolbar-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
     margin-bottom: 1rem;
+  }
+  .actions-bar {
+    margin-bottom: 0;
+  }
+  /* Push the icons to the far right, with or without a Play/Shuffle bar. */
+  .head-actions-desktop {
+    margin-left: auto;
+  }
+  /* Icons live in the header only on mobile. */
+  .head-actions-mobile {
+    display: none;
+  }
+  @media (max-width: 768px) {
+    /* No track-list column headers on phones. Scoped to .detail so it wins over
+       the base .list-head rule regardless of source order. */
+    .detail .list-head {
+      display: none;
+    }
+    .head-actions-desktop {
+      display: none;
+    }
+    .head-actions-mobile {
+      display: block;
+      margin-top: 0.25rem;
+    }
+    /* Tighter icon spacing on phones for a more compact header. */
+    .head-actions-mobile .detail-actions {
+      gap: 0;
+    }
   }
   .head {
     display: flex;
@@ -1107,8 +1218,8 @@
   }
   .cover-lg {
     flex-shrink: 0;
-    width: 120px;
-    height: 120px;
+    width: 168px;
+    height: 168px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1125,16 +1236,38 @@
   .head-info {
     min-width: 0;
   }
+  /* Always stack the collaborative tag under the title. */
   .head-info h3 {
     margin: 0 0 0.25rem;
     font-size: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+  .head-info h3 .pl-name {
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
+  }
+  .edit-tag {
+    flex-shrink: 0;
+    font-size: 0.6rem;
+    vertical-align: middle;
+    padding: 0.1rem 0.4rem;
+    background: var(--active-bg);
+    color: var(--accent-text);
+    border-radius: 0.3rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
   .head-info .muted {
     margin: 0 0 0.6rem;
     padding: 0;
+    font-size: 0.82rem;
   }
   .detail-actions {
     display: flex;
@@ -1167,12 +1300,38 @@
     background: var(--active-bg);
     color: var(--accent-text);
   }
-  .share-panel {
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: 0.75rem;
-    padding: 1rem 1.1rem 1.1rem;
-    margin-bottom: 1.25rem;
+  .dialog-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .dialog-head h3 {
+    margin: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dialog-close {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    background: transparent;
+    border: none;
+    border-radius: 0.4rem;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  @media (hover: hover) {
+    .dialog-close:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
   }
   .sp-section {
     margin: 1.1rem 0 0.5rem;
@@ -1187,13 +1346,44 @@
   }
   .sp-option {
     display: flex;
-    align-items: flex-start;
-    gap: 0.55rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
     margin-top: 0.7rem;
-    cursor: pointer;
   }
-  .sp-option input {
-    margin-top: 0.15rem;
+  .sp-option-text {
+    min-width: 0;
+  }
+  .switch {
+    flex-shrink: 0;
+    width: 44px;
+    height: 26px;
+    padding: 0;
+    border-radius: 13px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    position: relative;
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease;
+  }
+  .switch[aria-checked="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.15s ease;
+  }
+  .switch[aria-checked="true"] .knob {
+    transform: translateX(18px);
   }
   .opt-title {
     display: block;
@@ -1496,11 +1686,38 @@
   .plays {
     display: inline-flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 0.15rem;
+    width: 3rem;
     flex-shrink: 0;
     color: var(--muted);
     font-size: 0.78rem;
     font-variant-numeric: tabular-nums;
+  }
+  /* Track-list column headers (web only). Spacers match the trailing controls
+     (menu 2.25rem, remove 2.45rem) so "Plays" lines up over the play counts. */
+  .list-head {
+    display: flex;
+    align-items: center;
+    padding: 0 0 0.5rem 0.5rem;
+    border-bottom: 1px solid var(--border-strong);
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .head-title {
+    flex: 1;
+    min-width: 0;
+  }
+  .head-plays {
+    width: 3rem;
+    text-align: right;
+  }
+  .head-menu {
+    width: 2.25rem;
+  }
+  .head-remove {
+    width: 2.45rem;
   }
   .to-lib {
     flex-shrink: 0;

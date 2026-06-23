@@ -169,12 +169,12 @@
   }
   .cards {
     display: grid;
-    /* Cap the track size (auto-fit, max 200px) so a section with only a few
-       items doesn't stretch into giant cards — packed left, like the artists
-       section. */
-    grid-template-columns: repeat(auto-fit, minmax(140px, 200px));
+    /* auto-FILL (not auto-fit) keeps the empty column tracks, so a section with
+       only a few items leaves them one-column-sized instead of stretching into
+       giant cards; 1fr then fills the row so there's no dead space on the right.
+       Matches the Artists/Albums grids. */
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 1rem;
-    justify-content: start;
   }
   .card {
     position: relative;

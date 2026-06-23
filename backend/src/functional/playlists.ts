@@ -94,6 +94,7 @@ interface PlaylistListRow extends PlaylistRow {
   cover_song_id: number | null;
   copied_from: number | null;
   copied_from_owner: string | null;
+  shared: number;
 }
 
 // Lists a user's playlists (with track count + cover art song), newest first.
@@ -110,7 +111,9 @@ export function listPlaylists(db: Database, userId: string): Result<Playlist[]> 
                    ORDER BY ps.position ASC LIMIT 1) AS cover_song_id,
                 (SELECT u.name FROM playlists op
                    JOIN "user" u ON u.id = op.user_id
-                   WHERE op.id = p.copied_from) AS copied_from_owner
+                   WHERE op.id = p.copied_from) AS copied_from_owner,
+                EXISTS (SELECT 1 FROM playlist_shares ps2
+                          WHERE ps2.playlist_id = p.id) AS shared
          FROM playlists p
          WHERE p.user_id = ?
          ORDER BY datetime(p.created_at) DESC, p.id DESC`
@@ -123,6 +126,7 @@ export function listPlaylists(db: Database, userId: string): Result<Playlist[]> 
         coverSongId: row.cover_song_id,
         copiedFrom: row.copied_from,
         copiedFromOwner: row.copied_from_owner,
+        shared: row.shared === 1,
       }))
     );
   } catch (e) {
