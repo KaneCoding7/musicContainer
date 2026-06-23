@@ -412,6 +412,10 @@
       playlist={openShared}
       onClose={closePlaylist}
       onChanged={loadShared}
+      onSaved={() => {
+        loadShared();
+        vm.load();
+      }}
     />
   {/if}
 
