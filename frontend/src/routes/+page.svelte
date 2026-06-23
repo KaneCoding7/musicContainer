@@ -727,6 +727,10 @@
     .content > h2 {
       display: none;
     }
+    /* Never scroll the page sideways on mobile. */
+    .content {
+      overflow-x: hidden;
+    }
     .scrim {
       display: block;
     }
