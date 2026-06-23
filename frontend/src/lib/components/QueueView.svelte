@@ -3,19 +3,15 @@
   import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
   import { swipeRemove } from "$lib/actions/swipeRemove";
+  import { reorderHandle } from "$lib/actions/reorderHandle";
   import { thumbUrl } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
   let { vm }: { vm: SongViewModel } = $props();
 
-  // Drag-to-reorder state (Cycle 29).
-  let dragIndex = $state<number | null>(null);
-  let overIndex = $state<number | null>(null);
-
-  function onDrop(i: number) {
-    if (dragIndex !== null && dragIndex !== i) vm.moveInQueue(dragIndex, i);
-    dragIndex = null;
-    overIndex = null;
+  // Drag-to-reorder via a handle (pointer events → works on touch too).
+  function moveTrack(from: number, to: number) {
+    if (from !== to) vm.moveInQueue(from, to);
   }
 
   // When the queue opens, position the now-playing row at the top so you can
@@ -40,24 +36,12 @@
         use:scrollToTopOnMount={isCurrent}
         class:current={isCurrent}
         class:past={isPast}
-        class:dragging={i === dragIndex}
-        class:dragover={i === overIndex && i !== dragIndex}
-        draggable="true"
-        ondragstart={() => (dragIndex = i)}
-        ondragover={(e) => {
-          e.preventDefault();
-          overIndex = i;
-        }}
-        ondrop={(e) => {
-          e.preventDefault();
-          onDrop(i);
-        }}
-        ondragend={() => {
-          dragIndex = null;
-          overIndex = null;
-        }}
+        data-reorder-index={i}
         use:swipeRemove={{ onRemove: () => vm.removeFromQueue(i) }}
       >
+        <span class="handle" use:reorderHandle={{ index: i, onMove: moveTrack }} title="Drag to reorder" aria-label="Drag to reorder">
+          <Icon name="drag_indicator" size={20} />
+        </span>
         <button class="row" onclick={() => vm.playQueue(vm.queue, i)}>
           <span class="thumb">
             {#if song.hasArt}
@@ -120,11 +104,19 @@
   li.past {
     opacity: 0.55;
   }
-  li.dragging {
-    opacity: 0.4;
+  .handle {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 0.15rem 0 0.4rem;
+    color: var(--dim);
+    cursor: grab;
+    touch-action: none;
   }
-  li.dragover {
-    border-top: 2px solid var(--accent);
+  @media (hover: hover) {
+    .handle:hover {
+      color: var(--text);
+    }
   }
   .remove {
     flex-shrink: 0;
