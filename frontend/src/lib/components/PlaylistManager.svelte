@@ -1,25 +1,29 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import Icon from "$lib/components/Icon.svelte";
   import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import PlaylistMembers from "$lib/components/PlaylistMembers.svelte";
+  import SharedPlaylistDetail from "$lib/components/SharedPlaylistDetail.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
   import UserAutocomplete from "$lib/components/UserAutocomplete.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
   import { reorderHandle } from "$lib/actions/reorderHandle";
-  import { playlistZipUrl } from "$lib/services/playlistService";
-  import { thumbUrl } from "$lib/services/songService";
+  import { playlistImageUrl, playlistZipUrl } from "$lib/services/playlistService";
+  import { copySongToLibrary, thumbUrl } from "$lib/services/songService";
   import {
     disablePublicLink,
     enablePublicLink,
     fetchPlaylistShares,
+    fetchSharedWithMe,
     getPublicToken,
     publicLink,
     sharePlaylist,
     unsharePlaylist,
     type ShareUser,
+    type SharedPlaylist,
   } from "$lib/services/shareService";
   import type { PlaylistViewModel } from "$lib/viewmodels/playlistViewModel.svelte";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -32,6 +36,58 @@
   let newName = $state("");
   let addOpen = $state(false);
   let addQuery = $state("");
+
+  // Search/filter the playlist grid by name. Saved copies of shared playlists
+  // are hidden from "Your playlists" — the shared original lives in the "Shared
+  // with you" section instead (bookmarked), so it isn't duplicated here.
+  let query = $state("");
+  const ownPlaylists = $derived(
+    vm.playlists.filter((p) => p.copiedFrom == null)
+  );
+  const filteredPlaylists = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    return q
+      ? ownPlaylists.filter((p) => p.name.toLowerCase().includes(q))
+      : ownPlaylists;
+  });
+
+  // Playlists shared with me, listed alongside my own in a second section.
+  let shared = $state<SharedPlaylist[]>([]);
+  async function loadShared() {
+    try {
+      shared = await fetchSharedWithMe();
+    } catch {
+      /* keep the current list on failure */
+    }
+  }
+  onMount(loadShared);
+  const filteredShared = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    return q
+      ? shared.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            p.ownerName.toLowerCase().includes(q)
+        )
+      : shared;
+  });
+
+  // Create-playlist modal (name + optional cover image).
+  let showCreate = $state(false);
+  let newImage = $state<File | null>(null);
+  let newImagePreview = $state<string | null>(null);
+  let creating = $state(false);
+  function openCreate() {
+    newName = "";
+    newImage = null;
+    newImagePreview = null;
+    showCreate = true;
+  }
+  function onPickImage(e: Event) {
+    const f = (e.target as HTMLInputElement).files?.[0] ?? null;
+    newImage = f;
+    newImagePreview = f ? URL.createObjectURL(f) : null;
+  }
 
   // The open playlist is driven by the URL (?playlist=id) so it's a real
   // drill-in view: deep-linkable and the browser back button returns to the
@@ -50,6 +106,21 @@
   }
   function closePlaylist() {
     goto("?view=playlists", { noScroll: true });
+  }
+
+  // A shared playlist opened from the second section (?shared=id).
+  const sharedOpenId = $derived.by(() => {
+    const raw = page.url.searchParams.get("shared");
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) ? n : null;
+  });
+  const openShared = $derived(
+    sharedOpenId != null
+      ? (shared.find((p) => p.id === sharedOpenId) ?? null)
+      : null
+  );
+  function openSharedPlaylist(id: number) {
+    goto(`?view=playlists&shared=${id}`, { noScroll: true });
   }
 
   // --- Sharing ---
@@ -136,12 +207,17 @@
     }
   }
 
-  async function createPlaylist() {
+  async function submitCreate() {
     const name = newName.trim();
-    if (!name) return;
-    const ok = await vm.create(name);
+    if (!name || creating) return;
+    creating = true;
+    const ok = await vm.create(name, newImage);
+    creating = false;
     if (ok) {
+      showCreate = false;
       newName = "";
+      newImage = null;
+      newImagePreview = null;
       if (vm.selectedId !== null) openPlaylist(vm.selectedId); // drill into it
     }
   }
@@ -172,13 +248,69 @@
     songVm.playQueue(vm.selectedSongs, index);
   }
 
-  function renameSelected() {
-    const current = vm.selected;
-    if (!current) return;
-    const name = prompt("Rename playlist", current.name);
-    if (name && name.trim() && name.trim() !== current.name) {
-      vm.rename(current.id, name.trim());
+  // --- Saved-from-a-share playlists ---
+  // A saved copy references the original owner's song rows, so it carries the
+  // same "shared" extras: who-added badges + per-song add-to-my-library.
+  const isSavedCopy = $derived(vm.selected?.copiedFrom != null);
+  let addedToLib = $state<Set<number>>(new Set());
+  let addingLib = $state<number | null>(null);
+  const ownsSong = (id: number) => songVm.songs.some((s) => s.id === id);
+
+  async function addToLibrary(songId: number) {
+    if (addingLib !== null || addedToLib.has(songId)) return;
+    addingLib = songId;
+    try {
+      const copied = await copySongToLibrary(songId);
+      songVm.songs = [copied, ...songVm.songs];
+      addedToLib = new Set([...addedToLib, songId]);
+    } catch (e) {
+      vm.error = e instanceof Error ? e.message : "Failed to add to library";
+    } finally {
+      addingLib = null;
     }
+  }
+
+  // --- Edit-playlist modal (rename + change cover + jump to reorder) ---
+  let showEdit = $state(false);
+  let editName = $state("");
+  let editImage = $state<File | null>(null);
+  let editImagePreview = $state<string | null>(null);
+  let savingEdit = $state(false);
+  let coverBust = $state(0); // bump to refresh cached cover after a change
+
+  function openEdit() {
+    const cur = vm.selected;
+    if (!cur) return;
+    editName = cur.name;
+    editImage = null;
+    editImagePreview = null;
+    showEdit = true;
+  }
+  function onPickEditImage(e: Event) {
+    const f = (e.target as HTMLInputElement).files?.[0] ?? null;
+    editImage = f;
+    editImagePreview = f ? URL.createObjectURL(f) : null;
+  }
+  async function submitEdit() {
+    const cur = vm.selected;
+    if (!cur || savingEdit) return;
+    const name = editName.trim();
+    if (!name) return;
+    savingEdit = true;
+    if (name !== cur.name) await vm.rename(cur.id, name);
+    if (editImage) {
+      const ok = await vm.setImage(cur.id, editImage);
+      if (ok) coverBust = Date.now();
+    }
+    savingEdit = false;
+    showEdit = false;
+    editImage = null;
+    editImagePreview = null;
+  }
+  // Leave the modal and turn on in-list drag reordering.
+  function startReorder() {
+    showEdit = false;
+    reordering = true;
   }
 
   function deleteSelected() {
@@ -205,48 +337,87 @@
 </script>
 
 <div class="playlists">
-  {#if openId === null}
-  <div class="create">
-    <input
-      type="text"
-      placeholder="New playlist name"
-      bind:value={newName}
-      onkeydown={(e) => e.key === "Enter" && createPlaylist()}
-    />
-    <button onclick={createPlaylist} disabled={!newName.trim()}>Create</button>
+  {#if openId === null && sharedOpenId === null}
+  <div class="pl-toolbar">
+    <div class="search">
+      <Icon name="search" size={20} />
+      <input type="search" placeholder="Search playlists…" bind:value={query} />
+    </div>
+    <button class="create-btn" onclick={openCreate} title="Create playlist" aria-label="Create playlist">
+      <Icon name="add" size={22} />
+    </button>
   </div>
 
   {#if vm.error}
     <p class="error">{vm.error}</p>
   {/if}
 
-  {#if vm.playlists.length === 0}
-    <p class="muted">No playlists yet. Create one above.</p>
+  {#if ownPlaylists.length === 0 && shared.length === 0}
+    <p class="muted">No playlists yet. Tap + to create one.</p>
+  {:else if filteredPlaylists.length === 0 && filteredShared.length === 0}
+    <p class="muted">No playlists match “{query}”.</p>
   {:else}
-    <div class="cards">
-      {#each vm.playlists as playlist (playlist.id)}
-        <button
-          class="card"
-          onclick={() => openPlaylist(playlist.id)}
-        >
-          <span class="cover">
-            {#if playlist.coverSongId != null}
-              <img src={thumbUrl(playlist.coverSongId, 512)} alt="" />
-            {:else}
-              <Icon name="queue_music" size={26} />
-            {/if}
-          </span>
-          <span class="card-text">
-            <span class="card-name">{playlist.name}</span>
-            <span class="card-sub">
-              {playlist.trackCount ?? 0}
-              {(playlist.trackCount ?? 0) === 1 ? "track" : "tracks"}
+    {#if filteredPlaylists.length > 0}
+      {#if shared.length > 0}<h4 class="section-head">Your playlists</h4>{/if}
+      <div class="cards">
+        {#each filteredPlaylists as playlist (playlist.id)}
+          <button class="card" onclick={() => openPlaylist(playlist.id)}>
+            <span class="cover">
+              {#if playlist.hasImage}
+                <img src={playlistImageUrl(playlist.id, 512, coverBust)} alt="" />
+              {:else if playlist.coverSongId != null}
+                <img src={thumbUrl(playlist.coverSongId, 512)} alt="" />
+              {:else}
+                <Icon name="queue_music" size={26} />
+              {/if}
             </span>
-          </span>
-        </button>
-      {/each}
-    </div>
+            <span class="card-text">
+              <span class="card-name">{playlist.name}</span>
+              <span class="card-sub">
+                {playlist.trackCount ?? 0}
+                {(playlist.trackCount ?? 0) === 1 ? "track" : "tracks"}
+              </span>
+            </span>
+          </button>
+        {/each}
+      </div>
+    {/if}
+
+    {#if filteredShared.length > 0}
+      <h4 class="section-head">Shared with you</h4>
+      <div class="cards">
+        {#each filteredShared as p (p.id)}
+          <button class="card" onclick={() => openSharedPlaylist(p.id)}>
+            <span class="cover">
+              {#if p.hasImage}
+                <img src={playlistImageUrl(p.id, 512)} alt="" />
+              {:else if p.coverSongId != null}
+                <img src={thumbUrl(p.coverSongId, 512)} alt="" />
+              {:else}
+                <Icon name="queue_music" size={26} />
+              {/if}
+            </span>
+            <span class="card-text">
+              <span class="card-name">{p.name}</span>
+              <span class="card-sub">
+                by {p.ownerName} · {p.trackCount ?? 0}
+                {(p.trackCount ?? 0) === 1 ? "track" : "tracks"}
+              </span>
+            </span>
+          </button>
+        {/each}
+      </div>
+    {/if}
   {/if}
+  {/if}
+
+  {#if sharedOpenId !== null && openShared}
+    <SharedPlaylistDetail
+      {songVm}
+      playlist={openShared}
+      onClose={closePlaylist}
+      onChanged={loadShared}
+    />
   {/if}
 
   {#if openId !== null}
@@ -257,7 +428,9 @@
     <div class="detail">
       <div class="head">
         <span class="cover-lg">
-          {#if vm.selected.coverSongId != null}
+          {#if vm.selected.hasImage}
+            <img src={playlistImageUrl(vm.selected.id, 512, coverBust)} alt="" />
+          {:else if vm.selected.coverSongId != null}
             <img src={thumbUrl(vm.selected.coverSongId, 512)} alt="" />
           {:else}
             <Icon name="queue_music" size={48} />
@@ -268,24 +441,26 @@
           <p class="muted">
             {vm.selectedSongs.length}
             {vm.selectedSongs.length === 1 ? "track" : "tracks"}
+            {#if isSavedCopy && vm.selected.copiedFromOwner}
+              · Saved from {vm.selected.copiedFromOwner}
+            {/if}
           </p>
           <div class="detail-actions">
+            {#if reordering}
+              <button
+                class="head-action on"
+                title="Done reordering"
+                aria-label="Done reordering"
+                onclick={() => (reordering = false)}
+                ><Icon name="check" size={20} /></button
+              >
+            {:else}
             <button
               class="head-action"
-              title="Rename playlist"
-              aria-label="Rename playlist"
-              onclick={renameSelected}><Icon name="edit" size={20} /></button
+              title="Edit playlist"
+              aria-label="Edit playlist"
+              onclick={openEdit}><Icon name="edit" size={20} /></button
             >
-            {#if vm.selectedSongs.length > 1}
-              <button
-                class="head-action"
-                class:on={reordering}
-                title={reordering ? "Done" : "Reorder"}
-                aria-label={reordering ? "Done" : "Reorder"}
-                onclick={() => (reordering = !reordering)}
-                ><Icon name={reordering ? "check" : "swap_vert"} size={20} /></button
-              >
-            {/if}
             {#if vm.selectedSongs.length > 0}
               <a
                 class="head-action"
@@ -308,6 +483,7 @@
               aria-label="Delete playlist"
               onclick={deleteSelected}><Icon name="delete" size={20} /></button
             >
+            {/if}
           </div>
         </div>
       </div>
@@ -432,10 +608,30 @@
                 </span>
                 <span class="name">{song.originalFilename}</span>
               </button>
-              {#if collaborative && song.addedBy}
+              {#if (collaborative || isSavedCopy) && song.addedBy}
                 <span class="added-by" title={`Added by ${song.addedBy}`}>
                   <Icon name="person" size={13} />{song.addedBy}
                 </span>
+              {/if}
+              {#if isSavedCopy && !ownsSong(song.id)}
+                <button
+                  class="to-lib"
+                  class:done={addedToLib.has(song.id)}
+                  class:loading={addingLib === song.id}
+                  title={addedToLib.has(song.id) ? "In your library" : "Add to my library"}
+                  aria-label="Add to my library"
+                  disabled={addingLib !== null || addedToLib.has(song.id)}
+                  onclick={() => addToLibrary(song.id)}
+                >
+                  <Icon
+                    name={addedToLib.has(song.id)
+                      ? "check_circle"
+                      : addingLib === song.id
+                        ? "progress_activity"
+                        : "library_music"}
+                    size={18}
+                  />
+                </button>
               {/if}
               <span
                 class="plays"
@@ -512,11 +708,290 @@
   {/if}
 </div>
 
+{#if showCreate}
+  <div
+    class="modal-backdrop"
+    role="button"
+    tabindex="-1"
+    onclick={(e) => e.target === e.currentTarget && (showCreate = false)}
+    onkeydown={(e) => e.key === "Escape" && (showCreate = false)}
+  >
+    <div
+      class="dialog"
+      role="dialog"
+      tabindex="-1"
+      aria-modal="true"
+      aria-label="Create playlist"
+    >
+      <h3>New playlist</h3>
+
+      <div class="art-row">
+        <span class="art-thumb">
+          {#if newImagePreview}
+            <img src={newImagePreview} alt="" />
+          {:else}
+            <Icon name="add_photo_alternate" size={26} />
+          {/if}
+        </span>
+        <div class="art-actions">
+          <input class="art-file" type="file" accept="image/*" onchange={onPickImage} />
+          <span class="art-hint">Cover image — optional</span>
+        </div>
+      </div>
+
+      <label>
+        Name
+        <input
+          type="text"
+          placeholder="Playlist name"
+          bind:value={newName}
+          onkeydown={(e) => e.key === "Enter" && submitCreate()}
+        />
+      </label>
+
+      <div class="actions">
+        <button class="secondary" onclick={() => (showCreate = false)}>Cancel</button>
+        <button onclick={submitCreate} disabled={!newName.trim() || creating}>
+          {creating ? "Creating…" : "Create"}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showEdit && vm.selected}
+  <div
+    class="modal-backdrop"
+    role="button"
+    tabindex="-1"
+    onclick={(e) => e.target === e.currentTarget && (showEdit = false)}
+    onkeydown={(e) => e.key === "Escape" && (showEdit = false)}
+  >
+    <div
+      class="dialog"
+      role="dialog"
+      tabindex="-1"
+      aria-modal="true"
+      aria-label="Edit playlist"
+    >
+      <h3>Edit playlist</h3>
+
+      <div class="art-row">
+        <span class="art-thumb">
+          {#if editImagePreview}
+            <img src={editImagePreview} alt="" />
+          {:else if vm.selected.hasImage}
+            <img src={playlistImageUrl(vm.selected.id, 512, coverBust)} alt="" />
+          {:else if vm.selected.coverSongId != null}
+            <img src={thumbUrl(vm.selected.coverSongId, 512)} alt="" />
+          {:else}
+            <Icon name="add_photo_alternate" size={26} />
+          {/if}
+        </span>
+        <div class="art-actions">
+          <input class="art-file" type="file" accept="image/*" onchange={onPickEditImage} />
+          <span class="art-hint">Change cover image</span>
+        </div>
+      </div>
+
+      <label>
+        Name
+        <input
+          type="text"
+          placeholder="Playlist name"
+          bind:value={editName}
+          onkeydown={(e) => e.key === "Enter" && submitEdit()}
+        />
+      </label>
+
+      {#if vm.selectedSongs.length > 1}
+        <button class="reorder-link" onclick={startReorder}>
+          <Icon name="swap_vert" size={18} />
+          Reorder tracks
+        </button>
+      {/if}
+
+      <div class="actions">
+        <button class="secondary" onclick={() => (showEdit = false)}>Cancel</button>
+        <button onclick={submitEdit} disabled={!editName.trim() || savingEdit}>
+          {savingEdit ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
-  .create {
+  .pl-toolbar {
     display: flex;
+    align-items: center;
     gap: 0.5rem;
     margin-bottom: 1rem;
+  }
+  .search {
+    flex: 1;
+    min-width: 0;
+    max-width: 22rem;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1.1rem;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 2rem;
+    color: var(--dim);
+  }
+  .search input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font: inherit;
+  }
+  .search input::placeholder {
+    color: var(--dim);
+  }
+  .create-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border-radius: 50%;
+  }
+  /* Create-playlist modal — mirrors EditSongDialog */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    box-sizing: border-box;
+  }
+  .dialog {
+    width: min(420px, 100%);
+    max-height: 90vh;
+    overflow-y: auto;
+    box-sizing: border-box;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+  }
+  .dialog h3 {
+    margin: 0 0 1rem;
+  }
+  .art-row {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  .art-thumb {
+    width: 72px;
+    height: 72px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-2);
+    border-radius: 0.5rem;
+    color: var(--dim);
+    overflow: hidden;
+  }
+  .art-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .art-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    align-items: flex-start;
+  }
+  /* Plain, fully-visible native file input (same as EditSongDialog — most
+     reliable on iOS Safari, and the visible button can't fall through). */
+  .art-file {
+    max-width: 100%;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .art-file::file-selector-button,
+  .art-file::-webkit-file-upload-button {
+    margin-right: 0.5rem;
+    padding: 0.45rem 0.85rem;
+    background: var(--accent);
+    border: none;
+    border-radius: 0.4rem;
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .art-hint {
+    font-size: 0.72rem;
+    color: var(--dim);
+  }
+  .dialog label {
+    display: block;
+    margin-bottom: 0.75rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .dialog label input[type="text"] {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 0.25rem;
+    padding: 0.5rem 0.7rem;
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    color: var(--text);
+    font: inherit;
+  }
+  .reorder-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 0.25rem;
+    padding: 0.5rem 0.7rem;
+    background: var(--surface-2);
+    color: var(--text);
+    font-weight: 600;
+  }
+  @media (hover: hover) {
+    .reorder-link:hover {
+      background: var(--border-strong);
+    }
+  }
+  .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+  .dialog button {
+    padding: 0.5rem 1rem;
+  }
+  .dialog .secondary {
+    background: var(--border-strong);
+  }
+  @media (max-width: 768px) {
+    .search {
+      max-width: none;
+    }
   }
   input[type="text"] {
     flex: 1;
@@ -560,6 +1035,14 @@
     .back:hover {
       color: var(--text);
     }
+  }
+  .section-head {
+    margin: 0 0 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--dim);
   }
   .cards {
     display: grid;
@@ -1018,6 +1501,35 @@
     color: var(--muted);
     font-size: 0.78rem;
     font-variant-numeric: tabular-nums;
+  }
+  .to-lib {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.35rem;
+  }
+  @media (hover: hover) {
+    .to-lib:hover:not(:disabled) {
+      background: var(--surface-2);
+      color: var(--accent-text);
+    }
+  }
+  .to-lib.done {
+    color: var(--accent-text);
+    cursor: default;
+  }
+  .to-lib.loading :global(.material-symbols-rounded) {
+    animation: spin 1.2s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   .remove {
     display: inline-flex;

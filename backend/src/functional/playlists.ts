@@ -1,3 +1,5 @@
+import { existsSync, unlinkSync } from "node:fs";
+import { extname, join } from "node:path";
 import type { Database } from "better-sqlite3";
 import type { Playlist, Song } from "../types.js";
 import { err, ok, type Result } from "./result.js";
@@ -6,6 +8,7 @@ interface PlaylistRow {
   id: number;
   name: string;
   created_at: string;
+  image_filename?: string | null;
 }
 
 interface SongRow {
@@ -28,7 +31,12 @@ interface SongRow {
 }
 
 function rowToPlaylist(row: PlaylistRow): Playlist {
-  return { id: row.id, name: row.name, createdAt: row.created_at };
+  return {
+    id: row.id,
+    name: row.name,
+    createdAt: row.created_at,
+    hasImage: !!row.image_filename,
+  };
 }
 
 function rowToSong(row: SongRow): Song {
@@ -68,7 +76,9 @@ export function createPlaylist(
       .prepare("INSERT INTO playlists (name, user_id) VALUES (?, ?)")
       .run(trimmed, userId);
     const row = db
-      .prepare("SELECT id, name, created_at FROM playlists WHERE id = ?")
+      .prepare(
+        "SELECT id, name, created_at, image_filename FROM playlists WHERE id = ?"
+      )
       .get(info.lastInsertRowid as number) as PlaylistRow | undefined;
     if (!row) {
       return err("internal", "Playlist created but could not be read back");
@@ -82,6 +92,8 @@ export function createPlaylist(
 interface PlaylistListRow extends PlaylistRow {
   track_count: number;
   cover_song_id: number | null;
+  copied_from: number | null;
+  copied_from_owner: string | null;
 }
 
 // Lists a user's playlists (with track count + cover art song), newest first.
@@ -89,13 +101,16 @@ export function listPlaylists(db: Database, userId: string): Result<Playlist[]> 
   try {
     const rows = db
       .prepare(
-        `SELECT p.id, p.name, p.created_at,
+        `SELECT p.id, p.name, p.created_at, p.image_filename, p.copied_from,
                 (SELECT COUNT(*) FROM playlist_songs ps WHERE ps.playlist_id = p.id)
                   AS track_count,
                 (SELECT ps.song_id FROM playlist_songs ps
                    JOIN songs s ON s.id = ps.song_id
                    WHERE ps.playlist_id = p.id AND s.art_filename IS NOT NULL
-                   ORDER BY ps.position ASC LIMIT 1) AS cover_song_id
+                   ORDER BY ps.position ASC LIMIT 1) AS cover_song_id,
+                (SELECT u.name FROM playlists op
+                   JOIN "user" u ON u.id = op.user_id
+                   WHERE op.id = p.copied_from) AS copied_from_owner
          FROM playlists p
          WHERE p.user_id = ?
          ORDER BY datetime(p.created_at) DESC, p.id DESC`
@@ -106,6 +121,8 @@ export function listPlaylists(db: Database, userId: string): Result<Playlist[]> 
         ...rowToPlaylist(row),
         trackCount: row.track_count,
         coverSongId: row.cover_song_id,
+        copiedFrom: row.copied_from,
+        copiedFromOwner: row.copied_from_owner,
       }))
     );
   } catch (e) {
@@ -125,7 +142,7 @@ export function getPlaylist(
   try {
     const row = db
       .prepare(
-        "SELECT id, name, created_at FROM playlists WHERE id = ? AND user_id = ?"
+        "SELECT id, name, created_at, image_filename FROM playlists WHERE id = ? AND user_id = ?"
       )
       .get(id, userId) as PlaylistRow | undefined;
     if (!row) return err("not_found", `Playlist ${id} not found`);
@@ -160,19 +177,89 @@ export function renamePlaylist(
 export function deletePlaylist(
   db: Database,
   id: number,
-  userId: string
+  userId: string,
+  imgDir?: string
 ): Result<void> {
   const existing = getPlaylist(db, id, userId);
   if (!existing.ok) return existing;
+  const row = db
+    .prepare("SELECT image_filename FROM playlists WHERE id = ? AND user_id = ?")
+    .get(id, userId) as { image_filename: string | null } | undefined;
   try {
     db.prepare("DELETE FROM playlists WHERE id = ? AND user_id = ?").run(
       id,
       userId
     );
+    if (imgDir && row?.image_filename) {
+      const p = join(imgDir, row.image_filename);
+      if (existsSync(p)) {
+        try {
+          unlinkSync(p);
+        } catch {
+          /* best-effort */
+        }
+      }
+    }
     return ok(undefined);
   } catch (e) {
     return err("internal", `Failed to delete playlist: ${(e as Error).message}`);
   }
+}
+
+// Sets (or clears) a playlist's custom cover image filename (owner-scoped).
+// Returns the updated playlist plus the previous image filename for cleanup.
+export function setPlaylistImage(
+  db: Database,
+  id: number,
+  userId: string,
+  filename: string | null
+): Result<{ playlist: Playlist; oldImage: string | null }> {
+  const existing = getPlaylist(db, id, userId);
+  if (!existing.ok) return existing;
+  try {
+    const row = db
+      .prepare(
+        "SELECT image_filename FROM playlists WHERE id = ? AND user_id = ?"
+      )
+      .get(id, userId) as { image_filename: string | null } | undefined;
+    db.prepare(
+      "UPDATE playlists SET image_filename = ? WHERE id = ? AND user_id = ?"
+    ).run(filename, id, userId);
+    const updated = getPlaylist(db, id, userId);
+    if (!updated.ok) return updated;
+    return ok({ playlist: updated.value, oldImage: row?.image_filename ?? null });
+  } catch (e) {
+    return err("internal", `Failed to set playlist image: ${(e as Error).message}`);
+  }
+}
+
+// Resolves a playlist's custom image file for serving (owner-scoped).
+export function resolvePlaylistImage(
+  db: Database,
+  id: number,
+  userId: string,
+  imgDir: string
+): Result<{ path: string; contentType: string }> {
+  const row = db
+    .prepare("SELECT image_filename, user_id FROM playlists WHERE id = ?")
+    .get(id) as { image_filename: string | null; user_id: string } | undefined;
+  if (!row) return err("not_found", `Playlist ${id} not found`);
+  // Owner, or anyone the playlist is shared with, may view the cover.
+  if (row.user_id !== userId) {
+    const shared = db
+      .prepare(
+        "SELECT 1 AS x FROM playlist_shares WHERE playlist_id = ? AND shared_with = ?"
+      )
+      .get(id, userId);
+    if (!shared) return err("not_found", `Playlist ${id} not found`);
+  }
+  if (!row.image_filename) return err("not_found", "Playlist has no image");
+  const path = join(imgDir, row.image_filename);
+  if (!existsSync(path)) return err("not_found", "Image file missing on disk");
+  const ext = extname(path).toLowerCase();
+  const contentType =
+    ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
+  return ok({ path, contentType });
 }
 
 // True if the user may edit a playlist: they own it, or hold an editor share.

@@ -1,8 +1,10 @@
-import { existsSync } from "node:fs";
+import { existsSync, unlinkSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { extname, join } from "node:path";
 import { ZipArchive } from "archiver";
 import { Router } from "express";
-import { getDb, MUSIC_DIR } from "../db/init.js";
+import multer from "multer";
+import { ART_DIR, getDb, MUSIC_DIR } from "../db/init.js";
 import {
   addSongToPlaylist,
   addSongsToPlaylist,
@@ -13,10 +15,37 @@ import {
   removeSongFromPlaylist,
   renamePlaylist,
   reorderPlaylist,
+  resolvePlaylistImage,
+  setPlaylistImage,
 } from "../functional/playlists.js";
 import { statusForError } from "../functional/result.js";
 import { getSharedPlaylistSongs } from "../functional/shares.js";
+import { serveArt } from "../thumbnails.js";
 import type { Song } from "../types.js";
+
+// Playlist cover-image uploads — JPEG/PNG/WebP into the shared art dir.
+const PL_IMG_MIME_EXT: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+};
+const plImageUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, ART_DIR),
+    filename: (_req, file, cb) => {
+      const ext =
+        extname(file.originalname).toLowerCase() ||
+        PL_IMG_MIME_EXT[file.mimetype] ||
+        ".jpg";
+      cb(null, `${randomUUID()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) =>
+    file.mimetype in PL_IMG_MIME_EXT
+      ? cb(null, true)
+      : cb(new Error("Image must be a JPEG, PNG, or WebP")),
+});
 
 export const playlistsRouter = Router();
 
@@ -123,15 +152,85 @@ playlistsRouter.patch("/playlists/:id", (req, res) => {
   return res.json({ playlist: result.value });
 });
 
-// DELETE /api/playlists/:id — delete a playlist.
+// DELETE /api/playlists/:id — delete a playlist (and its cover image).
 playlistsRouter.delete("/playlists/:id", (req, res) => {
-  const result = deletePlaylist(getDb(), Number(req.params.id), req.userId!);
+  const result = deletePlaylist(
+    getDb(),
+    Number(req.params.id),
+    req.userId!,
+    ART_DIR
+  );
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
       .json({ error: result.error });
   }
   return res.status(204).end();
+});
+
+// PUT /api/playlists/:id/image — upload/replace a playlist's cover image.
+playlistsRouter.put("/playlists/:id/image", (req, res) => {
+  plImageUpload.single("image")(req, res, (uploadErr: unknown) => {
+    if (uploadErr) {
+      const message =
+        uploadErr instanceof Error ? uploadErr.message : "Upload failed";
+      return res.status(400).json({ error: { code: "validation", message } });
+    }
+    if (!req.file) {
+      return res
+        .status(400)
+        .json({ error: { code: "validation", message: "No image (field: image)" } });
+    }
+    const result = setPlaylistImage(
+      getDb(),
+      Number(req.params.id),
+      req.userId!,
+      req.file.filename
+    );
+    if (!result.ok) {
+      const p = join(ART_DIR, req.file.filename);
+      if (existsSync(p)) {
+        try {
+          unlinkSync(p);
+        } catch {
+          /* best-effort */
+        }
+      }
+      return res
+        .status(statusForError(result.error.code))
+        .json({ error: result.error });
+    }
+    if (result.value.oldImage) {
+      const old = join(ART_DIR, result.value.oldImage);
+      if (existsSync(old)) {
+        try {
+          unlinkSync(old);
+        } catch {
+          /* best-effort */
+        }
+      }
+    }
+    return res.json({ playlist: result.value.playlist });
+  });
+});
+
+// GET /api/playlists/:id/image — serve a playlist's custom cover (?size=N for a
+// thumbnail). 204 (not 404) when absent, so a stale reference can't trip the
+// scanner heuristic at the edge.
+playlistsRouter.get("/playlists/:id/image", async (req, res) => {
+  const result = resolvePlaylistImage(
+    getDb(),
+    Number(req.params.id),
+    req.userId!,
+    ART_DIR
+  );
+  if (!result.ok) {
+    if (result.error.code === "not_found") return res.status(204).end();
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  await serveArt(req, res, result.value.path, result.value.contentType, req.query.size);
 });
 
 // PUT /api/playlists/:id/order — reorder songs within a playlist.

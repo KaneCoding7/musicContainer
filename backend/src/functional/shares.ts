@@ -138,7 +138,8 @@ export function listSharedWithMe(
   try {
     const rows = db
       .prepare(
-        `SELECT p.id, p.name, p.created_at, u.name AS owner_name, ps.can_edit,
+        `SELECT p.id, p.name, p.created_at, p.image_filename, u.name AS owner_name,
+                ps.can_edit,
                 (SELECT COUNT(*) FROM playlist_songs x WHERE x.playlist_id = p.id)
                   AS track_count,
                 (SELECT x.song_id FROM playlist_songs x
@@ -158,6 +159,7 @@ export function listSharedWithMe(
       id: number;
       name: string;
       created_at: string;
+      image_filename: string | null;
       owner_name: string;
       can_edit: number;
       track_count: number;
@@ -173,6 +175,7 @@ export function listSharedWithMe(
         canEdit: r.can_edit === 1,
         trackCount: r.track_count,
         coverSongId: r.cover_song_id,
+        hasImage: !!r.image_filename,
         savedCopyId: r.saved_copy_id,
       }))
     );

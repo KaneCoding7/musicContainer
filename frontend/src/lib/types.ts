@@ -27,6 +27,9 @@ export interface Playlist {
   createdAt: string;
   trackCount?: number;
   coverSongId?: number | null;
+  hasImage?: boolean;
+  copiedFrom?: number | null; // source playlist id, if saved from a share
+  copiedFromOwner?: string | null; // name of who owns the source playlist
 }
 
 export interface ApiError {

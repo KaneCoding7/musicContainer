@@ -26,6 +26,7 @@
 {#if vm.recentlyPlayed.length === 0}
   <p class="muted">Nothing played yet. Play a song to see it here.</p>
 {:else}
+  <div class="recent">
   <div class="actions-bar"><PlayActions {vm} songs={vm.recentlyPlayed} /></div>
   <ul>
     {#each vm.recentlyPlayed as song, i (song.id)}
@@ -61,9 +62,28 @@
       </li>
     {/each}
   </ul>
+  </div>
 {/if}
 
 <style>
+  /* Mobile: fixed play-actions header, scrolling list (matches All Songs). */
+  @media (max-width: 768px) {
+    .recent {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .recent > .actions-bar {
+      flex-shrink: 0;
+    }
+    .recent ul {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+  }
   .actions-bar {
     margin-bottom: 1rem;
   }

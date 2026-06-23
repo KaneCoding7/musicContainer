@@ -193,6 +193,7 @@
 {#if vm.songs.length === 0}
   <p class="muted">No songs yet. Upload some to see artists.</p>
 {:else if current}
+  <div class="detail">
   <button class="back" onclick={closeArtist}>
     <Icon name="arrow_back" size={20} /> All artists
   </button>
@@ -327,6 +328,7 @@
       </li>
     {/each}
   </ol>
+  </div>
 {:else}
   <div class="grid">
     {#each artists as artist (artist.name)}
@@ -445,6 +447,22 @@
   /* On mobile, stack the avatar on top with the name and all action buttons
      centered in a row beneath it. */
   @media (max-width: 768px) {
+    /* Artist detail keeps its header fixed and scrolls the track list. */
+    .detail {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .detail > :not(ol) {
+      flex-shrink: 0;
+    }
+    .detail ol {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
     .head {
       flex-direction: column;
       text-align: center;

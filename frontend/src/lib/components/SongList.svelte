@@ -346,9 +346,10 @@
   .toolbar {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     flex-wrap: wrap;
     gap: 0.5rem;
+    margin-top: 0.6rem;
     margin-bottom: 0.75rem;
   }
   .ghost {
@@ -483,6 +484,7 @@
   }
   .search input {
     flex: 1;
+    min-width: 0; /* allow the input to shrink so the toolbar can't overflow */
     background: transparent;
     border: none;
     outline: none;
@@ -691,15 +693,62 @@
   }
 
   @media (max-width: 768px) {
+    /* Keep the header (stats, play actions, search/sort) fixed and scroll only
+       the song list. The in-view title is hidden on mobile, so the list fills
+       the content height. */
+    .song-list {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .song-list > :not(ul) {
+      flex-shrink: 0;
+    }
+    .song-list ul {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    /* Search fills the row with the sort dropdown to its right, both the same
+       height. */
+    .toolbar {
+      flex-wrap: nowrap;
+      margin-top: 0.25rem;
+      align-items: stretch;
+    }
     .search {
-      flex-basis: 100%;
+      flex: 1 1 auto;
       max-width: none;
     }
-    /* Track on the left, controls on the right (flex handles the split). Date,
-       plays and duration are dropped to keep rows readable on phones — hide
-       both the body cells and their header labels so the columns line up. */
+    /* Compact sort: show just the icon; the native <select> overlays it
+       invisibly so tapping the icon still opens the order picker. */
+    .sort {
+      flex-shrink: 0;
+      position: relative;
+      gap: 0;
+      padding: 0.4rem 0.55rem;
+    }
+    .sort select {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+    /* Multi-select isn't offered on phones. */
+    .toolbar .ghost,
+    .selbar {
+      display: none;
+    }
+    /* No column headers on phones. */
+    .list-head {
+      display: none;
+    }
+    /* Date, plays and duration body cells are dropped to keep rows readable. */
     .col-date,
-    .head-date,
     .col-plays,
     .col-dur {
       display: none;

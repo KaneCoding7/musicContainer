@@ -17,7 +17,6 @@
   import QueueView from "$lib/components/QueueView.svelte";
   import RecentlyPlayedView from "$lib/components/RecentlyPlayedView.svelte";
   import SettingsView from "$lib/components/SettingsView.svelte";
-  import SharedView from "$lib/components/SharedView.svelte";
   import SongList from "$lib/components/SongList.svelte";
   import UploadView from "$lib/components/UploadView.svelte";
   import type { SongMetadata } from "$lib/services/songService";
@@ -53,7 +52,6 @@
     | "upload"
     | "liked"
     | "playlists"
-    | "shared"
     | "albums"
     | "artists"
     | "recent"
@@ -68,7 +66,6 @@
       case "upload":
       case "liked":
       case "playlists":
-      case "shared":
       case "albums":
       case "artists":
       case "recent":
@@ -127,7 +124,6 @@
     { id: "songs", label: "All Songs", icon: "library_music" },
     { id: "liked", label: "Liked", icon: "favorite" },
     { id: "playlists", label: "Playlists", icon: "queue_music" },
-    { id: "shared", label: "Shared with me", icon: "folder_shared" },
     { id: "albums", label: "Albums", icon: "album" },
     { id: "artists", label: "Artists", icon: "artist" },
     { id: "recent", label: "Recently Played", icon: "history" },
@@ -395,9 +391,6 @@
       {:else if view === "playlists"}
         <h2>Playlists</h2>
         <PlaylistManager vm={playlistVm} songVm={vm} />
-      {:else if view === "shared"}
-        <h2>Shared with me</h2>
-        <SharedView songVm={vm} onCopied={() => playlistVm.load()} />
       {:else if view === "albums"}
         <h2>Albums</h2>
         <AlbumsView {vm} />
@@ -721,6 +714,15 @@
   @media (max-width: 768px) {
     .topbar {
       display: flex;
+    }
+    /* The topbar already shows the section name, so drop the redundant in-view
+       title on mobile. */
+    .content > h2 {
+      display: none;
+    }
+    /* Never scroll the page sideways on mobile. */
+    .content {
+      overflow-x: hidden;
     }
     .scrim {
       display: block;

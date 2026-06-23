@@ -27,4 +27,7 @@ export interface Playlist {
   createdAt: string; // ISO timestamp
   trackCount?: number; // populated by list queries
   coverSongId?: number | null; // first track with album art, for the cover
+  hasImage?: boolean; // has a custom uploaded cover image
+  copiedFrom?: number | null; // source playlist id, if saved from a share
+  copiedFromOwner?: string | null; // name of who owns the source playlist
 }
