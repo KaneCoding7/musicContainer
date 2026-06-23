@@ -711,10 +711,12 @@
       overflow-y: auto;
       overflow-x: hidden;
     }
-    /* Search fills the row with the sort dropdown to its right. */
+    /* Search fills the row with the sort dropdown to its right, both the same
+       height. */
     .toolbar {
       flex-wrap: nowrap;
       margin-top: 0.25rem;
+      align-items: stretch;
     }
     .search {
       flex: 1 1 auto;
