@@ -483,6 +483,7 @@
   }
   .search input {
     flex: 1;
+    min-width: 0; /* allow the input to shrink so the toolbar can't overflow */
     background: transparent;
     border: none;
     outline: none;
@@ -691,6 +692,24 @@
   }
 
   @media (max-width: 768px) {
+    /* Keep the header (stats, play actions, search/sort) fixed and scroll only
+       the song list. The in-view title is hidden on mobile, so the list fills
+       the content height. */
+    .song-list {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .song-list > :not(ul) {
+      flex-shrink: 0;
+    }
+    .song-list ul {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
     /* Search fills the row with the sort dropdown to its right. */
     .toolbar {
       flex-wrap: nowrap;
