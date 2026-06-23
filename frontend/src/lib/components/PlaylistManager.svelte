@@ -37,13 +37,18 @@
   let addOpen = $state(false);
   let addQuery = $state("");
 
-  // Search/filter the playlist grid by name.
+  // Search/filter the playlist grid by name. Saved copies of shared playlists
+  // are hidden from "Your playlists" — the shared original lives in the "Shared
+  // with you" section instead (bookmarked), so it isn't duplicated here.
   let query = $state("");
+  const ownPlaylists = $derived(
+    vm.playlists.filter((p) => p.copiedFrom == null)
+  );
   const filteredPlaylists = $derived.by(() => {
     const q = query.trim().toLowerCase();
     return q
-      ? vm.playlists.filter((p) => p.name.toLowerCase().includes(q))
-      : vm.playlists;
+      ? ownPlaylists.filter((p) => p.name.toLowerCase().includes(q))
+      : ownPlaylists;
   });
 
   // Playlists shared with me, listed alongside my own in a second section.
@@ -347,7 +352,7 @@
     <p class="error">{vm.error}</p>
   {/if}
 
-  {#if vm.playlists.length === 0 && shared.length === 0}
+  {#if ownPlaylists.length === 0 && shared.length === 0}
     <p class="muted">No playlists yet. Tap + to create one.</p>
   {:else if filteredPlaylists.length === 0 && filteredShared.length === 0}
     <p class="muted">No playlists match “{query}”.</p>
