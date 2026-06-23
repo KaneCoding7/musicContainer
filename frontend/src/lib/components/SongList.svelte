@@ -699,8 +699,21 @@
       flex: 1 1 auto;
       max-width: none;
     }
+    /* Compact sort: show just the icon; the native <select> overlays it
+       invisibly so tapping the icon still opens the order picker. */
     .sort {
       flex-shrink: 0;
+      position: relative;
+      gap: 0;
+      padding: 0.4rem 0.55rem;
+    }
+    .sort select {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
     }
     /* Multi-select isn't offered on phones. */
     .toolbar .ghost,
