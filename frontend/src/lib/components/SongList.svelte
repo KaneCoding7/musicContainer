@@ -714,6 +714,7 @@
     /* Search fills the row with the sort dropdown to its right. */
     .toolbar {
       flex-wrap: nowrap;
+      margin-top: 0.25rem;
     }
     .search {
       flex: 1 1 auto;
