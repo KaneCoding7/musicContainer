@@ -242,8 +242,8 @@
       <Icon name="search" size={20} />
       <input type="search" placeholder="Search playlists…" bind:value={query} />
     </div>
-    <button class="create-btn" onclick={openCreate}>
-      <Icon name="add" size={20} /> Create
+    <button class="create-btn" onclick={openCreate} title="Create playlist" aria-label="Create playlist">
+      <Icon name="add" size={22} />
     </button>
   </div>
 
@@ -627,8 +627,12 @@
   .create-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    justify-content: center;
     flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border-radius: 50%;
   }
   /* Create-playlist modal */
   .modal-backdrop {
