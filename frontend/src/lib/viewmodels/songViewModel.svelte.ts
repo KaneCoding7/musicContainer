@@ -522,8 +522,18 @@ export class SongViewModel {
   }
 
   // Mirrors a remote device's playback state (used by non-active devices).
+  // Re-map queued songs to their current library versions (by id) so a snapshot
+  // or a remote device's stale queue can't revert per-song metadata that was
+  // changed locally (clip on/off, liked, art, etc.). Falls back to the snapshot
+  // copy for songs not in the library (e.g. shared/not-yet-loaded).
+  private freshenQueue(q: Song[]): Song[] {
+    if (!this.songs.length) return q;
+    const byId = new Map(this.songs.map((s) => [s.id, s]));
+    return q.map((s) => byId.get(s.id) ?? s);
+  }
+
   applyRemoteState(s: PlaybackSnapshot): void {
-    this.queue = s.queue;
+    this.queue = this.freshenQueue(s.queue);
     this.currentIndex = s.currentIndex;
     this.queuedCount = s.queuedCount ?? 0;
     this.isPlaying = s.isPlaying;
@@ -709,7 +719,7 @@ export class SongViewModel {
     const ci = s.currentIndex;
     const idx =
       typeof ci === "number" && ci >= 0 && ci < queue.length ? ci : 0;
-    this.queue = queue;
+    this.queue = this.freshenQueue(queue);
     this.currentIndex = idx;
     this.queuedCount =
       typeof s.queuedCount === "number" ? s.queuedCount : 0;
