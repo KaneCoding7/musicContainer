@@ -234,9 +234,18 @@ export function resolvePlaylistImage(
   imgDir: string
 ): Result<{ path: string; contentType: string }> {
   const row = db
-    .prepare("SELECT image_filename FROM playlists WHERE id = ? AND user_id = ?")
-    .get(id, userId) as { image_filename: string | null } | undefined;
+    .prepare("SELECT image_filename, user_id FROM playlists WHERE id = ?")
+    .get(id) as { image_filename: string | null; user_id: string } | undefined;
   if (!row) return err("not_found", `Playlist ${id} not found`);
+  // Owner, or anyone the playlist is shared with, may view the cover.
+  if (row.user_id !== userId) {
+    const shared = db
+      .prepare(
+        "SELECT 1 AS x FROM playlist_shares WHERE playlist_id = ? AND shared_with = ?"
+      )
+      .get(id, userId);
+    if (!shared) return err("not_found", `Playlist ${id} not found`);
+  }
   if (!row.image_filename) return err("not_found", "Playlist has no image");
   const path = join(imgDir, row.image_filename);
   if (!existsSync(path)) return err("not_found", "Image file missing on disk");
