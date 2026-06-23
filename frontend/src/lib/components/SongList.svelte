@@ -349,6 +349,7 @@
     justify-content: flex-start;
     flex-wrap: wrap;
     gap: 0.5rem;
+    margin-top: 1rem;
     margin-bottom: 0.75rem;
   }
   .ghost {
