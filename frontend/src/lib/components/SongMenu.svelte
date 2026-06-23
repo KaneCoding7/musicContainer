@@ -26,6 +26,7 @@
     onRemoveFromPlaylist,
     onAddToLibrary,
     inLibrary = false,
+    canModify = true,
   }: {
     vm: SongViewModel;
     song: Song;
@@ -38,6 +39,9 @@
     // When set (someone else's track), adds an "Add to my library" item.
     onAddToLibrary?: () => void | Promise<void>;
     inLibrary?: boolean; // already in my library — show a done state instead
+    // False for tracks the viewer doesn't own (shared/org playlists): hides the
+    // library-editing actions (Edit / Delete) they're not allowed to perform.
+    canModify?: boolean;
   } = $props();
 
   let open = $state(false);
@@ -204,15 +208,19 @@
             {song.clipDisabled ? "Show clip" : "Hide clip"}
           </button>
         {/if}
-        <button onclick={() => { editing = true; close(); }}>
-          <Icon name="edit" size={18} /> Edit
-        </button>
+        {#if canModify}
+          <button onclick={() => { editing = true; close(); }}>
+            <Icon name="edit" size={18} /> Edit
+          </button>
+        {/if}
         <a class="item" href={downloadUrl(song.id)} onclick={close}>
           <Icon name="download" size={18} /> Download
         </a>
-        <button class="danger" onclick={confirmDelete}>
-          <Icon name="delete" size={18} /> Delete
-        </button>
+        {#if canModify}
+          <button class="danger" onclick={confirmDelete}>
+            <Icon name="delete" size={18} /> Delete
+          </button>
+        {/if}
       {/if}
     </div>
   {/if}
