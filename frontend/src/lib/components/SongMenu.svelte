@@ -24,6 +24,8 @@
     onDelete,
     onChanged,
     onRemoveFromPlaylist,
+    onAddToLibrary,
+    inLibrary = false,
   }: {
     vm: SongViewModel;
     song: Song;
@@ -33,6 +35,9 @@
     // When set (i.e. shown within a playlist), adds a "Remove from playlist"
     // item that calls this instead of deleting the song from the library.
     onRemoveFromPlaylist?: () => void | Promise<void>;
+    // When set (someone else's track), adds an "Add to my library" item.
+    onAddToLibrary?: () => void | Promise<void>;
+    inLibrary?: boolean; // already in my library — show a done state instead
   } = $props();
 
   let open = $state(false);
@@ -182,6 +187,12 @@
         <button onclick={openPlaylists}>
           <Icon name="playlist_add" size={18} /> Add to playlist
         </button>
+        {#if onAddToLibrary}
+          <button disabled={inLibrary} onclick={() => { onAddToLibrary?.(); close(); }}>
+            <Icon name={inLibrary ? "check_circle" : "library_music"} size={18} />
+            {inLibrary ? "In your library" : "Add to my library"}
+          </button>
+        {/if}
         {#if onRemoveFromPlaylist}
           <button onclick={() => { onRemoveFromPlaylist?.(); close(); }}>
             <Icon name="playlist_remove" size={18} /> Remove from playlist

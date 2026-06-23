@@ -25,6 +25,15 @@
     onBulkEdit?: (ids: number[], fields: SongMetadata) => Promise<number>;
   } = $props();
 
+  // Collapsible search: a lone icon until clicked, then a search field expands.
+  let searchOpen = $state(false);
+  function autofocus(node: HTMLInputElement) {
+    node.focus();
+  }
+  function collapseSearchIfEmpty() {
+    if (!vm.query.trim()) searchOpen = false;
+  }
+
   // --- Multi-select (Cycle 16) ---
   let selecting = $state(false);
   let selected = $state<Set<number>>(new Set());
@@ -149,20 +158,32 @@
         totalDuration
       )}
     </p>
+    <div class="control-row">
     <div class="actions-bar">
       <PlayActions {vm} songs={vm.filteredSongs} />
     </div>
     <div class="toolbar">
-      <div class="search">
-        <Icon name="search" size={20} />
-        <input
-          id="song-search"
-          type="search"
-          placeholder="Search songs, artists, albums…"
-          bind:value={vm.query}
-        />
+      <div class="search" class:open={searchOpen}>
+        <button
+          class="icon-btn search-icon"
+          title="Search"
+          aria-label="Search"
+          onclick={() => (searchOpen ? collapseSearchIfEmpty() : (searchOpen = true))}
+        >
+          <Icon name="search" size={20} />
+        </button>
+        {#if searchOpen}
+          <input
+            id="song-search"
+            type="search"
+            placeholder="Search"
+            bind:value={vm.query}
+            use:autofocus
+            onblur={collapseSearchIfEmpty}
+          />
+        {/if}
       </div>
-      <label class="sort" title="Sort">
+      <label class="sort icon-btn" title="Sort">
         <Icon name="sort" size={20} />
         <select bind:value={vm.sortBy} aria-label="Sort songs">
           <option value="added">Recently added</option>
@@ -172,14 +193,17 @@
         </select>
       </label>
       {#if (onBulkAdd && playlists.length > 0) || onBulkEdit}
-        {#if selecting}
-          <button class="ghost" onclick={exitSelect}>Done</button>
-        {:else}
-          <button class="ghost" onclick={() => (selecting = true)}>
-            <Icon name="playlist_add" size={20} /> Select
-          </button>
-        {/if}
+        <button
+          class="icon-btn select-btn"
+          class:active={selecting}
+          title={selecting ? "Done selecting" : "Select"}
+          aria-label={selecting ? "Done selecting" : "Select"}
+          onclick={() => (selecting ? exitSelect() : (selecting = true))}
+        >
+          <Icon name={selecting ? "check" : "playlist_add"} size={20} />
+        </button>
       {/if}
+    </div>
     </div>
 
     {#if selecting}
@@ -343,14 +367,55 @@
   .actions-bar {
     margin-bottom: 0.85rem;
   }
+  /* Play/Shuffle (left) and the search/sort/select controls (right) share one row. */
+  .control-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 0.6rem 0 0.85rem;
+  }
+  .control-row .actions-bar {
+    margin: 0;
+    flex-shrink: 0;
+  }
+  /* The toolbar takes the remaining width and right-aligns; the search then
+     expands leftward into that space instead of wrapping to a new line. */
+  .control-row .toolbar {
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+  }
   .toolbar {
     display: flex;
     align-items: center;
-    justify-content: flex-start;
-    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 0.5rem;
-    margin-top: 0.6rem;
-    margin-bottom: 0.75rem;
+  }
+  /* Round icon button used by the collapsed search + the select toggle. */
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  @media (hover: hover) {
+    .icon-btn:hover {
+      background: var(--border-strong);
+      color: var(--text);
+    }
+  }
+  .icon-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
   }
   .ghost {
     display: inline-flex;
@@ -371,16 +436,19 @@
       background: var(--border-strong);
     }
   }
+  /* Sort is an icon-only button (uses .icon-btn for the circle); the native
+     select sits invisibly on top so a click opens the system dropdown. */
   .sort {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    flex-shrink: 0;
-    padding: 0.3rem 0.9rem;
-    background: var(--surface-2);
-    border: 1px solid var(--border-strong);
-    border-radius: 2rem;
-    color: var(--muted);
+    position: relative;
+  }
+  .sort select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    border: none;
+    cursor: pointer;
   }
   .sort select {
     background: transparent;
@@ -468,18 +536,31 @@
   li.selected {
     background: var(--active-bg);
   }
+  /* Collapsed: just the icon button. Open: expands into a search pill. */
   .search {
-    flex: 0 1 22rem;
-    min-width: 0;
-    max-width: 22rem;
-    box-sizing: border-box;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.3rem 1.1rem;
+    flex-shrink: 0;
+  }
+  .search.open {
+    flex: 0 1 13rem;
+    min-width: 0;
+    max-width: 13rem;
+    height: 2rem;
+    box-sizing: border-box;
+    gap: 0.4rem;
+    padding: 0 1.1rem 0 0.7rem;
     background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: 2rem;
+    color: var(--dim);
+  }
+  /* Inside the open pill the search icon is a plain prefix, not its own circle. */
+  .search.open .search-icon {
+    width: auto;
+    height: auto;
+    background: transparent;
+    border: none;
     color: var(--dim);
   }
   .search input {
@@ -739,18 +820,19 @@
       cursor: pointer;
     }
     /* Multi-select isn't offered on phones. */
-    .toolbar .ghost,
+    .toolbar .select-btn,
     .selbar {
       display: none;
     }
-    /* No column headers on phones. */
-    .list-head {
+    /* No column headers on phones. Scoped to .song-list so it can't be
+       overridden by a later base rule regardless of source order. */
+    .song-list .list-head {
       display: none;
     }
     /* Date, plays and duration body cells are dropped to keep rows readable. */
-    .col-date,
-    .col-plays,
-    .col-dur {
+    .song-list .col-date,
+    .song-list .col-plays,
+    .song-list .col-dur {
       display: none;
     }
     .row {

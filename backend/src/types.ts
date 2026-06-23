@@ -30,4 +30,5 @@ export interface Playlist {
   hasImage?: boolean; // has a custom uploaded cover image
   copiedFrom?: number | null; // source playlist id, if saved from a share
   copiedFromOwner?: string | null; // name of who owns the source playlist
+  shared?: boolean; // owner has shared this with at least one other user
 }

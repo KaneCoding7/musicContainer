@@ -273,6 +273,13 @@
     </div>
     <p class="muted small">Anyone with this link can listen to {current.name} — no account needed.</p>
   {/if}
+  <div class="list-head" aria-hidden="true">
+    <div class="head-track">
+      <span class="head-title">Title</span>
+      <span class="head-plays">Plays</span>
+    </div>
+    <span class="head-menu"></span>
+  </div>
   <ol>
     {#each current.songs as song, i (song.id)}
       {@const isCurrent = song.id === vm.currentSong?.id}
@@ -447,6 +454,11 @@
   /* On mobile, stack the avatar on top with the name and all action buttons
      centered in a row beneath it. */
   @media (max-width: 768px) {
+    /* No column headers on phones. Scoped to .detail so it wins over the base
+       .list-head rule regardless of source order. */
+    .detail .list-head {
+      display: none;
+    }
     /* Artist detail keeps its header fixed and scrolls the track list. */
     .detail {
       height: 100%;
@@ -668,11 +680,42 @@
   .plays {
     display: inline-flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 0.15rem;
+    width: 3rem;
     flex-shrink: 0;
     color: var(--muted);
     font-size: 0.78rem;
     font-variant-numeric: tabular-nums;
+  }
+  /* Column headers (web only). head-track mirrors the .track box so "Plays"
+     lines up over the play counts. */
+  .list-head {
+    display: flex;
+    align-items: center;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-strong);
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .head-track {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 0.75rem;
+  }
+  .head-title {
+    flex: 1;
+    min-width: 0;
+  }
+  .head-plays {
+    width: 3rem;
+    text-align: right;
+  }
+  .head-menu {
+    width: 2.25rem;
   }
   .t-name {
     overflow: hidden;

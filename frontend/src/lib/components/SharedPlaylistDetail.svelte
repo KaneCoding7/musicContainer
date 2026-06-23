@@ -3,6 +3,7 @@
   import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import PlaylistMembers from "$lib/components/PlaylistMembers.svelte";
+  import SongMenu from "$lib/components/SongMenu.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
   import { reorderHandle } from "$lib/actions/reorderHandle";
   import { copySongToLibrary, thumbUrl } from "$lib/services/songService";
@@ -62,6 +63,15 @@
   // True if I already own this song (it's in my library).
   const ownsSong = (id: number) => songVm.songs.some((s) => s.id === id);
 
+  // Total runtime, e.g. "4h 3m" or "12m" (empty if unknown). Mirrors the owner view.
+  const totalDuration = $derived.by(() => {
+    const secs = songs.reduce((acc, s) => acc + (s.duration ?? 0), 0);
+    if (secs <= 0) return "";
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  });
+
   async function addToLibrary(songId: number) {
     if (addingLib !== null || addedToLib.has(songId)) return;
     addingLib = songId;
@@ -111,6 +121,9 @@
   }
 
   async function removeSong(songId: number) {
+    const song = songs.find((s) => s.id === songId);
+    const label = song?.originalFilename ?? "this track";
+    if (!confirm(`Remove "${label}" from this playlist?`)) return;
     error = null;
     try {
       await removeSongFromPlaylist(playlist.id, songId);
@@ -144,6 +157,29 @@
   }
 </script>
 
+{#snippet detailActions()}
+  <div class="detail-actions">
+    {#if playlist.canEdit && songs.length > 1}
+      <button
+        class="head-action"
+        class:on={reordering}
+        title={reordering ? "Done" : "Reorder"}
+        aria-label={reordering ? "Done" : "Reorder"}
+        onclick={() => (reordering = !reordering)}
+        ><Icon name={reordering ? "check" : "swap_vert"} size={20} /></button
+      >
+    {/if}
+    {#if songs.length > 0}
+      <a
+        class="head-action"
+        href={playlistZipUrl(playlist.id)}
+        title="Download as zip"
+        aria-label="Download playlist as zip"><Icon name="download" size={20} /></a
+      >
+    {/if}
+  </div>
+{/snippet}
+
 <button class="back" onclick={onClose}>
   <Icon name="arrow_back" size={20} /> All playlists
 </button>
@@ -163,47 +199,44 @@
     </span>
     <div class="head-info">
       <h3>
-        {playlist.name}
+        <span class="pl-name">{playlist.name}</span>
         {#if playlist.canEdit}<span class="edit-tag">collaborative</span>{/if}
       </h3>
       <p class="muted">
-        Shared by {playlist.ownerName} · {songs.length}
+        {songs.length}
         {songs.length === 1 ? "track" : "tracks"}
+        {#if totalDuration}· {totalDuration}{/if}
       </p>
-      <div class="detail-actions">
-        {#if playlist.canEdit && songs.length > 1}
-          <button
-            class="head-action"
-            class:on={reordering}
-            title={reordering ? "Done" : "Reorder"}
-            aria-label={reordering ? "Done" : "Reorder"}
-            onclick={() => (reordering = !reordering)}
-            ><Icon name={reordering ? "check" : "swap_vert"} size={20} /></button
-          >
-        {/if}
-        {#if songs.length > 0}
-          <a
-            class="head-action"
-            href={playlistZipUrl(playlist.id)}
-            title="Download as zip"
-            aria-label="Download playlist as zip"><Icon name="download" size={20} /></a
-          >
-        {/if}
+      <PlaylistMembers playlistId={playlist.id} />
+      <!-- Mobile: icons stay in the header under the people pill. -->
+      <div class="head-actions-mobile">
+        {@render detailActions()}
       </div>
     </div>
   </div>
 
-  {#if songs.length > 0}
-    <div class="actions-bar">
-      <PlayActions vm={songVm} {songs} />
+  <!-- Desktop: Play/Shuffle on the left, the permission-gated icons on the
+       right of the same row. On mobile this row is just Play/Shuffle. -->
+  <div class="toolbar-row">
+    {#if songs.length > 0}
+      <div class="actions-bar">
+        <PlayActions vm={songVm} {songs} />
+      </div>
+    {/if}
+    <div class="head-actions-desktop">
+      {@render detailActions()}
     </div>
-  {/if}
-
-  <PlaylistMembers playlistId={playlist.id} />
+  </div>
 
   {#if songs.length === 0}
     <p class="muted">No songs in this playlist yet.</p>
   {:else}
+    <div class="list-head" aria-hidden="true">
+      <span class="head-title">Title</span>
+      <span class="head-plays">Plays</span>
+      <span class="head-menu"></span>
+      {#if playlist.canEdit}<span class="head-remove"></span>{/if}
+    </div>
     <ol>
       {#each songs as song, i (song.id)}
         {@const isCurrent = song.id === songVm.currentSong?.id}
@@ -250,26 +283,22 @@
               <Icon name="person" size={13} />{song.addedBy}
             </span>
           {/if}
-          {#if !ownsSong(song.id)}
-            <button
-              class="to-lib"
-              class:done={addedToLib.has(song.id)}
-              class:loading={addingLib === song.id}
-              title={addedToLib.has(song.id) ? "In your library" : "Add to my library"}
-              aria-label="Add to my library"
-              disabled={addingLib !== null || addedToLib.has(song.id)}
-              onclick={() => addToLibrary(song.id)}
-            >
-              <Icon
-                name={addedToLib.has(song.id)
-                  ? "check_circle"
-                  : addingLib === song.id
-                    ? "progress_activity"
-                    : "library_music"}
-                size={18}
-              />
-            </button>
-          {/if}
+          <span
+            class="plays"
+            title={`${song.playCount} play${song.playCount === 1 ? "" : "s"}`}
+          >
+            <Icon name="play_arrow" size={13} />{song.playCount}
+          </span>
+          <SongMenu
+            vm={songVm}
+            {song}
+            onRemoveFromPlaylist={playlist.canEdit
+              ? () => removeSong(song.id)
+              : undefined}
+            onAddToLibrary={() => addToLibrary(song.id)}
+            inLibrary={ownsSong(song.id) || addedToLib.has(song.id)}
+            onChanged={refreshSongs}
+          />
           {#if playlist.canEdit}
             <button
               class="remove"
@@ -344,11 +373,6 @@
     margin-bottom: 1rem;
     font: inherit;
   }
-  @media (hover: hover) {
-    .back:hover {
-      color: var(--text);
-    }
-  }
   .head {
     display: flex;
     gap: 1.25rem;
@@ -357,8 +381,8 @@
   }
   .cover-lg {
     flex-shrink: 0;
-    width: 120px;
-    height: 120px;
+    width: 168px;
+    height: 168px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -375,18 +399,30 @@
   .head-info {
     min-width: 0;
   }
+  /* Always stack the collaborative tag under the title. */
   .head-info h3 {
     margin: 0 0 0.25rem;
     font-size: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+  .pl-name {
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
   }
   .head-info .muted {
     margin: 0 0 0.6rem;
     padding: 0;
+    font-size: 0.82rem;
   }
   .edit-tag {
+    flex-shrink: 0;
     font-size: 0.6rem;
     vertical-align: middle;
     padding: 0.1rem 0.4rem;
@@ -421,13 +457,79 @@
     background: var(--active-bg);
     color: var(--accent-text);
   }
-  .actions-bar {
+  /* Desktop: Play/Shuffle (left) and the permission-gated icons (right) share
+     one row. On mobile the icons live in the header instead. */
+  .toolbar-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
     margin-bottom: 1rem;
+  }
+  .actions-bar {
+    margin-bottom: 0;
+  }
+  .head-actions-desktop {
+    margin-left: auto;
+  }
+  .head-actions-mobile {
+    display: none;
+  }
+  /* Track-list column headers (web only). */
+  .list-head {
+    display: flex;
+    align-items: center;
+    padding: 0 0 0.5rem 0.5rem;
+    border-bottom: 1px solid var(--border-strong);
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .head-title {
+    flex: 1;
+    min-width: 0;
+  }
+  .head-plays {
+    width: 3rem;
+    text-align: right;
+  }
+  .head-menu {
+    width: 2.25rem;
+  }
+  .head-remove {
+    width: 2.45rem;
+  }
+  .plays {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.15rem;
+    width: 3rem;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
   }
   ol {
     list-style: none;
     padding: 0;
     margin: 0 0 1rem;
+  }
+  @media (max-width: 768px) {
+    /* No track-list column headers on phones; icons move into the header.
+       Scoped to .detail so it wins regardless of source order. */
+    .detail .list-head {
+      display: none;
+    }
+    .head-actions-desktop {
+      display: none;
+    }
+    .head-actions-mobile {
+      display: block;
+      margin-top: 0.25rem;
+    }
+    .head-actions-mobile .detail-actions {
+      gap: 0;
+    }
   }
   li {
     display: flex;
@@ -540,35 +642,6 @@
     font-size: 0.76rem;
     font-weight: 400;
     color: var(--dim);
-  }
-  .to-lib {
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    padding: 0.4rem 0.6rem;
-    border-radius: 0.35rem;
-  }
-  @media (hover: hover) {
-    .to-lib:hover:not(:disabled) {
-      background: var(--surface-2);
-      color: var(--accent-text);
-    }
-  }
-  .to-lib.done {
-    color: var(--accent-text);
-    cursor: default;
-  }
-  .to-lib.loading :global(.material-symbols-rounded) {
-    animation: spin 1.2s linear infinite;
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
   .remove {
     display: inline-flex;

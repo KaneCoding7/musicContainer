@@ -21,6 +21,11 @@
     const days = Math.floor(hrs / 24);
     return `${days}d ago`;
   }
+  function formatDuration(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  }
 </script>
 
 {#if vm.recentlyPlayed.length === 0}
@@ -28,6 +33,15 @@
 {:else}
   <div class="recent">
   <div class="actions-bar"><PlayActions {vm} songs={vm.recentlyPlayed} /></div>
+  <div class="list-head" aria-hidden="true">
+    <span class="head-title">Title</span>
+    <div class="row-end">
+      <span class="head-date">Last played</span>
+      <span class="col-plays">Plays</span>
+      <span class="col-dur"><Icon name="schedule" size={18} /></span>
+      <span class="col-menu"></span>
+    </div>
+  </div>
   <ul>
     {#each vm.recentlyPlayed as song, i (song.id)}
       {@const isCurrent = song.id === vm.currentSong?.id}
@@ -50,15 +64,20 @@
             <span class="name">{song.originalFilename}</span>
             {#if song.artist}<span class="artist">{song.artist}</span>{/if}
           </span>
-          <span class="stats">
-            <span class="when">{relativeTime(song.lastPlayedAt ?? "")}</span>
-            <span class="plays">
-              <Icon name="play_arrow" fill size={14} />
-              {song.playCount}
-            </span>
-          </span>
         </button>
-        <SongMenu {vm} {song} />
+        <div class="row-end">
+          <span class="col-date">{relativeTime(song.lastPlayedAt ?? "")}</span>
+          <span
+            class="col-plays plays"
+            title={`${song.playCount} play${song.playCount === 1 ? "" : "s"}`}
+          >
+            <Icon name="play_arrow" size={13} />{song.playCount}
+          </span>
+          <span class="col-dur dur">
+            {song.duration ? formatDuration(song.duration) : "—"}
+          </span>
+          <SongMenu {vm} {song} />
+        </div>
       </li>
     {/each}
   </ul>
@@ -68,6 +87,17 @@
 <style>
   /* Mobile: fixed play-actions header, scrolling list (matches All Songs). */
   @media (max-width: 768px) {
+    /* No column headers on phones; drop metadata columns to keep rows clean.
+       Scoped to .recent so these win over the base rules regardless of source
+       order (equal-specificity rules would otherwise lose to the later base). */
+    .recent .list-head {
+      display: none;
+    }
+    .recent .col-date,
+    .recent .col-plays,
+    .recent .col-dur {
+      display: none;
+    }
     .recent {
       height: 100%;
       display: flex;
@@ -165,19 +195,66 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .stats {
+  /* Column headers + metadata columns mirror the All Songs view (web only). */
+  .list-head {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.15rem;
-    flex-shrink: 0;
+    align-items: center;
+    padding: 0 0 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border-strong);
     color: var(--muted);
     font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .list-head .col-dur,
+  .list-head .col-plays {
+    display: inline-flex;
+    justify-content: flex-end;
+  }
+  .head-title {
+    flex: 1;
+    min-width: 0;
+  }
+  .row-end {
+    display: flex;
+    align-items: center;
+    gap: 1.6rem;
+    flex-shrink: 0;
+  }
+  .col-date {
+    width: 7.5rem;
+    text-align: right;
+    color: var(--dim);
+    font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .head-date {
+    width: 7.5rem;
+    text-align: right;
+  }
+  .col-plays {
+    width: 3rem;
+    justify-content: flex-end;
+  }
+  .col-dur {
+    width: 3rem;
+    text-align: right;
+  }
+  .col-dur.dur {
+    color: var(--dim);
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .col-menu {
+    width: 2.25rem;
   }
   .plays {
     display: inline-flex;
     align-items: center;
     gap: 0.15rem;
     color: var(--dim);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
   }
 </style>
