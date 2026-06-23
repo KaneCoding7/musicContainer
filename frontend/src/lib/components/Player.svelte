@@ -36,7 +36,12 @@
   // per listen (reset when the same track restarts — replay / repeat-one).
   let recordedSongId: number | null = null;
 
-  const song = $derived(vm.currentSong);
+  // Read the queue + index directly (not vm.currentSong) so this subscribes to
+  // the queue array itself — replaceSong() updating the *currently playing*
+  // track's entry then re-renders the player live (e.g. hide/show clip).
+  const song = $derived(
+    vm.currentIndex == null ? null : (vm.queue[vm.currentIndex] ?? null)
+  );
 
   // Warm the browser cache with nearby cover art (±2 tracks) so the stack
   // animation almost always has the image ready when you skip or go back.
