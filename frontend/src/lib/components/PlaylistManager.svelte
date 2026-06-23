@@ -9,7 +9,7 @@
   import UserAutocomplete from "$lib/components/UserAutocomplete.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
   import { reorderHandle } from "$lib/actions/reorderHandle";
-  import { playlistZipUrl } from "$lib/services/playlistService";
+  import { playlistImageUrl, playlistZipUrl } from "$lib/services/playlistService";
   import { thumbUrl } from "$lib/services/songService";
   import {
     disablePublicLink,
@@ -32,6 +32,32 @@
   let newName = $state("");
   let addOpen = $state(false);
   let addQuery = $state("");
+
+  // Search/filter the playlist grid by name.
+  let query = $state("");
+  const filteredPlaylists = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    return q
+      ? vm.playlists.filter((p) => p.name.toLowerCase().includes(q))
+      : vm.playlists;
+  });
+
+  // Create-playlist modal (name + optional cover image).
+  let showCreate = $state(false);
+  let newImage = $state<File | null>(null);
+  let newImagePreview = $state<string | null>(null);
+  let creating = $state(false);
+  function openCreate() {
+    newName = "";
+    newImage = null;
+    newImagePreview = null;
+    showCreate = true;
+  }
+  function onPickImage(e: Event) {
+    const f = (e.target as HTMLInputElement).files?.[0] ?? null;
+    newImage = f;
+    newImagePreview = f ? URL.createObjectURL(f) : null;
+  }
 
   // The open playlist is driven by the URL (?playlist=id) so it's a real
   // drill-in view: deep-linkable and the browser back button returns to the
@@ -136,12 +162,17 @@
     }
   }
 
-  async function createPlaylist() {
+  async function submitCreate() {
     const name = newName.trim();
-    if (!name) return;
-    const ok = await vm.create(name);
+    if (!name || creating) return;
+    creating = true;
+    const ok = await vm.create(name, newImage);
+    creating = false;
     if (ok) {
+      showCreate = false;
       newName = "";
+      newImage = null;
+      newImagePreview = null;
       if (vm.selectedId !== null) openPlaylist(vm.selectedId); // drill into it
     }
   }
@@ -206,14 +237,14 @@
 
 <div class="playlists">
   {#if openId === null}
-  <div class="create">
-    <input
-      type="text"
-      placeholder="New playlist name"
-      bind:value={newName}
-      onkeydown={(e) => e.key === "Enter" && createPlaylist()}
-    />
-    <button onclick={createPlaylist} disabled={!newName.trim()}>Create</button>
+  <div class="pl-toolbar">
+    <div class="search">
+      <Icon name="search" size={20} />
+      <input type="search" placeholder="Search playlists…" bind:value={query} />
+    </div>
+    <button class="create-btn" onclick={openCreate}>
+      <Icon name="add" size={20} /> Create
+    </button>
   </div>
 
   {#if vm.error}
@@ -221,16 +252,20 @@
   {/if}
 
   {#if vm.playlists.length === 0}
-    <p class="muted">No playlists yet. Create one above.</p>
+    <p class="muted">No playlists yet. Tap Create to make one.</p>
+  {:else if filteredPlaylists.length === 0}
+    <p class="muted">No playlists match “{query}”.</p>
   {:else}
     <div class="cards">
-      {#each vm.playlists as playlist (playlist.id)}
+      {#each filteredPlaylists as playlist (playlist.id)}
         <button
           class="card"
           onclick={() => openPlaylist(playlist.id)}
         >
           <span class="cover">
-            {#if playlist.coverSongId != null}
+            {#if playlist.hasImage}
+              <img src={playlistImageUrl(playlist.id, 512)} alt="" />
+            {:else if playlist.coverSongId != null}
               <img src={thumbUrl(playlist.coverSongId, 512)} alt="" />
             {:else}
               <Icon name="queue_music" size={26} />
@@ -512,11 +547,157 @@
   {/if}
 </div>
 
+{#if showCreate}
+  <div
+    class="modal-backdrop"
+    role="button"
+    tabindex="-1"
+    onclick={(e) => e.target === e.currentTarget && (showCreate = false)}
+    onkeydown={(e) => e.key === "Escape" && (showCreate = false)}
+  >
+    <div
+      class="modal"
+      role="dialog"
+      tabindex="-1"
+      aria-modal="true"
+      aria-label="Create playlist"
+    >
+      <h3>New playlist</h3>
+      <label class="img-pick">
+        <span class="img-preview">
+          {#if newImagePreview}
+            <img src={newImagePreview} alt="" />
+          {:else}
+            <Icon name="add_photo_alternate" size={28} />
+          {/if}
+        </span>
+        <input type="file" accept="image/*" onchange={onPickImage} />
+        <span class="img-hint">{newImage ? "Change image" : "Add image (optional)"}</span>
+      </label>
+      <input
+        class="name-input"
+        type="text"
+        placeholder="Playlist name"
+        bind:value={newName}
+        onkeydown={(e) => e.key === "Enter" && submitCreate()}
+      />
+      <div class="modal-actions">
+        <button class="secondary" onclick={() => (showCreate = false)}>Cancel</button>
+        <button class="primary" onclick={submitCreate} disabled={!newName.trim() || creating}>
+          {creating ? "Creating…" : "Create"}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
-  .create {
+  .pl-toolbar {
     display: flex;
+    align-items: center;
     gap: 0.5rem;
     margin-bottom: 1rem;
+  }
+  .search {
+    flex: 1;
+    min-width: 0;
+    max-width: 22rem;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1.1rem;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 2rem;
+    color: var(--dim);
+  }
+  .search input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font: inherit;
+  }
+  .search input::placeholder {
+    color: var(--dim);
+  }
+  .create-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex-shrink: 0;
+  }
+  /* Create-playlist modal */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  .modal {
+    width: min(380px, 100%);
+    box-sizing: border-box;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+  .modal h3 {
+    margin: 0;
+    text-align: center;
+  }
+  .img-pick {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+  }
+  .img-preview {
+    width: 120px;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-2);
+    border-radius: 0.6rem;
+    color: var(--dim);
+    overflow: hidden;
+  }
+  .img-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .img-pick input[type="file"] {
+    display: none;
+  }
+  .img-hint {
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+  .modal-actions .secondary {
+    background: var(--border-strong);
+  }
+  @media (max-width: 768px) {
+    .search {
+      max-width: none;
+    }
   }
   input[type="text"] {
     flex: 1;

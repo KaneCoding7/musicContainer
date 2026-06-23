@@ -39,6 +39,27 @@ export async function createPlaylist(name: string): Promise<Playlist> {
   return (await res.json()).playlist as Playlist;
 }
 
+// Uploads/replaces a playlist's custom cover image; returns the updated playlist.
+export async function uploadPlaylistImage(
+  playlistId: number,
+  file: File
+): Promise<Playlist> {
+  const form = new FormData();
+  form.append("image", file);
+  const res = await fetch(`${apiBase()}/api/playlists/${playlistId}/image`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: form,
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).playlist as Playlist;
+}
+
+// URL for a playlist's custom cover image (only meaningful when hasImage).
+export function playlistImageUrl(playlistId: number, size = 512): string {
+  return withToken(`${apiBase()}/api/playlists/${playlistId}/image?size=${size}`);
+}
+
 // Renames a playlist; returns the updated playlist.
 export async function renamePlaylist(
   playlistId: number,

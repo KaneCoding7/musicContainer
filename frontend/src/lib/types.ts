@@ -27,6 +27,7 @@ export interface Playlist {
   createdAt: string;
   trackCount?: number;
   coverSongId?: number | null;
+  hasImage?: boolean;
 }
 
 export interface ApiError {

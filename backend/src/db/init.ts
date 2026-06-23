@@ -277,6 +277,11 @@ export function migrate(database: Database.Database): void {
   if (!plColumns.includes("user_id")) {
     database.exec("ALTER TABLE playlists ADD COLUMN user_id TEXT");
   }
+  // Optional custom cover image (in ART_DIR). Null → fall back to the first
+  // track's album art.
+  if (!plColumns.includes("image_filename")) {
+    database.exec("ALTER TABLE playlists ADD COLUMN image_filename TEXT");
+  }
   // Links a saved copy back to the shared playlist it was copied from, so the
   // "Add to my playlists" action can toggle (and we can tell it's already saved).
   if (!plColumns.includes("copied_from")) {

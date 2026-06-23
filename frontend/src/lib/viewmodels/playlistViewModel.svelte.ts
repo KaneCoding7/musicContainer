@@ -26,11 +26,18 @@ export class PlaylistViewModel {
     }
   }
 
-  // Creates a playlist and selects it. Returns true on success.
-  async create(name: string): Promise<boolean> {
+  // Creates a playlist (optionally with a cover image) and selects it.
+  async create(name: string, image?: File | null): Promise<boolean> {
     this.error = null;
     try {
-      const playlist = await api.createPlaylist(name);
+      let playlist = await api.createPlaylist(name);
+      if (image) {
+        try {
+          playlist = await api.uploadPlaylistImage(playlist.id, image);
+        } catch {
+          /* image is optional — keep the playlist even if the upload fails */
+        }
+      }
       this.playlists = [playlist, ...this.playlists];
       await this.select(playlist.id);
       return true;
