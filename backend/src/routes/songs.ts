@@ -14,6 +14,7 @@ import { dirname, extname, join } from "node:path";
 import { Router } from "express";
 import multer from "multer";
 import { ART_DIR, CLIPS_DIR, getDb, MUSIC_DIR } from "../db/init.js";
+import { preparedDownload } from "../functional/download.js";
 import {
   copySongToLibrary,
   deleteSong,
@@ -1186,32 +1187,6 @@ songsRouter.get("/songs/:id/download", async (req, res) => {
       .status(404)
       .json({ error: { code: "not_found", message: `Song ${id} not found` } });
   }
-  const result = resolveSongFileById(getDb(), id, MUSIC_DIR);
-  if (!result.ok) {
-    return res
-      .status(statusForError(result.error.code))
-      .json({ error: result.error });
-  }
-  const { path: audioPath, originalFilename } = result.value;
-
-  if (extname(originalFilename).toLowerCase() !== ".mp3") {
-    return res.download(audioPath, originalFilename);
-  }
-
-  const row = getDb()
-    .prepare(
-      "SELECT original_filename, artist, album, source_url, art_filename FROM songs WHERE id = ?"
-    )
-    .get(id) as
-    | {
-        original_filename: string;
-        artist: string | null;
-        album: string | null;
-        source_url: string | null;
-        art_filename: string | null;
-      }
-    | undefined;
-
   const work = mkdtempSync(join(dirname(MUSIC_DIR), "dl-"));
   const cleanup = () => {
     try {
@@ -1220,37 +1195,14 @@ songsRouter.get("/songs/:id/download", async (req, res) => {
       /* best-effort */
     }
   };
-  try {
-    const title = (row?.original_filename ?? originalFilename).replace(
-      /\.[^.]+$/,
-      ""
-    );
-    const artPath = row?.art_filename ? join(ART_DIR, row.art_filename) : null;
-    const hasArt = !!artPath && existsSync(artPath);
-    const out = join(work, "tagged.mp3");
-    const args = ["-y", "-i", audioPath];
-    if (hasArt) args.push("-i", artPath!);
-    args.push("-map", "0:a");
-    if (hasArt) args.push("-map", "1:0");
-    args.push("-c:a", "copy");
-    if (hasArt) args.push("-c:v", "mjpeg", "-disposition:v:0", "attached_pic");
-    args.push("-id3v2_version", "3", "-metadata", `title=${title}`);
-    if (row?.artist) args.push("-metadata", `artist=${row.artist}`);
-    if (row?.album) args.push("-metadata", `album=${row.album}`);
-    // Stash the source link in a custom TXXX:SOURCE_URL frame, base64url-encoded
-    // so the "/" in the URL doesn't get split across frames by ffmpeg/ID3.
-    if (row?.source_url) {
-      const enc = Buffer.from(row.source_url, "utf8").toString("base64url");
-      args.push("-metadata", `SOURCE_URL=${enc}`);
-    }
-    args.push(out);
-    await run("ffmpeg", args);
-    if (!existsSync(out)) throw new Error("tagging produced no file");
-    return res.download(out, originalFilename, () => cleanup());
-  } catch {
+  const prepared = await preparedDownload(getDb(), id, MUSIC_DIR, ART_DIR, work);
+  if (!prepared) {
     cleanup();
-    return res.download(audioPath, originalFilename);
+    return res
+      .status(404)
+      .json({ error: { code: "not_found", message: `Song ${id} not found` } });
   }
+  return res.download(prepared.path, prepared.name, () => cleanup());
 });
 
 // GET /api/songs/:id/stream — stream an audio file with HTTP Range support

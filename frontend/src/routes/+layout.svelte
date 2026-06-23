@@ -80,6 +80,20 @@
       sans-serif;
   }
 
+  /* Native dropdowns: iOS renders its own picker, but Windows/Chrome paints the
+     popup from the element's own colors — without these the option list falls
+     back to a white system background with our light text and is unreadable.
+     Setting select + option colors explicitly fixes it cross-platform. */
+  :global(select) {
+    color: var(--text);
+    background-color: var(--surface-2);
+  }
+  :global(select option),
+  :global(select optgroup) {
+    color: var(--text);
+    background-color: var(--surface);
+  }
+
   /* Transient confirmation toast (e.g. swipe-to-queue). */
   :global(.swipe-toast) {
     position: fixed;

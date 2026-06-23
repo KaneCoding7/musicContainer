@@ -9,8 +9,8 @@
   import { copySongToLibrary, thumbUrl } from "$lib/services/songService";
   import {
     addSongToPlaylist,
+    downloadPlaylistZip,
     playlistImageUrl,
-    playlistZipUrl,
     removeSongFromPlaylist,
     reorderPlaylist,
   } from "$lib/services/playlistService";
@@ -37,6 +37,20 @@
   let error = $state<string | null>(null);
   let reordering = $state(false);
   let orgNoteOpen = $state(false); // collapsed "what's this?" explainer
+  let downloading = $state(false);
+
+  // Download as a zip, with a spinner while the server tags + bundles tracks.
+  async function downloadZip() {
+    if (downloading) return;
+    downloading = true;
+    try {
+      await downloadPlaylistZip(playlist.id, playlist.name);
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Download failed";
+    } finally {
+      downloading = false;
+    }
+  }
   let addOpen = $state(false);
   let addQuery = $state("");
   let addedToLib = $state<Set<number>>(new Set());
@@ -171,12 +185,16 @@
       >
     {/if}
     {#if songs.length > 0}
-      <a
+      <button
         class="head-action"
-        href={playlistZipUrl(playlist.id)}
+        class:loading={downloading}
         title="Download as zip"
-        aria-label="Download playlist as zip"><Icon name="download" size={20} /></a
+        aria-label="Download playlist as zip"
+        disabled={downloading}
+        onclick={downloadZip}
       >
+        <Icon name={downloading ? "progress_activity" : "download"} size={20} />
+      </button>
     {/if}
   </div>
 {/snippet}
@@ -201,7 +219,7 @@
     <div class="head-info">
       <h3>
         <span class="pl-name">{playlist.name}</span>
-        {#if playlist.isOrg}<span class="edit-tag">team</span>{:else if playlist.canEdit}<span class="edit-tag">collaborative</span>{/if}
+        {#if playlist.isOrg}<span class="edit-tag">team</span>{:else if playlist.isGlobal}<span class="edit-tag">global</span>{:else if playlist.canEdit}<span class="edit-tag">collaborative</span>{/if}
       </h3>
       <p class="muted">
         {songs.length}
@@ -229,7 +247,7 @@
     </div>
   </div>
 
-  {#if playlist.isOrg}
+  {#if playlist.isOrg || playlist.isGlobal}
     <div class="org-info">
       <button
         class="org-tag"
@@ -237,16 +255,23 @@
         aria-expanded={orgNoteOpen}
         onclick={() => (orgNoteOpen = !orgNoteOpen)}
       >
-        <Icon name="group" size={14} />
+        <Icon name={playlist.isGlobal ? "public" : "group"} size={14} />
         What's this?
         <Icon name={orgNoteOpen ? "expand_less" : "expand_more"} size={16} />
       </button>
       {#if orgNoteOpen}
         <p class="org-note">
-          <strong>Team playlist.</strong> Everyone at {playlist.ownerName} shares
-          this one. Add songs from your library and they show up for the whole
-          team — anyone can play them or save them to their own library. You can
-          only remove the tracks <em>you</em> added.
+          {#if playlist.isGlobal}
+            <strong>Global playlist.</strong> Everyone on the system shares this
+            one. Add songs from your library and they show up for everybody —
+            anyone can play them or save them to their own library. You can only
+            remove the tracks <em>you</em> added.
+          {:else}
+            <strong>Team playlist.</strong> Everyone at {playlist.ownerName} shares
+            this one. Add songs from your library and they show up for the whole
+            team — anyone can play them or save them to their own library. You can
+            only remove the tracks <em>you</em> added.
+          {/if}
         </p>
       {/if}
     </div>
@@ -264,7 +289,8 @@
     <ol>
       {#each songs as song, i (song.id)}
         {@const isCurrent = song.id === songVm.currentSong?.id}
-        {@const canRemove = playlist.isOrg ? !!song.addedByMe : playlist.canEdit}
+        {@const canRemove =
+          playlist.isOrg || playlist.isGlobal ? !!song.addedByMe : playlist.canEdit}
         <li
           class:current={isCurrent}
           class:playing={isCurrent && songVm.isPlaying}
@@ -471,6 +497,17 @@
     cursor: pointer;
     padding: 0.35rem 0.5rem;
     border-radius: 0.4rem;
+  }
+  .head-action:disabled {
+    cursor: default;
+  }
+  .head-action.loading :global(.material-symbols-rounded) {
+    animation: spin 1.1s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   @media (hover: hover) {
     .head-action:hover {

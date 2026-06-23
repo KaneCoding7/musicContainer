@@ -96,6 +96,7 @@ interface PlaylistListRow extends PlaylistRow {
   copied_from: number | null;
   copied_from_owner: string | null;
   shared: number;
+  is_global: number;
 }
 
 // Lists a user's playlists (with track count + cover art song), newest first.
@@ -114,7 +115,8 @@ export function listPlaylists(db: Database, userId: string): Result<Playlist[]> 
                    JOIN "user" u ON u.id = op.user_id
                    WHERE op.id = p.copied_from) AS copied_from_owner,
                 EXISTS (SELECT 1 FROM playlist_shares ps2
-                          WHERE ps2.playlist_id = p.id) AS shared
+                          WHERE ps2.playlist_id = p.id) AS shared,
+                p.is_global
          FROM playlists p
          WHERE p.user_id = ?
          ORDER BY datetime(p.created_at) DESC, p.id DESC`
@@ -128,6 +130,7 @@ export function listPlaylists(db: Database, userId: string): Result<Playlist[]> 
         copiedFrom: row.copied_from,
         copiedFromOwner: row.copied_from_owner,
         shared: row.shared === 1,
+        isGlobal: row.is_global === 1,
       }))
     );
   } catch (e) {
@@ -256,7 +259,7 @@ export function resolvePlaylistImage(
         "SELECT 1 AS x FROM playlist_shares WHERE playlist_id = ? AND shared_with = ?"
       )
       .get(id, userId);
-    if (!shared && !isOrgMemberOf(db, id, userId)) {
+    if (!shared && !isOrgMemberOf(db, id, userId) && !isGlobalPlaylist(db, id)) {
       return err("not_found", `Playlist ${id} not found`);
     }
   }
@@ -286,7 +289,38 @@ export function canEditPlaylist(
     .get(playlistId, userId);
   if (editor) return true;
   // Any member of an org/team playlist (same email domain) may add tracks.
-  return isOrgMemberOf(db, playlistId, userId);
+  if (isOrgMemberOf(db, playlistId, userId)) return true;
+  // Global playlists are collaborative for every user on the system.
+  return isGlobalPlaylist(db, playlistId);
+}
+
+// True if the playlist is shared with the whole system.
+export function isGlobalPlaylist(db: Database, playlistId: number): boolean {
+  const row = db
+    .prepare("SELECT 1 AS x FROM playlists WHERE id = ? AND is_global = 1")
+    .get(playlistId);
+  return !!row;
+}
+
+// Toggles whether a playlist is shared with every user (owner only).
+export function setPlaylistGlobal(
+  db: Database,
+  id: number,
+  userId: string,
+  global: boolean
+): Result<Playlist> {
+  const owned = getPlaylist(db, id, userId);
+  if (!owned.ok) return owned;
+  try {
+    db.prepare("UPDATE playlists SET is_global = ? WHERE id = ? AND user_id = ?").run(
+      global ? 1 : 0,
+      id,
+      userId
+    );
+    return getPlaylist(db, id, userId);
+  } catch (e) {
+    return err("internal", `Failed to update playlist: ${(e as Error).message}`);
+  }
 }
 
 // Ensures the user can edit the playlist (owner or editor); not_found otherwise.
@@ -482,13 +516,18 @@ export function removeSongFromPlaylist(
   const access = requireEditAccess(db, playlistId, userId);
   if (!access.ok) return access;
 
-  // On org/team playlists, members may only remove tracks they themselves added.
-  const isOrg = !!db
-    .prepare("SELECT 1 AS x FROM playlists WHERE id = ? AND org_domain IS NOT NULL")
-    .get(playlistId);
+  // Collaborative playlists (org/team + global) use per-song ownership: a member
+  // may only remove tracks they added. The playlist's owner can remove any track
+  // (moderation); org playlists have no owner, so it's strictly per-song there.
+  const collab = db
+    .prepare(
+      "SELECT user_id FROM playlists WHERE id = ? AND (org_domain IS NOT NULL OR is_global = 1)"
+    )
+    .get(playlistId) as { user_id: string | null } | undefined;
+  const perSong = !!collab && collab.user_id !== userId;
 
   try {
-    const info = isOrg
+    const info = perSong
       ? db
           .prepare(
             "DELETE FROM playlist_songs WHERE playlist_id = ? AND song_id = ? AND added_by = ?"
@@ -500,7 +539,7 @@ export function removeSongFromPlaylist(
           )
           .run(playlistId, songId);
     if (info.changes === 0) {
-      if (isOrg) {
+      if (perSong) {
         return err("validation", "You can only remove tracks you added.");
       }
       return err("not_found", "Song is not in this playlist");

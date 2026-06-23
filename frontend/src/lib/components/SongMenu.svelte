@@ -182,11 +182,11 @@
           <Icon name="favorite" fill={song.liked} size={18} />
           {song.liked ? "Unlike" : "Like"}
         </button>
-        <button onclick={() => { vm.playNext(song); close(); }}>
-          <Icon name="playlist_play" size={18} /> Play next
-        </button>
         <button onclick={() => { vm.addToQueue(song); close(); }}>
           <Icon name="queue_music" size={18} /> Add to queue
+        </button>
+        <button onclick={() => { vm.playNext(song); close(); }}>
+          <Icon name="playlist_play" size={18} /> Play next
         </button>
         <button onclick={openPlaylists}>
           <Icon name="playlist_add" size={18} /> Add to playlist

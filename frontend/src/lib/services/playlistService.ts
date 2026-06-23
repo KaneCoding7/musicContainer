@@ -9,6 +9,25 @@ export function playlistZipUrl(playlistId: number): string {
   return withToken(`${apiBase()}/api/playlists/${playlistId}/download`);
 }
 
+// Downloads a playlist zip via fetch (so the caller can show a loading state
+// while the server tags + bundles the tracks), then saves it client-side.
+export async function downloadPlaylistZip(
+  playlistId: number,
+  name: string
+): Promise<void> {
+  const res = await fetch(playlistZipUrl(playlistId));
+  if (!res.ok) throw new Error(await errorMessage(res));
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${(name || "playlist").replace(/[^\w.\- ]+/g, "_")}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 async function errorMessage(res: Response): Promise<string> {
   try {
     const body = await res.json();
@@ -76,6 +95,20 @@ export async function renamePlaylist(
     method: "PATCH",
     headers: jsonHeaders(),
     body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).playlist as Playlist;
+}
+
+// Toggle whether a playlist is shared with every user on the system.
+export async function setPlaylistGlobal(
+  playlistId: number,
+  global: boolean
+): Promise<Playlist> {
+  const res = await fetch(`${apiBase()}/api/playlists/${playlistId}/global`, {
+    method: "PUT",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ global }),
   });
   if (!res.ok) throw new Error(await errorMessage(res));
   return (await res.json()).playlist as Playlist;

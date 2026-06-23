@@ -11,7 +11,11 @@
   import UserAutocomplete from "$lib/components/UserAutocomplete.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
   import { reorderHandle } from "$lib/actions/reorderHandle";
-  import { playlistImageUrl, playlistZipUrl } from "$lib/services/playlistService";
+  import {
+    downloadPlaylistZip,
+    playlistImageUrl,
+    setPlaylistGlobal,
+  } from "$lib/services/playlistService";
   import { copySongToLibrary, thumbUrl } from "$lib/services/songService";
   import {
     disablePublicLink,
@@ -72,6 +76,56 @@
         )
       : shared;
   });
+
+  // Category filter for the grid. Multi-select: any combination of chips can be
+  // active; an empty selection means "All". Chips only appear for categories
+  // that currently exist.
+  let cats = $state<Set<string>>(new Set());
+  const hasShared = $derived(
+    filteredShared.some((p) => !p.isOrg && !p.isGlobal)
+  );
+  const hasTeam = $derived(filteredShared.some((p) => p.isOrg));
+  const hasGlobal = $derived(
+    filteredShared.some((p) => p.isGlobal) ||
+      filteredPlaylists.some((p) => p.isGlobal)
+  );
+  const filterChips = $derived(
+    [
+      ...(ownPlaylists.length ? [{ k: "mine", label: "Mine" }] : []),
+      ...(hasShared ? [{ k: "shared", label: "Shared with me" }] : []),
+      ...(hasTeam ? [{ k: "team", label: "Team" }] : []),
+      ...(hasGlobal ? [{ k: "global", label: "Global" }] : []),
+    ] as { k: string; label: string }[]
+  );
+  // Only count selections for categories that still exist.
+  const activeCats = $derived(
+    new Set([...cats].filter((c) => filterChips.some((f) => f.k === c)))
+  );
+  function toggleCat(k: string) {
+    const next = new Set(activeCats);
+    if (next.has(k)) next.delete(k);
+    else next.add(k);
+    cats = next;
+  }
+  const ownShown = $derived(
+    filteredPlaylists.filter(
+      (p) =>
+        activeCats.size === 0 ||
+        activeCats.has("mine") ||
+        (activeCats.has("global") && p.isGlobal)
+    )
+  );
+  const sharedShown = $derived(
+    filteredShared.filter((p) => {
+      if (activeCats.size === 0) return true;
+      const isPlainShare = !p.isOrg && !p.isGlobal;
+      return (
+        (activeCats.has("shared") && isPlainShare) ||
+        (activeCats.has("team") && !!p.isOrg) ||
+        (activeCats.has("global") && !!p.isGlobal)
+      );
+    })
+  );
 
   // Create-playlist modal (name + optional cover image).
   let showCreate = $state(false);
@@ -168,6 +222,38 @@
       }
     } catch (e) {
       shareError = e instanceof Error ? e.message : "Failed to update link";
+    }
+  }
+
+  // Download the open playlist as a zip, showing a spinner while the server
+  // tags + bundles the tracks (can take a moment for big playlists).
+  let downloading = $state(false);
+  async function downloadZip() {
+    if (downloading || !vm.selected) return;
+    downloading = true;
+    try {
+      await downloadPlaylistZip(vm.selected.id, vm.selected.name);
+    } catch (e) {
+      vm.error = e instanceof Error ? e.message : "Download failed";
+    } finally {
+      downloading = false;
+    }
+  }
+
+  // Share with every user on the system (collaborative). Optimistically reflect
+  // the new state on the playlist in the list.
+  async function toggleGlobal() {
+    const id = vm.selectedId;
+    if (id === null) return;
+    shareError = null;
+    const next = !vm.selected?.isGlobal;
+    try {
+      await setPlaylistGlobal(id, next);
+      vm.playlists = vm.playlists.map((p) =>
+        p.id === id ? { ...p, isGlobal: next } : p
+      );
+    } catch (e) {
+      shareError = e instanceof Error ? e.message : "Failed to update";
     }
   }
 
@@ -372,12 +458,16 @@
         onclick={openEdit}><Icon name="edit" size={20} /></button
       >
       {#if vm.selectedSongs.length > 0}
-        <a
+        <button
           class="head-action"
-          href={playlistZipUrl(vm.selectedId ?? 0)}
+          class:loading={downloading}
           title="Download as zip"
-          aria-label="Download playlist as zip"><Icon name="download" size={20} /></a
+          aria-label="Download playlist as zip"
+          disabled={downloading}
+          onclick={downloadZip}
         >
+          <Icon name={downloading ? "progress_activity" : "download"} size={20} />
+        </button>
       {/if}
       <button
         class="head-action"
@@ -416,8 +506,32 @@
   {:else if filteredPlaylists.length === 0 && filteredShared.length === 0}
     <p class="muted">No playlists match “{query}”.</p>
   {:else}
+    {#if filterChips.length > 1}
+      <div class="pl-filter">
+        <button
+          class="chip"
+          class:on={activeCats.size === 0}
+          onclick={() => (cats = new Set())}
+        >
+          All
+        </button>
+        {#each filterChips as c (c.k)}
+          <button
+            class="chip"
+            class:on={activeCats.has(c.k)}
+            onclick={() => toggleCat(c.k)}
+          >
+            {c.label}
+          </button>
+        {/each}
+      </div>
+    {/if}
+
+    {#if ownShown.length === 0 && sharedShown.length === 0}
+      <p class="muted">Nothing in this filter.</p>
+    {:else}
     <div class="cards">
-      {#each filteredPlaylists as playlist (playlist.id)}
+      {#each ownShown as playlist (playlist.id)}
         <button class="card" onclick={() => openPlaylist(playlist.id)}>
           <span class="cover">
             {#if playlist.hasImage}
@@ -427,7 +541,11 @@
             {:else}
               <Icon name="queue_music" size={26} />
             {/if}
-            {#if playlist.shared}
+            {#if playlist.isGlobal}
+              <span class="shared-badge" title="Global playlist">
+                <Icon name="public" size={15} />
+              </span>
+            {:else if playlist.shared}
               <span class="shared-badge" title="Shared playlist">
                 <Icon name="group" size={15} />
               </span>
@@ -436,14 +554,18 @@
           <span class="card-text">
             <span class="card-name">{playlist.name}</span>
             <span class="card-sub">
-              {playlist.shared ? "Shared · " : ""}{playlist.trackCount ?? 0}
+              {playlist.isGlobal
+                ? "Global · "
+                : playlist.shared
+                  ? "Shared · "
+                  : ""}{playlist.trackCount ?? 0}
               {(playlist.trackCount ?? 0) === 1 ? "track" : "tracks"}
             </span>
           </span>
         </button>
       {/each}
 
-      {#each filteredShared as p (p.id)}
+      {#each sharedShown as p (p.id)}
         <button class="card" onclick={() => openSharedPlaylist(p.id)}>
           <span class="cover">
             {#if p.hasImage}
@@ -453,20 +575,29 @@
             {:else}
               <Icon name="queue_music" size={26} />
             {/if}
-            <span class="shared-badge" title={p.isOrg ? "Team playlist" : "Shared playlist"}>
-              <Icon name="group" size={15} />
+            <span
+              class="shared-badge"
+              title={p.isGlobal
+                ? "Global playlist"
+                : p.isOrg
+                  ? "Team playlist"
+                  : "Shared playlist"}
+            >
+              <Icon name={p.isGlobal ? "public" : "group"} size={15} />
             </span>
           </span>
           <span class="card-text">
             <span class="card-name">{p.name}</span>
             <span class="card-sub">
-              {p.isOrg ? "Team" : `by ${p.ownerName}`} · {p.trackCount ?? 0}
+              {p.isGlobal ? "Global" : p.isOrg ? "Team" : `by ${p.ownerName}`} · {p.trackCount ??
+                0}
               {(p.trackCount ?? 0) === 1 ? "track" : "tracks"}
             </span>
           </span>
         </button>
       {/each}
     </div>
+    {/if}
   {/if}
   {/if}
 
@@ -867,6 +998,21 @@
         <p class="sp-empty">Not shared with anyone yet.</p>
       {/if}
 
+      <p class="sp-section">Share with everyone</p>
+      <div class="public-row">
+        <span class="public-desc">
+          <Icon name="public" size={18} />
+          <span>Show in every user's playlists — anyone can add songs &amp; play.</span>
+        </span>
+        <button
+          class="link-toggle"
+          class:on={vm.selected.isGlobal}
+          onclick={toggleGlobal}
+        >
+          {vm.selected.isGlobal ? "Turn off" : "Share"}
+        </button>
+      </div>
+
       <p class="sp-section">Public link</p>
       <div class="public-row">
         <span class="public-desc">
@@ -896,6 +1042,34 @@
     align-items: center;
     gap: 0.5rem;
     margin-bottom: 1rem;
+  }
+  /* Category filter chips above the grid. */
+  .pl-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+  }
+  .pl-filter .chip {
+    padding: 0.3rem 0.85rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 1rem;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  @media (hover: hover) {
+    .pl-filter .chip:hover {
+      background: var(--border-strong);
+      color: var(--text);
+    }
+  }
+  .pl-filter .chip.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
   }
   .search {
     flex: 1;
@@ -1284,6 +1458,17 @@
     cursor: pointer;
     padding: 0.35rem 0.5rem;
     border-radius: 0.4rem;
+  }
+  .head-action:disabled {
+    cursor: default;
+  }
+  .head-action.loading :global(.material-symbols-rounded) {
+    animation: spin 1.1s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   @media (hover: hover) {
     .head-action:hover {

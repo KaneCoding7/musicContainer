@@ -1,7 +1,8 @@
-import { existsSync, unlinkSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, unlinkSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { extname, join } from "node:path";
+import { dirname, extname, join } from "node:path";
 import { ZipArchive } from "archiver";
+import { preparedDownload } from "../functional/download.js";
 import { Router } from "express";
 import multer from "multer";
 import { ART_DIR, getDb, MUSIC_DIR } from "../db/init.js";
@@ -14,6 +15,7 @@ import {
   listPlaylists,
   removeSongFromPlaylist,
   renamePlaylist,
+  setPlaylistGlobal,
   reorderPlaylist,
   resolvePlaylistImage,
   setPlaylistImage,
@@ -50,7 +52,7 @@ const plImageUpload = multer({
 export const playlistsRouter = Router();
 
 // GET /api/playlists/:id/download — download a playlist's tracks as a zip.
-playlistsRouter.get("/playlists/:id/download", (req, res) => {
+playlistsRouter.get("/playlists/:id/download", async (req, res) => {
   const id = Number(req.params.id);
   const userId = req.userId!;
   const db = getDb();
@@ -72,27 +74,28 @@ playlistsRouter.get("/playlists/:id/download", (req, res) => {
     .get(id) as { name: string } | undefined;
   const zipName = (nameRow?.name ?? "playlist").replace(/[^\w.\- ]+/g, "_");
 
-  res.setHeader("Content-Type", "application/zip");
-  res.setHeader(
-    "Content-Disposition",
-    `attachment; filename="${zipName}.zip"`
-  );
-
-  const archive = new ZipArchive({ zlib: { level: 0 } }); // store; audio is already compressed
-  archive.on("error", () => {
-    if (!res.headersSent) res.status(500);
-    res.end();
-  });
-  archive.pipe(res);
+  // Embed library metadata into each track (same tagging as the single-track
+  // download) before zipping, so re-uploading the zip keeps artist/album/art/
+  // source. Tagged temp files live in workDir until the archive finishes.
+  const work = mkdtempSync(join(dirname(MUSIC_DIR), "zip-"));
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    try {
+      rmSync(work, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
+  };
 
   const used = new Set<string>();
+  const files: { path: string; entry: string }[] = [];
   for (const song of songs) {
-    const path = join(MUSIC_DIR, song.filename);
-    if (!existsSync(path)) continue;
-    const ext = extname(song.filename);
-    let entry = extname(song.originalFilename)
-      ? song.originalFilename
-      : `${song.originalFilename}${ext}`;
+    const prepared = await preparedDownload(db, song.id, MUSIC_DIR, ART_DIR, work);
+    if (!prepared) continue;
+    const ext = extname(prepared.name) || extname(song.filename);
+    let entry = extname(prepared.name) ? prepared.name : `${prepared.name}${ext}`;
     // De-duplicate identical entry names within the zip.
     if (used.has(entry)) {
       const base = entry.slice(0, entry.length - extname(entry).length);
@@ -101,8 +104,23 @@ playlistsRouter.get("/playlists/:id/download", (req, res) => {
       entry = `${base} (${i})${extname(entry)}`;
     }
     used.add(entry);
-    archive.file(path, { name: entry });
+    files.push({ path: prepared.path, entry });
   }
+
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", `attachment; filename="${zipName}.zip"`);
+
+  const archive = new ZipArchive({ zlib: { level: 0 } }); // store; audio is already compressed
+  archive.on("error", () => {
+    if (!res.headersSent) res.status(500);
+    res.end();
+  });
+  // Remove the tagged temp files once the archive is fully streamed.
+  archive.on("end", cleanup);
+  res.on("close", cleanup);
+  archive.pipe(res);
+
+  for (const f of files) archive.file(f.path, { name: f.entry });
   archive.finalize();
 });
 
@@ -144,6 +162,23 @@ playlistsRouter.get("/playlists/:id", (req, res) => {
 playlistsRouter.patch("/playlists/:id", (req, res) => {
   const name = typeof req.body?.name === "string" ? req.body.name : "";
   const result = renamePlaylist(getDb(), Number(req.params.id), name, req.userId!);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ playlist: result.value });
+});
+
+// PUT /api/playlists/:id/global — share with every user, or stop (owner only).
+playlistsRouter.put("/playlists/:id/global", (req, res) => {
+  const global = req.body?.global === true;
+  const result = setPlaylistGlobal(
+    getDb(),
+    Number(req.params.id),
+    req.userId!,
+    global
+  );
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))

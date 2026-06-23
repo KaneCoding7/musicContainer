@@ -304,6 +304,13 @@ export function migrate(database: Database.Database): void {
       "ALTER TABLE playlists ADD COLUMN org_logo_tried INTEGER NOT NULL DEFAULT 0"
     );
   }
+  // Global playlists: shared with every user on the system (collaborative,
+  // per-song ownership). The owner still owns/manages the playlist itself.
+  if (!plColumns.includes("is_global")) {
+    database.exec(
+      "ALTER TABLE playlists ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0"
+    );
+  }
   // Collaborative sharing (Cycle 33): editors may add/remove tracks.
   const shareColumns = (
     database

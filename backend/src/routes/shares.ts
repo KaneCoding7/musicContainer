@@ -12,6 +12,7 @@ import {
 import {
   copySharedPlaylist,
   getSharedPlaylistSongs,
+  listGlobalPlaylists,
   listPlaylistMembers,
   listPlaylistShares,
   listSharedWithMe,
@@ -174,8 +175,16 @@ sharesRouter.get("/shared", async (req, res) => {
       .status(statusForError(org.error.code))
       .json({ error: org.error });
   }
-  // Org/team playlists first, then explicitly-shared ones.
-  return res.json({ playlists: [...org.value, ...result.value] });
+  const global = listGlobalPlaylists(db, req.userId!);
+  if (!global.ok) {
+    return res
+      .status(statusForError(global.error.code))
+      .json({ error: global.error });
+  }
+  // Team, then global, then explicitly-shared playlists.
+  return res.json({
+    playlists: [...org.value, ...global.value, ...result.value],
+  });
 });
 
 // GET /api/shared/:id — songs of a playlist shared with me (read-only).
