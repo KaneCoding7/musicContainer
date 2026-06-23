@@ -1056,7 +1056,6 @@
     <div class="npf-meta">
       <h2>{song.originalFilename}</h2>
       {#if song.artist}<p class="npf-artist">{song.artist}</p>{/if}
-      {#if song.album}<p class="npf-album">{song.album}</p>{/if}
     </div>
     <div
       class="npf-seek"
@@ -1411,8 +1410,7 @@
     text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
   }
   .np-full.np-canvas :global(.npf-meta h2),
-  .np-full.np-canvas :global(.npf-artist),
-  .np-full.np-canvas :global(.npf-album) {
+  .np-full.np-canvas :global(.npf-artist) {
     color: #fff;
   }
   /* With a clip playing the album-art card is hidden so it isn't sitting on top
@@ -1572,11 +1570,6 @@
   .npf-artist {
     margin: 0.35rem 0 0;
     color: var(--muted);
-  }
-  .npf-album {
-    margin: 0.15rem 0 0;
-    color: var(--dim);
-    font-size: 0.85rem;
   }
   .npf-seek {
     display: flex;
