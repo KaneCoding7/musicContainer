@@ -203,13 +203,47 @@
     songVm.playQueue(vm.selectedSongs, index);
   }
 
-  function renameSelected() {
-    const current = vm.selected;
-    if (!current) return;
-    const name = prompt("Rename playlist", current.name);
-    if (name && name.trim() && name.trim() !== current.name) {
-      vm.rename(current.id, name.trim());
+  // --- Edit-playlist modal (rename + change cover + jump to reorder) ---
+  let showEdit = $state(false);
+  let editName = $state("");
+  let editImage = $state<File | null>(null);
+  let editImagePreview = $state<string | null>(null);
+  let savingEdit = $state(false);
+  let coverBust = $state(0); // bump to refresh cached cover after a change
+
+  function openEdit() {
+    const cur = vm.selected;
+    if (!cur) return;
+    editName = cur.name;
+    editImage = null;
+    editImagePreview = null;
+    showEdit = true;
+  }
+  function onPickEditImage(e: Event) {
+    const f = (e.target as HTMLInputElement).files?.[0] ?? null;
+    editImage = f;
+    editImagePreview = f ? URL.createObjectURL(f) : null;
+  }
+  async function submitEdit() {
+    const cur = vm.selected;
+    if (!cur || savingEdit) return;
+    const name = editName.trim();
+    if (!name) return;
+    savingEdit = true;
+    if (name !== cur.name) await vm.rename(cur.id, name);
+    if (editImage) {
+      const ok = await vm.setImage(cur.id, editImage);
+      if (ok) coverBust = Date.now();
     }
+    savingEdit = false;
+    showEdit = false;
+    editImage = null;
+    editImagePreview = null;
+  }
+  // Leave the modal and turn on in-list drag reordering.
+  function startReorder() {
+    showEdit = false;
+    reordering = true;
   }
 
   function deleteSelected() {
@@ -264,7 +298,7 @@
         >
           <span class="cover">
             {#if playlist.hasImage}
-              <img src={playlistImageUrl(playlist.id, 512)} alt="" />
+              <img src={playlistImageUrl(playlist.id, 512, coverBust)} alt="" />
             {:else if playlist.coverSongId != null}
               <img src={thumbUrl(playlist.coverSongId, 512)} alt="" />
             {:else}
@@ -292,7 +326,9 @@
     <div class="detail">
       <div class="head">
         <span class="cover-lg">
-          {#if vm.selected.coverSongId != null}
+          {#if vm.selected.hasImage}
+            <img src={playlistImageUrl(vm.selected.id, 512, coverBust)} alt="" />
+          {:else if vm.selected.coverSongId != null}
             <img src={thumbUrl(vm.selected.coverSongId, 512)} alt="" />
           {:else}
             <Icon name="queue_music" size={48} />
@@ -305,22 +341,21 @@
             {vm.selectedSongs.length === 1 ? "track" : "tracks"}
           </p>
           <div class="detail-actions">
+            {#if reordering}
+              <button
+                class="head-action on"
+                title="Done reordering"
+                aria-label="Done reordering"
+                onclick={() => (reordering = false)}
+                ><Icon name="check" size={20} /></button
+              >
+            {:else}
             <button
               class="head-action"
-              title="Rename playlist"
-              aria-label="Rename playlist"
-              onclick={renameSelected}><Icon name="edit" size={20} /></button
+              title="Edit playlist"
+              aria-label="Edit playlist"
+              onclick={openEdit}><Icon name="edit" size={20} /></button
             >
-            {#if vm.selectedSongs.length > 1}
-              <button
-                class="head-action"
-                class:on={reordering}
-                title={reordering ? "Done" : "Reorder"}
-                aria-label={reordering ? "Done" : "Reorder"}
-                onclick={() => (reordering = !reordering)}
-                ><Icon name={reordering ? "check" : "swap_vert"} size={20} /></button
-              >
-            {/if}
             {#if vm.selectedSongs.length > 0}
               <a
                 class="head-action"
@@ -343,6 +378,7 @@
               aria-label="Delete playlist"
               onclick={deleteSelected}><Icon name="delete" size={20} /></button
             >
+            {/if}
           </div>
         </div>
       </div>
@@ -598,6 +634,68 @@
   </div>
 {/if}
 
+{#if showEdit && vm.selected}
+  <div
+    class="modal-backdrop"
+    role="button"
+    tabindex="-1"
+    onclick={(e) => e.target === e.currentTarget && (showEdit = false)}
+    onkeydown={(e) => e.key === "Escape" && (showEdit = false)}
+  >
+    <div
+      class="dialog"
+      role="dialog"
+      tabindex="-1"
+      aria-modal="true"
+      aria-label="Edit playlist"
+    >
+      <h3>Edit playlist</h3>
+
+      <div class="art-row">
+        <span class="art-thumb">
+          {#if editImagePreview}
+            <img src={editImagePreview} alt="" />
+          {:else if vm.selected.hasImage}
+            <img src={playlistImageUrl(vm.selected.id, 512, coverBust)} alt="" />
+          {:else if vm.selected.coverSongId != null}
+            <img src={thumbUrl(vm.selected.coverSongId, 512)} alt="" />
+          {:else}
+            <Icon name="add_photo_alternate" size={26} />
+          {/if}
+        </span>
+        <div class="art-actions">
+          <input class="art-file" type="file" accept="image/*" onchange={onPickEditImage} />
+          <span class="art-hint">Change cover image</span>
+        </div>
+      </div>
+
+      <label>
+        Name
+        <input
+          type="text"
+          placeholder="Playlist name"
+          bind:value={editName}
+          onkeydown={(e) => e.key === "Enter" && submitEdit()}
+        />
+      </label>
+
+      {#if vm.selectedSongs.length > 1}
+        <button class="reorder-link" onclick={startReorder}>
+          <Icon name="swap_vert" size={18} />
+          Reorder tracks
+        </button>
+      {/if}
+
+      <div class="actions">
+        <button class="secondary" onclick={() => (showEdit = false)}>Cancel</button>
+        <button onclick={submitEdit} disabled={!editName.trim() || savingEdit}>
+          {savingEdit ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   .pl-toolbar {
     display: flex;
@@ -735,6 +833,23 @@
     border-radius: 0.5rem;
     color: var(--text);
     font: inherit;
+  }
+  .reorder-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 0.25rem;
+    padding: 0.5rem 0.7rem;
+    background: var(--surface-2);
+    color: var(--text);
+    font-weight: 600;
+  }
+  @media (hover: hover) {
+    .reorder-link:hover {
+      background: var(--border-strong);
+    }
   }
   .actions {
     display: flex;

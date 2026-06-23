@@ -47,6 +47,21 @@ export class PlaylistViewModel {
     }
   }
 
+  // Replaces a playlist's cover image; flips hasImage so the cover refreshes.
+  async setImage(id: number, image: File): Promise<boolean> {
+    this.error = null;
+    try {
+      const updated = await api.uploadPlaylistImage(id, image);
+      this.playlists = this.playlists.map((p) =>
+        p.id === id ? { ...p, hasImage: updated.hasImage ?? true } : p
+      );
+      return true;
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Failed to update image";
+      return false;
+    }
+  }
+
   // Re-fetches the playlist list so track counts / covers stay accurate.
   private async refreshList(): Promise<void> {
     try {

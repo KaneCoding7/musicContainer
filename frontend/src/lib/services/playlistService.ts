@@ -56,8 +56,15 @@ export async function uploadPlaylistImage(
 }
 
 // URL for a playlist's custom cover image (only meaningful when hasImage).
-export function playlistImageUrl(playlistId: number, size = 512): string {
-  return withToken(`${apiBase()}/api/playlists/${playlistId}/image?size=${size}`);
+// Pass `bust` (e.g. a timestamp) to defeat the browser cache after replacing
+// the image — the URL is otherwise identical across uploads.
+export function playlistImageUrl(
+  playlistId: number,
+  size = 512,
+  bust?: number | string
+): string {
+  const b = bust ? `&t=${bust}` : "";
+  return withToken(`${apiBase()}/api/playlists/${playlistId}/image?size=${size}${b}`);
 }
 
 // Renames a playlist; returns the updated playlist.
