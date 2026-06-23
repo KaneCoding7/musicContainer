@@ -722,6 +722,11 @@
     .topbar {
       display: flex;
     }
+    /* The topbar already shows the section name, so drop the redundant in-view
+       title on mobile. */
+    .content > h2 {
+      display: none;
+    }
     .scrim {
       display: block;
     }
