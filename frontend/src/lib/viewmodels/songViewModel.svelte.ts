@@ -312,8 +312,8 @@ export class SongViewModel {
   // A $derived (not a getter) so it reliably re-tracks when the queue array is
   // replaced in place — e.g. replaceSong() updating the *currently playing*
   // track, which a getter accessed across a component boundary could miss.
-  currentSong = $derived<Song | null>(
-    this.currentIndex === null ? null : this.queue[this.currentIndex] ?? null
+  currentSong: Song | null = $derived(
+    this.currentIndex === null ? null : (this.queue[this.currentIndex] ?? null)
   );
 
   // The track a "next" skip would land on (null at the end with repeat off).
