@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import Icon from "$lib/components/Icon.svelte";
   import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import PlaylistMembers from "$lib/components/PlaylistMembers.svelte";
+  import SharedPlaylistDetail from "$lib/components/SharedPlaylistDetail.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
   import UserAutocomplete from "$lib/components/UserAutocomplete.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
@@ -15,11 +17,13 @@
     disablePublicLink,
     enablePublicLink,
     fetchPlaylistShares,
+    fetchSharedWithMe,
     getPublicToken,
     publicLink,
     sharePlaylist,
     unsharePlaylist,
     type ShareUser,
+    type SharedPlaylist,
   } from "$lib/services/shareService";
   import type { PlaylistViewModel } from "$lib/viewmodels/playlistViewModel.svelte";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -40,6 +44,27 @@
     return q
       ? vm.playlists.filter((p) => p.name.toLowerCase().includes(q))
       : vm.playlists;
+  });
+
+  // Playlists shared with me, listed alongside my own in a second section.
+  let shared = $state<SharedPlaylist[]>([]);
+  async function loadShared() {
+    try {
+      shared = await fetchSharedWithMe();
+    } catch {
+      /* keep the current list on failure */
+    }
+  }
+  onMount(loadShared);
+  const filteredShared = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    return q
+      ? shared.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            p.ownerName.toLowerCase().includes(q)
+        )
+      : shared;
   });
 
   // Create-playlist modal (name + optional cover image).
@@ -76,6 +101,21 @@
   }
   function closePlaylist() {
     goto("?view=playlists", { noScroll: true });
+  }
+
+  // A shared playlist opened from the second section (?shared=id).
+  const sharedOpenId = $derived.by(() => {
+    const raw = page.url.searchParams.get("shared");
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) ? n : null;
+  });
+  const openShared = $derived(
+    sharedOpenId != null
+      ? (shared.find((p) => p.id === sharedOpenId) ?? null)
+      : null
+  );
+  function openSharedPlaylist(id: number) {
+    goto(`?view=playlists&shared=${id}`, { noScroll: true });
   }
 
   // --- Sharing ---
@@ -292,7 +332,7 @@
 </script>
 
 <div class="playlists">
-  {#if openId === null}
+  {#if openId === null && sharedOpenId === null}
   <div class="pl-toolbar">
     <div class="search">
       <Icon name="search" size={20} />
@@ -307,37 +347,72 @@
     <p class="error">{vm.error}</p>
   {/if}
 
-  {#if vm.playlists.length === 0}
-    <p class="muted">No playlists yet. Tap Create to make one.</p>
-  {:else if filteredPlaylists.length === 0}
+  {#if vm.playlists.length === 0 && shared.length === 0}
+    <p class="muted">No playlists yet. Tap + to create one.</p>
+  {:else if filteredPlaylists.length === 0 && filteredShared.length === 0}
     <p class="muted">No playlists match “{query}”.</p>
   {:else}
-    <div class="cards">
-      {#each filteredPlaylists as playlist (playlist.id)}
-        <button
-          class="card"
-          onclick={() => openPlaylist(playlist.id)}
-        >
-          <span class="cover">
-            {#if playlist.hasImage}
-              <img src={playlistImageUrl(playlist.id, 512, coverBust)} alt="" />
-            {:else if playlist.coverSongId != null}
-              <img src={thumbUrl(playlist.coverSongId, 512)} alt="" />
-            {:else}
-              <Icon name="queue_music" size={26} />
-            {/if}
-          </span>
-          <span class="card-text">
-            <span class="card-name">{playlist.name}</span>
-            <span class="card-sub">
-              {playlist.trackCount ?? 0}
-              {(playlist.trackCount ?? 0) === 1 ? "track" : "tracks"}
+    {#if filteredPlaylists.length > 0}
+      {#if shared.length > 0}<h4 class="section-head">Your playlists</h4>{/if}
+      <div class="cards">
+        {#each filteredPlaylists as playlist (playlist.id)}
+          <button class="card" onclick={() => openPlaylist(playlist.id)}>
+            <span class="cover">
+              {#if playlist.hasImage}
+                <img src={playlistImageUrl(playlist.id, 512, coverBust)} alt="" />
+              {:else if playlist.coverSongId != null}
+                <img src={thumbUrl(playlist.coverSongId, 512)} alt="" />
+              {:else}
+                <Icon name="queue_music" size={26} />
+              {/if}
             </span>
-          </span>
-        </button>
-      {/each}
-    </div>
+            <span class="card-text">
+              <span class="card-name">{playlist.name}</span>
+              <span class="card-sub">
+                {playlist.trackCount ?? 0}
+                {(playlist.trackCount ?? 0) === 1 ? "track" : "tracks"}
+              </span>
+            </span>
+          </button>
+        {/each}
+      </div>
+    {/if}
+
+    {#if filteredShared.length > 0}
+      <h4 class="section-head">Shared with you</h4>
+      <div class="cards">
+        {#each filteredShared as p (p.id)}
+          <button class="card" onclick={() => openSharedPlaylist(p.id)}>
+            <span class="cover">
+              {#if p.hasImage}
+                <img src={playlistImageUrl(p.id, 512)} alt="" />
+              {:else if p.coverSongId != null}
+                <img src={thumbUrl(p.coverSongId, 512)} alt="" />
+              {:else}
+                <Icon name="queue_music" size={26} />
+              {/if}
+            </span>
+            <span class="card-text">
+              <span class="card-name">{p.name}</span>
+              <span class="card-sub">
+                by {p.ownerName} · {p.trackCount ?? 0}
+                {(p.trackCount ?? 0) === 1 ? "track" : "tracks"}
+              </span>
+            </span>
+          </button>
+        {/each}
+      </div>
+    {/if}
   {/if}
+  {/if}
+
+  {#if sharedOpenId !== null && openShared}
+    <SharedPlaylistDetail
+      {songVm}
+      playlist={openShared}
+      onClose={closePlaylist}
+      onChanged={loadShared}
+    />
   {/if}
 
   {#if openId !== null}
@@ -955,6 +1030,14 @@
     .back:hover {
       color: var(--text);
     }
+  }
+  .section-head {
+    margin: 0 0 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--dim);
   }
   .cards {
     display: grid;
