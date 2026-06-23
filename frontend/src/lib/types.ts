@@ -19,6 +19,8 @@ export interface Song {
   clipDisabled: boolean; // per-song opt-out: don't show this song's clip
   sourceUrl: string | null; // the original import link (e.g. YouTube), if any
   addedBy?: string | null; // name of who added it to a playlist (playlist views)
+  addedByMe?: boolean; // viewer added this track (org/team playlists)
+  ownedByMe?: boolean; // viewer owns the underlying song (shared/org playlists)
 }
 
 export interface Playlist {

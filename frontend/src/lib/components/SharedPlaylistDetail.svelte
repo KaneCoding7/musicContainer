@@ -36,6 +36,7 @@
   let songs = $state<Song[]>([]);
   let error = $state<string | null>(null);
   let reordering = $state(false);
+  let orgNoteOpen = $state(false); // collapsed "what's this?" explainer
   let addOpen = $state(false);
   let addQuery = $state("");
   let addedToLib = $state<Set<number>>(new Set());
@@ -200,7 +201,7 @@
     <div class="head-info">
       <h3>
         <span class="pl-name">{playlist.name}</span>
-        {#if playlist.canEdit}<span class="edit-tag">collaborative</span>{/if}
+        {#if playlist.isOrg}<span class="edit-tag">team</span>{:else if playlist.canEdit}<span class="edit-tag">collaborative</span>{/if}
       </h3>
       <p class="muted">
         {songs.length}
@@ -228,6 +229,29 @@
     </div>
   </div>
 
+  {#if playlist.isOrg}
+    <div class="org-info">
+      <button
+        class="org-tag"
+        class:on={orgNoteOpen}
+        aria-expanded={orgNoteOpen}
+        onclick={() => (orgNoteOpen = !orgNoteOpen)}
+      >
+        <Icon name="group" size={14} />
+        What's this?
+        <Icon name={orgNoteOpen ? "expand_less" : "expand_more"} size={16} />
+      </button>
+      {#if orgNoteOpen}
+        <p class="org-note">
+          <strong>Team playlist.</strong> Everyone at {playlist.ownerName} shares
+          this one. Add songs from your library and they show up for the whole
+          team — anyone can play them or save them to their own library. You can
+          only remove the tracks <em>you</em> added.
+        </p>
+      {/if}
+    </div>
+  {/if}
+
   {#if songs.length === 0}
     <p class="muted">No songs in this playlist yet.</p>
   {:else}
@@ -240,6 +264,7 @@
     <ol>
       {#each songs as song, i (song.id)}
         {@const isCurrent = song.id === songVm.currentSong?.id}
+        {@const canRemove = playlist.isOrg ? !!song.addedByMe : playlist.canEdit}
         <li
           class:current={isCurrent}
           class:playing={isCurrent && songVm.isPlaying}
@@ -292,14 +317,13 @@
           <SongMenu
             vm={songVm}
             {song}
-            onRemoveFromPlaylist={playlist.canEdit
-              ? () => removeSong(song.id)
-              : undefined}
+            onRemoveFromPlaylist={canRemove ? () => removeSong(song.id) : undefined}
             onAddToLibrary={() => addToLibrary(song.id)}
             inLibrary={ownsSong(song.id) || addedToLib.has(song.id)}
+            canModify={!!song.ownedByMe}
             onChanged={refreshSongs}
           />
-          {#if playlist.canEdit}
+          {#if canRemove}
             <button
               class="remove"
               title="Remove from playlist"
@@ -464,6 +488,47 @@
     align-items: center;
     gap: 1rem;
     margin-bottom: 1rem;
+  }
+  /* Collapsed "what's this?" explainer on Team playlists. */
+  .org-info {
+    margin: 0 0 1rem;
+  }
+  .org-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.6rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 1rem;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+  @media (hover: hover) {
+    .org-tag:hover {
+      background: var(--border-strong);
+      color: var(--text);
+    }
+  }
+  .org-tag.on {
+    background: var(--active-bg);
+    border-color: var(--accent);
+    color: var(--accent-text);
+  }
+  .org-note {
+    margin: 0.5rem 0 0;
+    padding: 0.7rem 0.9rem;
+    background: var(--active-bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.6rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.45;
+  }
+  .org-note strong {
+    color: var(--text);
   }
   .actions-bar {
     margin-bottom: 0;

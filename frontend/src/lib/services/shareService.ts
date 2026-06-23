@@ -14,6 +14,7 @@ export interface SharedPlaylist extends Playlist {
   ownerName: string;
   canEdit: boolean;
   savedCopyId: number | null; // my saved copy's id, if I've saved this one
+  isOrg?: boolean; // auto-created org/team playlist (per email domain)
 }
 export interface UserMatch {
   id: string;

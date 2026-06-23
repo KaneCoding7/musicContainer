@@ -287,6 +287,23 @@ export function migrate(database: Database.Database): void {
   if (!plColumns.includes("copied_from")) {
     database.exec("ALTER TABLE playlists ADD COLUMN copied_from INTEGER");
   }
+  // Org/team playlists (auto-created per email domain): when set, the playlist
+  // is the shared Team playlist for that domain and has no personal user_id, so
+  // it never shows in anyone's "your playlists". One per domain (unique index).
+  if (!plColumns.includes("org_domain")) {
+    database.exec("ALTER TABLE playlists ADD COLUMN org_domain TEXT");
+  }
+  database.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_playlists_org_domain
+       ON playlists(org_domain) WHERE org_domain IS NOT NULL`
+  );
+  // Whether we've attempted to fetch the company logo for an org playlist's
+  // cover (so we try exactly once, not on every load).
+  if (!plColumns.includes("org_logo_tried")) {
+    database.exec(
+      "ALTER TABLE playlists ADD COLUMN org_logo_tried INTEGER NOT NULL DEFAULT 0"
+    );
+  }
   // Collaborative sharing (Cycle 33): editors may add/remove tracks.
   const shareColumns = (
     database

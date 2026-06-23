@@ -3,6 +3,7 @@ import { extname, join } from "node:path";
 import type { Database } from "better-sqlite3";
 import type { Playlist, Song } from "../types.js";
 import { err, ok, type Result } from "./result.js";
+import { isOrgMemberOf } from "./orgPlaylists.js";
 
 interface PlaylistRow {
   id: number;
@@ -248,14 +249,16 @@ export function resolvePlaylistImage(
     .prepare("SELECT image_filename, user_id FROM playlists WHERE id = ?")
     .get(id) as { image_filename: string | null; user_id: string } | undefined;
   if (!row) return err("not_found", `Playlist ${id} not found`);
-  // Owner, or anyone the playlist is shared with, may view the cover.
+  // Owner, anyone the playlist is shared with, or an org member may view the cover.
   if (row.user_id !== userId) {
     const shared = db
       .prepare(
         "SELECT 1 AS x FROM playlist_shares WHERE playlist_id = ? AND shared_with = ?"
       )
       .get(id, userId);
-    if (!shared) return err("not_found", `Playlist ${id} not found`);
+    if (!shared && !isOrgMemberOf(db, id, userId)) {
+      return err("not_found", `Playlist ${id} not found`);
+    }
   }
   if (!row.image_filename) return err("not_found", "Playlist has no image");
   const path = join(imgDir, row.image_filename);
@@ -281,7 +284,9 @@ export function canEditPlaylist(
       "SELECT 1 AS x FROM playlist_shares WHERE playlist_id = ? AND shared_with = ? AND can_edit = 1"
     )
     .get(playlistId, userId);
-  return !!editor;
+  if (editor) return true;
+  // Any member of an org/team playlist (same email domain) may add tracks.
+  return isOrgMemberOf(db, playlistId, userId);
 }
 
 // Ensures the user can edit the playlist (owner or editor); not_found otherwise.
@@ -299,21 +304,37 @@ function requireEditAccess(
 
 // Returns a playlist's songs in order, WITHOUT an ownership check. Callers must
 // have already authorized access (owner or an active share).
-export function songsInPlaylist(db: Database, playlistId: number): Song[] {
+export function songsInPlaylist(
+  db: Database,
+  playlistId: number,
+  viewerId?: string
+): Song[] {
   const rows = db
     .prepare(
       `SELECT s.id, s.filename, s.original_filename, s.uploaded_at,
               s.artist, s.album, s.art_filename, s.duration,
               s.play_count, s.last_played_at, s.liked, s.loudness, s.sort_order,
-              s.source_url, s.clip_filename, s.clip_disabled, au.name AS added_by_name
+              s.source_url, s.clip_filename, s.clip_disabled, au.name AS added_by_name,
+              ps.added_by AS added_by_id, s.user_id AS song_user_id
        FROM playlist_songs ps
        JOIN songs s ON s.id = ps.song_id
        LEFT JOIN "user" au ON au.id = ps.added_by
        WHERE ps.playlist_id = ?
        ORDER BY ps.position ASC`
     )
-    .all(playlistId) as (SongRow & { added_by_name: string | null })[];
-  return rows.map((row) => ({ ...rowToSong(row), addedBy: row.added_by_name }));
+    .all(playlistId) as (SongRow & {
+    added_by_name: string | null;
+    added_by_id: string | null;
+    song_user_id: string | null;
+  })[];
+  return rows.map((row) => ({
+    ...rowToSong(row),
+    addedBy: row.added_by_name,
+    // Per-song ownership flags (used by org/team playlists). Only meaningful
+    // when a viewer is supplied.
+    addedByMe: viewerId != null && row.added_by_id === viewerId,
+    ownedByMe: viewerId != null && row.song_user_id === viewerId,
+  }));
 }
 
 // Returns the songs in a playlist (owner-scoped), ordered by their position.
@@ -461,13 +482,27 @@ export function removeSongFromPlaylist(
   const access = requireEditAccess(db, playlistId, userId);
   if (!access.ok) return access;
 
+  // On org/team playlists, members may only remove tracks they themselves added.
+  const isOrg = !!db
+    .prepare("SELECT 1 AS x FROM playlists WHERE id = ? AND org_domain IS NOT NULL")
+    .get(playlistId);
+
   try {
-    const info = db
-      .prepare(
-        "DELETE FROM playlist_songs WHERE playlist_id = ? AND song_id = ?"
-      )
-      .run(playlistId, songId);
+    const info = isOrg
+      ? db
+          .prepare(
+            "DELETE FROM playlist_songs WHERE playlist_id = ? AND song_id = ? AND added_by = ?"
+          )
+          .run(playlistId, songId, userId)
+      : db
+          .prepare(
+            "DELETE FROM playlist_songs WHERE playlist_id = ? AND song_id = ?"
+          )
+          .run(playlistId, songId);
     if (info.changes === 0) {
+      if (isOrg) {
+        return err("validation", "You can only remove tracks you added.");
+      }
       return err("not_found", "Song is not in this playlist");
     }
     return ok(undefined);

@@ -453,14 +453,14 @@
             {:else}
               <Icon name="queue_music" size={26} />
             {/if}
-            <span class="shared-badge" title="Shared playlist">
+            <span class="shared-badge" title={p.isOrg ? "Team playlist" : "Shared playlist"}>
               <Icon name="group" size={15} />
             </span>
           </span>
           <span class="card-text">
             <span class="card-name">{p.name}</span>
             <span class="card-sub">
-              by {p.ownerName} · {p.trackCount ?? 0}
+              {p.isOrg ? "Team" : `by ${p.ownerName}`} · {p.trackCount ?? 0}
               {(p.trackCount ?? 0) === 1 ? "track" : "tracks"}
             </span>
           </span>

@@ -19,6 +19,7 @@ import {
   sharePlaylist,
   unsharePlaylist,
 } from "../functional/shares.js";
+import { listOrgPlaylistsForUser } from "../functional/orgPlaylists.js";
 
 export const sharesRouter = Router();
 
@@ -158,15 +159,23 @@ sharesRouter.delete("/playlists/:id/share/:userId", (req, res) => {
   return res.status(204).end();
 });
 
-// GET /api/shared — playlists shared with me.
-sharesRouter.get("/shared", (req, res) => {
-  const result = listSharedWithMe(getDb(), req.userId!);
+// GET /api/shared — playlists shared with me + my org/team playlist.
+sharesRouter.get("/shared", async (req, res) => {
+  const db = getDb();
+  const result = listSharedWithMe(db, req.userId!);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
       .json({ error: result.error });
   }
-  return res.json({ playlists: result.value });
+  const org = await listOrgPlaylistsForUser(db, req.userId!);
+  if (!org.ok) {
+    return res
+      .status(statusForError(org.error.code))
+      .json({ error: org.error });
+  }
+  // Org/team playlists first, then explicitly-shared ones.
+  return res.json({ playlists: [...org.value, ...result.value] });
 });
 
 // GET /api/shared/:id — songs of a playlist shared with me (read-only).

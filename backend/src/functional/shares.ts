@@ -1,6 +1,7 @@
 import type { Database } from "better-sqlite3";
 import type { Playlist, Song } from "../types.js";
 import { getPlaylist, songsInPlaylist } from "./playlists.js";
+import { isOrgMemberOf, songInUserOrgPlaylist } from "./orgPlaylists.js";
 import { err, ok, type Result } from "./result.js";
 
 export interface ShareUser {
@@ -15,6 +16,7 @@ export interface SharedPlaylist extends Playlist {
   ownerName: string;
   canEdit: boolean;
   savedCopyId: number | null; // my saved copy's id, if I've saved this one
+  isOrg?: boolean; // auto-created org/team playlist (per email domain)
 }
 
 function findUserByEmail(
@@ -204,11 +206,16 @@ export function getSharedPlaylistSongs(
   userId: string,
   playlistId: number
 ): Result<Song[]> {
-  if (!isPlaylistSharedWith(db, playlistId, userId)) {
+  const allowed =
+    isPlaylistSharedWith(db, playlistId, userId) ||
+    isOrgMemberOf(db, playlistId, userId);
+  if (!allowed) {
     return err("not_found", `Playlist ${playlistId} not found`);
   }
   try {
-    return ok(songsInPlaylist(db, playlistId));
+    // Pass the viewer so per-song addedByMe/ownedByMe flags are populated
+    // (drives org/team playlist controls).
+    return ok(songsInPlaylist(db, playlistId, userId));
   } catch (e) {
     return err("internal", `Failed to get songs: ${(e as Error).message}`);
   }
@@ -354,5 +361,7 @@ export function canAccessSong(
        LIMIT 1`
     )
     .get(songId, userId);
-  return !!shared;
+  if (shared) return true;
+  // In an org/team playlist the user belongs to (same email domain).
+  return songInUserOrgPlaylist(db, userId, songId);
 }
