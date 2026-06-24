@@ -130,7 +130,7 @@
     { id: "songs", label: "All Songs", icon: "library_music" },
     { id: "liked", label: "Liked", icon: "favorite" },
     { id: "recent", label: "Recently Played", icon: "history" },
-    { id: "stats", label: "Listening", icon: "insights" },
+    { id: "stats", label: "Listening Stats", icon: "insights" },
     { id: "playlists", label: "Playlists", icon: "queue_music" },
     { id: "albums", label: "Albums", icon: "album" },
     { id: "artists", label: "Artists", icon: "artist" },
@@ -408,7 +408,7 @@
         <h2>Recently Played</h2>
         <RecentlyPlayedView {vm} />
       {:else if view === "stats"}
-        <h2>Listening</h2>
+        <h2>Listening Stats</h2>
         <ListeningStatsView onConnect={() => goTo("settings")} />
       {:else if view === "friends"}
         <h2>Friends</h2>
