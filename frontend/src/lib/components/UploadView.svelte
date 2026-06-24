@@ -2,6 +2,7 @@
   import EditSongDialog from "$lib/components/EditSongDialog.svelte";
   import Icon from "$lib/components/Icon.svelte";
   import { thumbUrl, updateSongMeta } from "$lib/services/songService";
+  import type { YouTubeResult } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
   let { vm }: { vm: SongViewModel } = $props();
@@ -199,7 +200,7 @@
   let playlistUrl = $state("");
   let playlistMsg = $state<{ ok: boolean; text: string } | null>(null);
   // Which import is running, so the progress bar shows in the right section.
-  let activeImport = $state<"track" | "playlist" | null>(null);
+  let activeImport = $state<"track" | "playlist" | "search" | null>(null);
 
   function stageLabel(stage: string, pct: number | null): string {
     if (stage === "download")
@@ -223,6 +224,56 @@
       linkUrl = "";
     } else {
       linkMsg = { ok: false, text: vm.error ?? "Import failed" };
+    }
+  }
+
+  // --- Search YouTube by name, then import a picked result -----------------
+  let searchQuery = $state("");
+  let searchResults = $state<YouTubeResult[]>([]);
+  let searchMsg = $state<{ ok: boolean; text: string } | null>(null);
+  let searched = $state(false); // a search has run (controls "no results")
+  // Which result row is currently importing (shows its spinner + progress).
+  let importingResultId = $state<string | null>(null);
+
+  function fmtDuration(secs: number | null): string {
+    if (secs == null || !isFinite(secs)) return "";
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  }
+
+  // YouTube CDN thumbnail for a video id (no extra API call needed).
+  const ytThumb = (id: string) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+
+  async function submitSearch(e: Event) {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (!q || vm.searching || vm.importing) return;
+    searchMsg = null;
+    searchResults = [];
+    searched = false;
+    const results = await vm.searchYouTube(q);
+    searched = true;
+    searchResults = results;
+    if (results.length === 0) {
+      searchMsg = { ok: false, text: vm.error ?? "No results found" };
+    }
+  }
+
+  async function importResult(r: YouTubeResult) {
+    if (vm.importing) return;
+    searchMsg = null;
+    importingResultId = r.id;
+    activeImport = "search";
+    const n = await vm.importFromLink(r.url);
+    activeImport = null;
+    importingResultId = null;
+    if (n > 0) {
+      searchMsg = { ok: true, text: `Added "${r.title}" — review it below` };
+      // Drop the imported pick from the list so it can't be added twice.
+      searchResults = searchResults.filter((x) => x.id !== r.id);
+    } else {
+      searchMsg = { ok: false, text: vm.error ?? "Import failed" };
     }
   }
 
@@ -309,7 +360,7 @@
       bind:value={linkUrl}
       disabled={vm.importing}
     />
-    <button type="submit" class="link-btn" disabled={vm.importing || !linkUrl.trim()}>
+    <button type="submit" class="link-btn" class:loading={activeImport === "track"} disabled={vm.importing || !linkUrl.trim()}>
       {#if activeImport === "track"}
         <Icon name="progress_activity" size={18} /> Importing…
       {:else}
@@ -338,7 +389,7 @@
       bind:value={playlistUrl}
       disabled={vm.importing}
     />
-    <button type="submit" class="link-btn" disabled={vm.importing || !playlistUrl.trim()}>
+    <button type="submit" class="link-btn" class:loading={activeImport === "playlist"} disabled={vm.importing || !playlistUrl.trim()}>
       {#if activeImport === "playlist"}
         <Icon name="progress_activity" size={18} /> Importing…
       {:else}
@@ -354,6 +405,72 @@
   {#if playlistMsg}
     <p class="msg" class:ok={playlistMsg.ok} class:err={!playlistMsg.ok}>
       {#if playlistMsg.ok}<Icon name="check_circle" size={18} />{/if}{playlistMsg.text}
+    </p>
+  {/if}
+
+  <div class="divider"><span>or search for a song</span></div>
+
+  <form class="link-row" onsubmit={submitSearch}>
+    <input
+      class="link-input"
+      type="text"
+      placeholder="Search by song name or artist — e.g. Daft Punk One More Time"
+      bind:value={searchQuery}
+      disabled={vm.importing}
+    />
+    <button
+      type="submit"
+      class="link-btn"
+      class:loading={vm.searching}
+      disabled={vm.searching || vm.importing || !searchQuery.trim()}
+    >
+      {#if vm.searching}
+        <Icon name="progress_activity" size={18} /> Searching…
+      {:else}
+        <Icon name="search" size={18} /> Search
+      {/if}
+    </button>
+  </form>
+  <p class="link-hint">
+    Finds the track on YouTube and pulls the audio as MP3 (with cover art).
+  </p>
+
+  {#if searchResults.length > 0}
+    <ul class="yt-results">
+      {#each searchResults as r (r.id)}
+        <li class="yt-result">
+          <img class="yt-thumb" src={ytThumb(r.id)} alt="" loading="lazy" />
+          <div class="yt-meta">
+            <span class="yt-title">{r.title}</span>
+            <span class="yt-sub">
+              {[r.uploader, fmtDuration(r.duration)].filter(Boolean).join(" · ")}
+            </span>
+          </div>
+          <button
+            class="yt-add"
+            class:loading={importingResultId === r.id}
+            onclick={() => importResult(r)}
+            disabled={vm.importing}
+          >
+            {#if importingResultId === r.id}
+              <Icon name="progress_activity" size={18} /> Importing…
+            {:else}
+              <Icon name="download" size={18} /> Add
+            {/if}
+          </button>
+        </li>
+      {/each}
+    </ul>
+  {:else if searched && !vm.searching && !searchMsg}
+    <p class="link-hint">No results — try a different search.</p>
+  {/if}
+
+  {#if activeImport === "search"}
+    {@render progressBar()}
+  {/if}
+  {#if searchMsg}
+    <p class="msg" class:ok={searchMsg.ok} class:err={!searchMsg.ok}>
+      {#if searchMsg.ok}<Icon name="check_circle" size={18} />{/if}{searchMsg.text}
     </p>
   {/if}
   </div>
@@ -633,11 +750,91 @@
   .link-btn :global(.material-symbols-rounded) {
     color: #fff;
   }
+  /* Spin the progress_activity icon while a button is working. */
+  .link-btn.loading :global(.material-symbols-rounded),
+  .yt-add.loading :global(.material-symbols-rounded) {
+    animation: spin 1s linear infinite;
+  }
   .link-hint {
     margin: 0.5rem 0 0;
     color: var(--dim);
     font-size: 0.8rem;
   }
+  /* YouTube search results */
+  .yt-results {
+    list-style: none;
+    margin: 0.75rem 0 0;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: 0.6rem;
+    overflow: hidden;
+  }
+  .yt-result {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.5rem 0.7rem;
+    border-top: 1px solid var(--surface-2);
+  }
+  .yt-result:first-child {
+    border-top: none;
+  }
+  .yt-thumb {
+    flex-shrink: 0;
+    width: 80px;
+    height: 45px;
+    object-fit: cover;
+    border-radius: 0.35rem;
+    background: var(--surface-2);
+  }
+  .yt-meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .yt-title {
+    color: var(--text);
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .yt-sub {
+    color: var(--dim);
+    font-size: 0.78rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .yt-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+    padding: 0.45rem 0.8rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 0.5rem;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  @media (hover: hover) {
+    .yt-add:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+  }
+  .yt-add:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+  .yt-add :global(.material-symbols-rounded) {
+    color: #fff;
+  }
+
   .link-progress {
     margin-top: 0.85rem;
   }

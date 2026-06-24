@@ -52,6 +52,7 @@ import {
 } from "../functional/playbackState.js";
 import { statusForError } from "../functional/result.js";
 import { extractMetadata } from "../metadata.js";
+import { enrichTrackInfo } from "../musicbrainz.js";
 import { measureLoudness } from "../loudness.js";
 import { streamSongFile } from "../stream.js";
 import { serveArt } from "../thumbnails.js";
@@ -544,6 +545,117 @@ function runSpotdl(
   });
 }
 
+// Searches YouTube via yt-dlp (no download) and returns lightweight result
+// metadata for the user to pick from. `--flat-playlist` keeps it fast — it only
+// reads the search results page, never touching each video. The query is passed
+// as a single argv after a fixed "ytsearchN:" prefix (no shell), so it can't
+// inject yt-dlp flags or shell commands.
+const SEARCH_COUNT = 8; // results to show per search
+
+interface YtSearchResult {
+  id: string;
+  title: string;
+  uploader: string | null;
+  duration: number | null;
+  url: string;
+}
+
+function runYtSearch(query: string): Promise<YtSearchResult[]> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "yt-dlp",
+      [
+        `ytsearch${SEARCH_COUNT}:${query}`,
+        "--flat-playlist",
+        "--dump-json",
+        "--no-warnings",
+        "--no-playlist",
+      ],
+      { stdio: ["ignore", "pipe", "pipe"] }
+    );
+
+    let out = "";
+    let errTail = "";
+    child.stdout.on("data", (d: Buffer) => (out += d.toString()));
+    child.stderr.on("data", (d: Buffer) => {
+      errTail = (errTail + d.toString()).slice(-600);
+    });
+
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error("Search timed out"));
+    }, 30_000);
+
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code !== 0 && !out.trim()) {
+        const last = errTail
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .pop();
+        return reject(new Error(last || "Search failed"));
+      }
+      const results: YtSearchResult[] = [];
+      for (const line of out.split("\n")) {
+        const s = line.trim();
+        if (!s) continue;
+        try {
+          const o = JSON.parse(s);
+          const id = typeof o.id === "string" ? o.id : null;
+          if (!id) continue;
+          results.push({
+            id,
+            title: typeof o.title === "string" ? o.title : id,
+            uploader:
+              (typeof o.uploader === "string" && o.uploader) ||
+              (typeof o.channel === "string" && o.channel) ||
+              null,
+            duration: typeof o.duration === "number" ? o.duration : null,
+            // Canonical watch URL — fed straight into the existing import flow.
+            url: `https://www.youtube.com/watch?v=${id}`,
+          });
+        } catch {
+          /* skip malformed line */
+        }
+      }
+      resolve(results);
+    });
+  });
+}
+
+// POST /api/youtube-search — { query } -> { results: [...] }. Searches YouTube
+// by name so the user can pick a track to import without finding a link first.
+songsRouter.post("/youtube-search", importLimiter, async (req, res) => {
+  const query =
+    typeof req.body?.query === "string" ? req.body.query.trim() : "";
+  if (!query) {
+    return res.status(400).json({
+      error: { code: "validation", message: "A search term is required" },
+    });
+  }
+  if (query.length > 200) {
+    return res.status(400).json({
+      error: { code: "validation", message: "Search term is too long" },
+    });
+  }
+  try {
+    const results = await runYtSearch(query);
+    return res.json({ results });
+  } catch (e) {
+    return res.status(502).json({
+      error: {
+        code: "import_failed",
+        message: e instanceof Error ? e.message : "Search failed",
+      },
+    });
+  }
+});
+
 // POST /api/import-link — download a link's audio (yt-dlp, or spotdl for Spotify
 // links) and ingest it into the library. Streams NDJSON progress lines so the
 // client can show a progress bar, ending with a {done} or {error} line.
@@ -609,10 +721,14 @@ songsRouter.post("/import-link", importLimiter, async (req, res) => {
       const dest = join(MUSIC_DIR, stored);
       copyFileSync(join(work, name), dest);
       const meta = await extractMetadata(dest, ART_DIR);
-      // Each track's own video URL, from its sidecar .info.json (yt-dlp writes
-      // "<title>.info.json" alongside "<title>.mp3"). Falls back to the pasted
-      // URL for a single-video import.
+      // Each track's own video URL + any music fields yt-dlp parsed, from its
+      // sidecar .info.json (yt-dlp writes "<title>.info.json" alongside the
+      // mp3). Falls back to the pasted URL for a single-video import.
       let trackUrl: string | null = url;
+      let infoUploader: string | null = null;
+      let infoTrack: string | null = null;
+      let infoArtist: string | null = null;
+      let infoAlbum: string | null = null;
       if (!isSpotify) {
         const infoPath = join(work, name.replace(/\.mp3$/i, ".info.json"));
         if (existsSync(infoPath)) {
@@ -620,17 +736,42 @@ songsRouter.post("/import-link", importLimiter, async (req, res) => {
             const info = JSON.parse(readFileSync(infoPath, "utf8"));
             if (typeof info.webpage_url === "string") trackUrl = info.webpage_url;
             else if (typeof info.original_url === "string") trackUrl = info.original_url;
+            // YouTube Music entries carry clean track/artist/album fields.
+            if (typeof info.track === "string") infoTrack = info.track;
+            if (typeof info.artist === "string") infoArtist = info.artist;
+            else if (typeof info.creator === "string") infoArtist = info.creator;
+            if (typeof info.album === "string") infoAlbum = info.album;
+            if (typeof info.uploader === "string") infoUploader = info.uploader;
+            else if (typeof info.channel === "string") infoUploader = info.channel;
           } catch {
             /* keep the fallback URL */
           }
         }
       }
+
+      // Guess a clean title/artist/album. Spotify (spotdl) already wrote good
+      // ID3 tags, so trust those and skip the network lookup; YouTube imports
+      // get the heuristic + MusicBrainz treatment.
+      const rawTitle = name.replace(/\.mp3$/i, "");
+      const info = await enrichTrackInfo({
+        rawTitle,
+        uploader: infoUploader,
+        durationSec: meta.duration,
+        tagTitle: isSpotify ? meta.title : infoTrack,
+        tagArtist: isSpotify ? meta.artist : infoArtist,
+        tagAlbum: isSpotify ? meta.album : infoAlbum,
+        useMusicBrainz: !isSpotify,
+      });
+      // Use the clean track title as the display name (no file extension — the
+      // download endpoint re-appends ".mp3" when the name lacks one).
+      const cleanName = info.title.trim() || rawTitle.replace(/\.mp3$/i, "");
+
       const result = recordSong(getDb(), {
         filename: stored,
-        originalFilename: name, // the video title + .mp3
+        originalFilename: cleanName,
         userId: req.userId!,
-        artist: meta.artist,
-        album: meta.album,
+        artist: info.artist ?? meta.artist,
+        album: info.album ?? meta.album,
         artFilename: meta.artFilename,
         duration: meta.duration,
         pending: true, // awaits review before joining the library
