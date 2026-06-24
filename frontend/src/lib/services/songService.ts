@@ -39,6 +39,27 @@ export async function uploadSong(file: File): Promise<Song> {
   return body.song as Song;
 }
 
+export interface YouTubeResult {
+  id: string;
+  title: string;
+  uploader: string | null;
+  duration: number | null;
+  url: string;
+}
+
+// Searches YouTube by name (server runs yt-dlp). Returns candidate tracks for
+// the user to pick from; the chosen one's `url` is then fed into importLink.
+export async function searchYouTube(query: string): Promise<YouTubeResult[]> {
+  const res = await fetch(`${apiBase()}/api/youtube-search`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  const body = await res.json();
+  return body.results as YouTubeResult[];
+}
+
 export interface ImportProgress {
   stage: string; // "download" | "convert" | "art" | "ingest"
   percent?: number;

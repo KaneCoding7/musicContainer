@@ -9,11 +9,13 @@ import {
   importLink,
   recordPlay,
   reorderSongs as reorderSongsApi,
+  searchYouTube as searchYouTubeApi,
   setLiked,
   updateSongMeta,
   updateSongsMeta,
   uploadSong,
   type SongMetadata,
+  type YouTubeResult,
 } from "$lib/services/songService";
 import {
   fetchPlaybackState,
@@ -44,6 +46,8 @@ export class SongViewModel {
   importing = $state(false);
   importStage = $state<string>("");
   importPercent = $state<number | null>(null);
+  // Searching YouTube by name (yt-dlp on the server) before importing a pick.
+  searching = $state(false);
   // Uploaded/imported tracks awaiting the user's review before joining the
   // library (hidden from the library until confirmed).
   staged = $state<Song[]>([]);
@@ -848,6 +852,21 @@ export class SongViewModel {
     } catch (e) {
       this.error = e instanceof Error ? e.message : "Failed to add to library";
       return 0;
+    }
+  }
+
+  // Searches YouTube by name (server runs yt-dlp). Returns candidate tracks for
+  // the user to pick from; the chosen one is imported via importFromLink.
+  async searchYouTube(query: string): Promise<YouTubeResult[]> {
+    this.searching = true;
+    this.error = null;
+    try {
+      return await searchYouTubeApi(query);
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Search failed";
+      return [];
+    } finally {
+      this.searching = false;
     }
   }
 
