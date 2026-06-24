@@ -9,6 +9,7 @@ import {
   renameSync,
   rmSync,
   unlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { Router } from "express";
@@ -52,7 +53,11 @@ import {
 } from "../functional/playbackState.js";
 import { statusForError } from "../functional/result.js";
 import { extractMetadata } from "../metadata.js";
-import { enrichTrackInfo } from "../musicbrainz.js";
+import {
+  enrichTrackInfo,
+  fetchCoverArt,
+  fetchCoverArtDataUrl,
+} from "../musicbrainz.js";
 import { measureLoudness } from "../loudness.js";
 import { streamSongFile } from "../stream.js";
 import { serveArt } from "../thumbnails.js";
@@ -766,13 +771,41 @@ songsRouter.post("/import-link", importLimiter, async (req, res) => {
       // download endpoint re-appends ".mp3" when the name lacks one).
       const cleanName = info.title.trim() || rawTitle.replace(/\.mp3$/i, "");
 
+      // Default cover: the real album art from the Cover Art Archive, falling
+      // back to the embedded YouTube thumbnail extractMetadata pulled. (Spotify
+      // imports already carry good cover art, so leave those alone.)
+      let artFilename = meta.artFilename;
+      if (!isSpotify && info.artist && info.album) {
+        const cover = await fetchCoverArt({
+          artist: info.artist,
+          album: info.album,
+        });
+        if (cover) {
+          const fn = `${randomUUID()}.${cover.ext}`;
+          try {
+            writeFileSync(join(ART_DIR, fn), cover.buffer);
+            // Remove the now-unused thumbnail file so it doesn't orphan on disk.
+            if (meta.artFilename) {
+              try {
+                unlinkSync(join(ART_DIR, meta.artFilename));
+              } catch {
+                /* best-effort */
+              }
+            }
+            artFilename = fn;
+          } catch {
+            /* keep the thumbnail on any write failure */
+          }
+        }
+      }
+
       const result = recordSong(getDb(), {
         filename: stored,
         originalFilename: cleanName,
         userId: req.userId!,
         artist: info.artist ?? meta.artist,
         album: info.album ?? meta.album,
-        artFilename: meta.artFilename,
+        artFilename,
         duration: meta.duration,
         pending: true, // awaits review before joining the library
         // Only video links support the "pick frame as art" feature.
@@ -929,7 +962,18 @@ songsRouter.get("/songs/:id/frames", heavyLimiter, async (req, res) => {
 
     const frames: { t?: number; label?: string; dataUrl: string }[] = [];
 
-    // The official thumbnail, offered first.
+    // The real album cover from the Cover Art Archive, offered first.
+    const songRes = getSong(getDb(), id, req.userId!);
+    const songMeta = songRes.ok ? songRes.value : null;
+    if (songMeta?.artist && songMeta?.album) {
+      const cover = await fetchCoverArtDataUrl({
+        artist: songMeta.artist,
+        album: songMeta.album,
+      });
+      if (cover) frames.push({ label: "Album cover", dataUrl: cover });
+    }
+
+    // The video's official thumbnail, offered next.
     if (thumb) {
       const ext = extname(thumb).toLowerCase();
       const mime =
