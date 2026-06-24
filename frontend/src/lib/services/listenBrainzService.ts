@@ -54,3 +54,34 @@ export function setNowPlaying(songId: number): void {
     headers: authHeaders(),
   }).catch(() => {});
 }
+
+export type StatsRange = "week" | "month" | "year" | "all_time";
+
+export interface StatEntry {
+  name: string;
+  subtitle?: string | null;
+  count: number;
+  mbid?: string | null;
+}
+
+export interface ListenBrainzStats {
+  connected: boolean;
+  username?: string | null;
+  range?: StatsRange;
+  listenCount?: number | null;
+  artists?: StatEntry[];
+  recordings?: StatEntry[];
+}
+
+// Fetches the user's ListenBrainz stats for a range. Returns { connected:false }
+// when no account is linked.
+export async function getListenBrainzStats(
+  range: StatsRange
+): Promise<ListenBrainzStats> {
+  const res = await fetch(
+    `${apiBase()}/api/listenbrainz/stats?range=${encodeURIComponent(range)}`,
+    { headers: authHeaders() }
+  );
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return res.json();
+}

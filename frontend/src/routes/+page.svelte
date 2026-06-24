@@ -12,6 +12,7 @@
   import Icon from "$lib/components/Icon.svelte";
   import InviteView from "$lib/components/InviteView.svelte";
   import LikedView from "$lib/components/LikedView.svelte";
+  import ListeningStatsView from "$lib/components/ListeningStatsView.svelte";
   import Player from "$lib/components/Player.svelte";
   import PlaylistManager from "$lib/components/PlaylistManager.svelte";
   import QueueView from "$lib/components/QueueView.svelte";
@@ -55,6 +56,7 @@
     | "albums"
     | "artists"
     | "recent"
+    | "stats"
     | "invite"
     | "friends"
     | "settings";
@@ -69,6 +71,7 @@
       case "albums":
       case "artists":
       case "recent":
+      case "stats":
       case "invite":
       case "friends":
       case "settings":
@@ -127,6 +130,7 @@
     { id: "songs", label: "All Songs", icon: "library_music" },
     { id: "liked", label: "Liked", icon: "favorite" },
     { id: "recent", label: "Recently Played", icon: "history" },
+    { id: "stats", label: "Listening", icon: "insights" },
     { id: "playlists", label: "Playlists", icon: "queue_music" },
     { id: "albums", label: "Albums", icon: "album" },
     { id: "artists", label: "Artists", icon: "artist" },
@@ -403,6 +407,9 @@
       {:else if view === "recent"}
         <h2>Recently Played</h2>
         <RecentlyPlayedView {vm} />
+      {:else if view === "stats"}
+        <h2>Listening</h2>
+        <ListeningStatsView onConnect={() => goTo("settings")} />
       {:else if view === "friends"}
         <h2>Friends</h2>
         <FriendsView vm={friendsVm} />

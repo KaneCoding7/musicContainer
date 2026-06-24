@@ -106,3 +106,101 @@ export async function submitPlayingNow(
     payload: [{ track_metadata: trackMetadata(track) }],
   });
 }
+
+// --- Stats (phase 2: pull data in) -----------------------------------------
+
+// Time ranges ListenBrainz computes stats over.
+export type StatsRange = "week" | "month" | "year" | "all_time";
+
+export interface StatEntry {
+  name: string;
+  subtitle?: string | null; // e.g. the artist under a track
+  count: number; // listen count in the range
+  mbid?: string | null;
+}
+
+export interface UserStats {
+  listenCount: number | null; // all-time total listens
+  artists: StatEntry[];
+  recordings: StatEntry[];
+}
+
+interface LbArtistsResp {
+  payload?: {
+    artists?: {
+      artist_name?: string;
+      listen_count?: number;
+      artist_mbid?: string | null;
+    }[];
+  };
+}
+interface LbRecordingsResp {
+  payload?: {
+    recordings?: {
+      track_name?: string;
+      artist_name?: string;
+      listen_count?: number;
+      recording_mbid?: string | null;
+    }[];
+  };
+}
+interface LbCountResp {
+  payload?: { count?: number };
+}
+
+const STAT_COUNT = 10; // entries per top-list
+
+// GETs a ListenBrainz JSON endpoint. Returns null on 204 (stats not yet
+// computed for this user/range), any error, or a network failure.
+async function lbGet<T>(path: string, token?: string | null): Promise<T | null> {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Token ${token}`;
+    const res = await fetch(`${LB_BASE}${path}`, {
+      headers,
+      signal: ctrl.signal,
+    }).finally(() => clearTimeout(timer));
+    if (res.status === 204 || !res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+// Fetches a user's top artists, top tracks, and all-time listen count. Each
+// piece degrades to empty/null independently — a user with no computed stats
+// for a range just gets empty lists, never an error.
+export async function getUserStats(
+  username: string,
+  range: StatsRange,
+  token?: string | null
+): Promise<UserStats> {
+  const u = encodeURIComponent(username);
+  const [artistsData, recData, countData] = await Promise.all([
+    lbGet<LbArtistsResp>(`/stats/user/${u}/artists?range=${range}&count=${STAT_COUNT}`, token),
+    lbGet<LbRecordingsResp>(`/stats/user/${u}/recordings?range=${range}&count=${STAT_COUNT}`, token),
+    lbGet<LbCountResp>(`/user/${u}/listen-count`, token),
+  ]);
+
+  const artists: StatEntry[] = (artistsData?.payload?.artists ?? [])
+    .filter((a) => a.artist_name)
+    .map((a) => ({
+      name: a.artist_name!,
+      count: a.listen_count ?? 0,
+      mbid: a.artist_mbid ?? null,
+    }));
+  const recordings: StatEntry[] = (recData?.payload?.recordings ?? [])
+    .filter((r) => r.track_name)
+    .map((r) => ({
+      name: r.track_name!,
+      subtitle: r.artist_name ?? null,
+      count: r.listen_count ?? 0,
+      mbid: r.recording_mbid ?? null,
+    }));
+  const listenCount =
+    typeof countData?.payload?.count === "number" ? countData.payload.count : null;
+
+  return { listenCount, artists, recordings };
+}
