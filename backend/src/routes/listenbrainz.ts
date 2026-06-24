@@ -3,16 +3,20 @@ import { getDb } from "../db/init.js";
 import {
   deleteListenBrainzToken,
   getListenBrainzConnection,
+  getListenBrainzToken,
   setListenBrainzToken,
 } from "../functional/listenbrainz.js";
-import { validateToken } from "../listenbrainz.js";
+import { getUserStats, validateToken, type StatsRange } from "../listenbrainz.js";
 import { rateLimit } from "../rate-limit.js";
 
 // Per-user ListenBrainz connection. Mounted under /api with requireAuth.
 export const listenBrainzRouter = Router();
 
-// Validating a token hits an external API — throttle it lightly.
+// These endpoints hit an external API — throttle them lightly.
 const connectLimiter = rateLimit({ windowMs: 60_000, max: 20 });
+const statsLimiter = rateLimit({ windowMs: 60_000, max: 40 });
+
+const RANGES = new Set<StatsRange>(["week", "month", "year", "all_time"]);
 
 // GET /api/listenbrainz — current connection status (never returns the token).
 listenBrainzRouter.get("/listenbrainz", (req, res) => {
@@ -45,4 +49,20 @@ listenBrainzRouter.post("/listenbrainz", connectLimiter, async (req, res) => {
 listenBrainzRouter.delete("/listenbrainz", (req, res) => {
   deleteListenBrainzToken(getDb(), req.userId!);
   res.json({ connected: false, username: null });
+});
+
+// GET /api/listenbrainz/stats?range=week|month|year|all_time — the user's top
+// artists, top tracks, and listen count. Returns { connected: false } when no
+// account is linked (the UI shows a connect prompt instead).
+listenBrainzRouter.get("/listenbrainz/stats", statsLimiter, async (req, res) => {
+  const db = getDb();
+  const conn = getListenBrainzConnection(db, req.userId!);
+  if (!conn.connected || !conn.username) {
+    return res.json({ connected: false });
+  }
+  const r = typeof req.query.range === "string" ? (req.query.range as StatsRange) : "month";
+  const range: StatsRange = RANGES.has(r) ? r : "month";
+  const token = getListenBrainzToken(db, req.userId!);
+  const stats = await getUserStats(conn.username, range, token);
+  res.json({ connected: true, username: conn.username, range, ...stats });
 });

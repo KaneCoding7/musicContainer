@@ -368,7 +368,7 @@
   <p class="sub hint">
     Scrobble your plays to <a href="https://listenbrainz.org" target="_blank" rel="noopener noreferrer">ListenBrainz</a>
     for listening stats and recommendations. A track counts once you've played
-    most of it. Paste your personal token (Settings → ListenBrainz on their site).
+    most of it.
   </p>
   {#if lbStatus.connected}
     <div class="row">
@@ -381,13 +381,25 @@
       </button>
     </div>
   {:else}
+    <ol class="lb-steps">
+      <li>
+        <a href="https://listenbrainz.org/login/" target="_blank" rel="noopener noreferrer">Create a free account</a>
+        (or sign in) — it uses a MusicBrainz login.
+      </li>
+      <li>
+        Open your
+        <a href="https://listenbrainz.org/settings/" target="_blank" rel="noopener noreferrer">ListenBrainz settings</a>
+        and copy your <strong>User token</strong>.
+      </li>
+      <li>Paste it below and connect.</li>
+    </ol>
     <form class="pw-form" onsubmit={connectLB}>
       <div class="field-wrap">
         <input
           class="inp"
           type="password"
           bind:value={lbToken}
-          placeholder="ListenBrainz token"
+          placeholder="Paste your ListenBrainz user token"
           autocomplete="off"
         />
         <button
@@ -401,6 +413,14 @@
         </button>
       </div>
     </form>
+    <a
+      class="lb-token-link"
+      href="https://listenbrainz.org/settings/"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      <Icon name="open_in_new" size={15} /> Get your token
+    </a>
   {/if}
   {#if lbMsg}<p class="msg" class:err={!lbMsg.ok}>{lbMsg.text}</p>{/if}
 
@@ -453,6 +473,36 @@
   }
   .hint {
     margin: 0.25rem 0 0.5rem;
+  }
+  /* ListenBrainz: numbered setup steps + "get token" link */
+  .lb-steps {
+    margin: 0.25rem 0 0.7rem;
+    padding-left: 1.2rem;
+    color: var(--dim);
+    font-size: 0.8rem;
+    line-height: 1.5;
+  }
+  .lb-steps li {
+    margin: 0.15rem 0;
+  }
+  .lb-steps strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+  .lb-token-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.55rem;
+    color: var(--accent-text);
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  @media (hover: hover) {
+    .lb-token-link:hover {
+      text-decoration: underline;
+    }
   }
   .gen {
     margin-top: 0.6rem;
