@@ -262,3 +262,98 @@ export async function enrichTrackInfo(input: {
     album: mb.album || base.album,
   };
 }
+
+// --- Cover art (Cover Art Archive) -----------------------------------------
+
+const CAA_BASE = "https://coverartarchive.org";
+
+interface MbReleaseSearchResult {
+  id?: string;
+  "release-group"?: { id?: string };
+}
+
+export interface CoverArt {
+  buffer: Buffer;
+  mime: string;
+  ext: string;
+}
+
+// Fetches a single image, following CAA's redirect to archive.org. Returns the
+// bytes + a normalized mime/extension, or null on any non-image / failure.
+async function fetchImage(url: string): Promise<CoverArt | null> {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT },
+      redirect: "follow",
+      signal: ctrl.signal,
+    }).finally(() => clearTimeout(timer));
+    if (!res.ok) return null;
+    const mime = (res.headers.get("content-type") ?? "image/jpeg").split(";")[0];
+    if (!/^image\//i.test(mime)) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length === 0) return null;
+    const ext = mime.includes("png")
+      ? "png"
+      : mime.includes("webp")
+        ? "webp"
+        : "jpg";
+    return { buffer, mime, ext };
+  } catch {
+    return null;
+  }
+}
+
+// Finds an album's front cover via MusicBrainz + the Cover Art Archive: search
+// releases for the artist+album, then try each candidate's front image (the
+// release first, then its release-group). Returns the image bytes, or null when
+// no cover exists. Never throws — callers fall back to the video thumbnail.
+export async function fetchCoverArt(opts: {
+  artist: string | null;
+  album: string | null;
+}): Promise<CoverArt | null> {
+  const { artist, album } = opts;
+  if (!artist || !album) return null;
+  try {
+    const q = `release:${lucene(album)} AND artist:${lucene(artist)}`;
+    const url = `${MB_BASE}/release/?query=${encodeURIComponent(q)}&fmt=json&limit=6`;
+    await mbThrottle();
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+      signal: ctrl.signal,
+    }).finally(() => clearTimeout(timer));
+    if (!res.ok) return null;
+    const data = (await res.json()) as { releases?: MbReleaseSearchResult[] };
+    const releases = (data.releases ?? []).slice(0, 5);
+
+    // Try each release's front cover, then fall back to release-group covers.
+    const targets = [
+      ...releases.flatMap((r) =>
+        r.id ? [`${CAA_BASE}/release/${r.id}/front-500`] : []
+      ),
+      ...releases.flatMap((r) => {
+        const rg = r["release-group"]?.id;
+        return rg ? [`${CAA_BASE}/release-group/${rg}/front-500`] : [];
+      }),
+    ];
+    for (const t of targets) {
+      const img = await fetchImage(t);
+      if (img) return img;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Same lookup, returned as a data URL for inline display (the cover picker).
+export async function fetchCoverArtDataUrl(opts: {
+  artist: string | null;
+  album: string | null;
+}): Promise<string | null> {
+  const img = await fetchCoverArt(opts);
+  return img ? `data:${img.mime};base64,${img.buffer.toString("base64")}` : null;
+}
