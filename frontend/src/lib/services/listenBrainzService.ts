@@ -64,6 +64,11 @@ export interface StatEntry {
   mbid?: string | null;
 }
 
+export interface ActivityBucket {
+  label: string;
+  count: number;
+}
+
 export interface ListenBrainzStats {
   connected: boolean;
   username?: string | null;
@@ -71,6 +76,8 @@ export interface ListenBrainzStats {
   listenCount?: number | null;
   artists?: StatEntry[];
   recordings?: StatEntry[];
+  releases?: StatEntry[];
+  activity?: ActivityBucket[];
 }
 
 // Fetches the user's ListenBrainz stats for a range. Returns { connected:false }
@@ -84,4 +91,35 @@ export async function getListenBrainzStats(
   );
   if (!res.ok) throw new Error(await errorMessage(res));
   return res.json();
+}
+
+export interface Recommendation {
+  track: string;
+  artist: string | null;
+  release: string | null;
+  recordingMbid: string;
+}
+
+export interface FreshRelease {
+  release: string;
+  artist: string | null;
+  date: string | null;
+  type: string | null;
+  releaseMbid: string | null;
+}
+
+export async function getRecommendations(): Promise<Recommendation[]> {
+  const res = await fetch(`${apiBase()}/api/listenbrainz/recommendations`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).items ?? [];
+}
+
+export async function getFreshReleases(): Promise<FreshRelease[]> {
+  const res = await fetch(`${apiBase()}/api/listenbrainz/fresh-releases`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).items ?? [];
 }

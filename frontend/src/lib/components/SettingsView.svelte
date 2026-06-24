@@ -13,6 +13,12 @@
     disconnectListenBrainz,
     type ListenBrainzStatus,
   } from "$lib/services/listenBrainzService";
+  import {
+    getLastfmStatus,
+    disconnectLastfm,
+    lastfmAuthUrl,
+    type LastfmStatus,
+  } from "$lib/services/lastfmService";
   import type { AuthViewModel } from "$lib/viewmodels/authViewModel.svelte";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -159,6 +165,41 @@
       lbMsg = { ok: false, text: err instanceof Error ? err.message : "Couldn't disconnect" };
     } finally {
       lbBusy = false;
+    }
+  }
+
+  // Last.fm scrobbling connection (web-auth redirect flow).
+  let lfmStatus = $state<LastfmStatus>({
+    configured: false,
+    apiKey: null,
+    connected: false,
+    username: null,
+  });
+  let lfmBusy = $state(false);
+  let lfmMsg = $state<string | null>(null);
+
+  onMount(async () => {
+    try {
+      lfmStatus = await getLastfmStatus();
+    } catch {
+      /* leave disabled */
+    }
+  });
+
+  function connectLFM() {
+    if (lfmStatus.apiKey) window.location.href = lastfmAuthUrl(lfmStatus.apiKey);
+  }
+
+  async function disconnectLFM() {
+    lfmBusy = true;
+    lfmMsg = null;
+    try {
+      lfmStatus = await disconnectLastfm();
+      lfmMsg = "Disconnected.";
+    } catch (err) {
+      lfmMsg = err instanceof Error ? err.message : "Couldn't disconnect";
+    } finally {
+      lfmBusy = false;
     }
   }
 
@@ -423,6 +464,36 @@
     </a>
   {/if}
   {#if lbMsg}<p class="msg" class:err={!lbMsg.ok}>{lbMsg.text}</p>{/if}
+
+  <p class="section">Last.fm</p>
+  {#if !lfmStatus.configured && !lfmStatus.connected}
+    <p class="sub hint">
+      Last.fm scrobbling isn't enabled on this server. (The operator can add a
+      Last.fm API key to turn it on.)
+    </p>
+  {:else}
+    <p class="sub hint">
+      Scrobble your plays to <a href="https://www.last.fm" target="_blank" rel="noopener noreferrer">Last.fm</a>
+      too — they're sent to every service you connect. You'll approve access on
+      Last.fm's site, then get sent back here.
+    </p>
+    {#if lfmStatus.connected}
+      <div class="row">
+        <div class="info">
+          <span class="t">Connected</span>
+          <span class="sub mono">{lfmStatus.username ?? "your account"}</span>
+        </div>
+        <button class="ghost" onclick={disconnectLFM} disabled={lfmBusy}>
+          {lfmBusy ? "Working…" : "Disconnect"}
+        </button>
+      </div>
+    {:else}
+      <button class="ghost gen" onclick={connectLFM}>
+        <Icon name="open_in_new" size={16} /> Connect Last.fm
+      </button>
+    {/if}
+    {#if lfmMsg}<p class="msg">{lfmMsg}</p>{/if}
+  {/if}
 
   <p class="section">Account</p>
   <button class="signout" onclick={onSignOut}>

@@ -19,6 +19,11 @@ services:
       - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-http://localhost:3000}
       # Set to "true" to require an invite code to register (owner exempt).
       - INVITE_ONLY=${INVITE_ONLY:-false}
+      # Last.fm scrobbling (optional). Register an API account at
+      # https://www.last.fm/api/account/create and set its Callback URL to
+      # <FRONTEND_ORIGIN>/lastfm/callback. Leave empty to disable Last.fm.
+      - LASTFM_API_KEY=${LASTFM_API_KEY:-}
+      - LASTFM_SECRET=${LASTFM_SECRET:-}
     volumes:
       - ./data:/data
 

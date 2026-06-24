@@ -213,6 +213,15 @@ export function migrate(database: Database.Database): void {
       username   TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Per-user Last.fm scrobbling. Stores only the permanent session key from
+    -- the web-auth exchange (never the password); username cached for display.
+    CREATE TABLE IF NOT EXISTS lastfm_sessions (
+      user_id     TEXT PRIMARY KEY,
+      session_key TEXT NOT NULL,
+      username    TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Metadata columns added post-MVP (Cycle 9). Added conditionally so existing

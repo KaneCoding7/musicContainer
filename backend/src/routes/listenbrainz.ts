@@ -6,7 +6,13 @@ import {
   getListenBrainzToken,
   setListenBrainzToken,
 } from "../functional/listenbrainz.js";
-import { getUserStats, validateToken, type StatsRange } from "../listenbrainz.js";
+import {
+  getFreshReleases,
+  getRecommendations,
+  getUserStats,
+  validateToken,
+  type StatsRange,
+} from "../listenbrainz.js";
 import { rateLimit } from "../rate-limit.js";
 
 // Per-user ListenBrainz connection. Mounted under /api with requireAuth.
@@ -65,4 +71,23 @@ listenBrainzRouter.get("/listenbrainz/stats", statsLimiter, async (req, res) => 
   const token = getListenBrainzToken(db, req.userId!);
   const stats = await getUserStats(conn.username, range, token);
   res.json({ connected: true, username: conn.username, range, ...stats });
+});
+
+// GET /api/listenbrainz/recommendations — personalized track recommendations.
+listenBrainzRouter.get("/listenbrainz/recommendations", statsLimiter, async (req, res) => {
+  const db = getDb();
+  const conn = getListenBrainzConnection(db, req.userId!);
+  if (!conn.connected || !conn.username) return res.json({ connected: false, items: [] });
+  const token = getListenBrainzToken(db, req.userId!);
+  const items = await getRecommendations(conn.username, token);
+  res.json({ connected: true, items });
+});
+
+// GET /api/listenbrainz/fresh-releases — new releases from followed artists.
+listenBrainzRouter.get("/listenbrainz/fresh-releases", statsLimiter, async (req, res) => {
+  const db = getDb();
+  const conn = getListenBrainzConnection(db, req.userId!);
+  if (!conn.connected || !conn.username) return res.json({ connected: false, items: [] });
+  const items = await getFreshReleases(conn.username);
+  res.json({ connected: true, items });
 });

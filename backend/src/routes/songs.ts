@@ -63,6 +63,11 @@ import {
   getScrobbleTrack,
 } from "../functional/listenbrainz.js";
 import { submitListen, submitPlayingNow } from "../listenbrainz.js";
+import { getLastfmSessionKey } from "../functional/lastfm.js";
+import {
+  scrobble as lastfmScrobble,
+  updateNowPlaying as lastfmNowPlaying,
+} from "../lastfm.js";
 import { measureLoudness } from "../loudness.js";
 import { streamSongFile } from "../stream.js";
 import { serveArt } from "../thumbnails.js";
@@ -1292,27 +1297,31 @@ songsRouter.post("/songs/:id/play", (req, res) => {
   return res.json({ song: result.value });
 });
 
-// POST /api/songs/:id/now-playing — set the user's ListenBrainz "now playing"
-// (fired when a track starts). No-op when the user hasn't connected an account.
+// POST /api/songs/:id/now-playing — set the user's "now playing" on every
+// connected scrobble service (fired when a track starts). No-op when nothing's
+// connected.
 songsRouter.post("/songs/:id/now-playing", (req, res) => {
   const db = getDb();
-  const token = getListenBrainzToken(db, req.userId!);
-  if (token) {
-    const track = getScrobbleTrack(db, Number(req.params.id), req.userId!);
-    if (track) submitPlayingNow(token, track).catch(() => {});
+  const track = getScrobbleTrack(db, Number(req.params.id), req.userId!);
+  if (track) {
+    const lbToken = getListenBrainzToken(db, req.userId!);
+    if (lbToken) submitPlayingNow(lbToken, track).catch(() => {});
+    const lfKey = getLastfmSessionKey(db, req.userId!);
+    if (lfKey) lastfmNowPlaying(lfKey, track).catch(() => {});
   }
   return res.status(204).end();
 });
 
-// Submits a completed listen to ListenBrainz if the user has connected an
-// account. Fire-and-forget: never blocks or fails the play request.
+// Submits a completed listen to every connected scrobble service (ListenBrainz
+// and/or Last.fm). Fire-and-forget: never blocks or fails the play request.
 function scrobble(db: ReturnType<typeof getDb>, songId: number, userId: string) {
-  const token = getListenBrainzToken(db, userId);
-  if (!token) return;
   const track = getScrobbleTrack(db, songId, userId);
   if (!track) return;
   const listenedAt = Math.floor(Date.now() / 1000);
-  submitListen(token, track, listenedAt).catch(() => {});
+  const lbToken = getListenBrainzToken(db, userId);
+  if (lbToken) submitListen(lbToken, track, listenedAt).catch(() => {});
+  const lfKey = getLastfmSessionKey(db, userId);
+  if (lfKey) lastfmScrobble(lfKey, track, listenedAt).catch(() => {});
 }
 
 // DELETE /api/songs/:id — remove a song (file + art + db + playlist refs).

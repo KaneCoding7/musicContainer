@@ -119,10 +119,17 @@ export interface StatEntry {
   mbid?: string | null;
 }
 
+export interface ActivityBucket {
+  label: string; // e.g. a day, month, or year bucket
+  count: number;
+}
+
 export interface UserStats {
   listenCount: number | null; // all-time total listens
   artists: StatEntry[];
   recordings: StatEntry[];
+  releases: StatEntry[]; // top albums
+  activity: ActivityBucket[]; // listens per time bucket in the range
 }
 
 interface LbArtistsResp {
@@ -146,6 +153,21 @@ interface LbRecordingsResp {
 }
 interface LbCountResp {
   payload?: { count?: number };
+}
+interface LbReleasesResp {
+  payload?: {
+    releases?: {
+      release_name?: string;
+      artist_name?: string;
+      listen_count?: number;
+      release_mbid?: string | null;
+    }[];
+  };
+}
+interface LbActivityResp {
+  payload?: {
+    listening_activity?: { time_range?: string; listen_count?: number }[];
+  };
 }
 
 const STAT_COUNT = 10; // entries per top-list
@@ -178,9 +200,11 @@ export async function getUserStats(
   token?: string | null
 ): Promise<UserStats> {
   const u = encodeURIComponent(username);
-  const [artistsData, recData, countData] = await Promise.all([
+  const [artistsData, recData, relData, actData, countData] = await Promise.all([
     lbGet<LbArtistsResp>(`/stats/user/${u}/artists?range=${range}&count=${STAT_COUNT}`, token),
     lbGet<LbRecordingsResp>(`/stats/user/${u}/recordings?range=${range}&count=${STAT_COUNT}`, token),
+    lbGet<LbReleasesResp>(`/stats/user/${u}/releases?range=${range}&count=${STAT_COUNT}`, token),
+    lbGet<LbActivityResp>(`/stats/user/${u}/listening-activity?range=${range}`, token),
     lbGet<LbCountResp>(`/user/${u}/listen-count`, token),
   ]);
 
@@ -199,8 +223,111 @@ export async function getUserStats(
       count: r.listen_count ?? 0,
       mbid: r.recording_mbid ?? null,
     }));
+  const releases: StatEntry[] = (relData?.payload?.releases ?? [])
+    .filter((r) => r.release_name)
+    .map((r) => ({
+      name: r.release_name!,
+      subtitle: r.artist_name ?? null,
+      count: r.listen_count ?? 0,
+      mbid: r.release_mbid ?? null,
+    }));
+  const activity: ActivityBucket[] = (actData?.payload?.listening_activity ?? [])
+    .filter((b) => b.time_range && typeof b.listen_count === "number")
+    .map((b) => ({ label: b.time_range!, count: b.listen_count! }));
   const listenCount =
     typeof countData?.payload?.count === "number" ? countData.payload.count : null;
 
-  return { listenCount, artists, recordings };
+  return { listenCount, artists, recordings, releases, activity };
+}
+
+// --- Recommendations + fresh releases (discovery) --------------------------
+
+export interface Recommendation {
+  track: string;
+  artist: string | null;
+  release: string | null;
+  recordingMbid: string;
+}
+
+export interface FreshRelease {
+  release: string;
+  artist: string | null;
+  date: string | null;
+  type: string | null;
+  releaseMbid: string | null;
+}
+
+interface LbRecResp {
+  payload?: { mbids?: { recording_mbid?: string }[] };
+}
+interface LbMetaEntry {
+  recording?: { name?: string };
+  artist?: { name?: string };
+  release?: { name?: string };
+}
+interface LbFreshResp {
+  payload?: {
+    releases?: {
+      release_name?: string;
+      artist_credit_name?: string;
+      release_date?: string;
+      release_group_primary_type?: string | null;
+      release_mbid?: string;
+    }[];
+  };
+}
+
+// Personalized track recommendations. ListenBrainz returns only MBIDs, so we
+// resolve names in one batched metadata call. Empty for users without computed
+// recommendations (the engine runs periodically) — handled gracefully upstream.
+export async function getRecommendations(
+  username: string,
+  token?: string | null
+): Promise<Recommendation[]> {
+  const u = encodeURIComponent(username);
+  const rec = await lbGet<LbRecResp>(
+    `/cf/recommendation/user/${u}/recording?count=20`,
+    token
+  );
+  const mbids = (rec?.payload?.mbids ?? [])
+    .map((m) => m.recording_mbid)
+    .filter((x): x is string => !!x)
+    .slice(0, 20);
+  if (mbids.length === 0) return [];
+
+  const meta = await lbGet<Record<string, LbMetaEntry>>(
+    `/metadata/recording/?recording_mbids=${encodeURIComponent(mbids.join(","))}&inc=artist+release`
+  );
+  if (!meta) return [];
+  const out: Recommendation[] = [];
+  for (const id of mbids) {
+    const m = meta[id];
+    if (!m?.recording?.name) continue;
+    out.push({
+      track: m.recording.name,
+      artist: m.artist?.name ?? null,
+      release: m.release?.name ?? null,
+      recordingMbid: id,
+    });
+  }
+  return out;
+}
+
+// New + upcoming releases from artists the user listens to, newest first.
+export async function getFreshReleases(
+  username: string
+): Promise<FreshRelease[]> {
+  const u = encodeURIComponent(username);
+  const fr = await lbGet<LbFreshResp>(`/user/${u}/fresh_releases`);
+  return (fr?.payload?.releases ?? [])
+    .filter((r) => r.release_name)
+    .map((r) => ({
+      release: r.release_name!,
+      artist: r.artist_credit_name ?? null,
+      date: r.release_date ?? null,
+      type: r.release_group_primary_type ?? null,
+      releaseMbid: r.release_mbid ?? null,
+    }))
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
+    .slice(0, 20);
 }
