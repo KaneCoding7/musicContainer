@@ -7,6 +7,12 @@
     getSubsonicCredential,
     generateSubsonicCredential,
   } from "$lib/services/subsonicService";
+  import {
+    getListenBrainzStatus,
+    connectListenBrainz,
+    disconnectListenBrainz,
+    type ListenBrainzStatus,
+  } from "$lib/services/listenBrainzService";
   import type { AuthViewModel } from "$lib/viewmodels/authViewModel.svelte";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -104,6 +110,55 @@
       subMsg = "Copied to clipboard";
     } catch {
       subMsg = "Couldn't copy — select and copy manually";
+    }
+  }
+
+  // ListenBrainz scrobbling connection.
+  let lbStatus = $state<ListenBrainzStatus>({ connected: false, username: null });
+  let lbToken = $state("");
+  let lbBusy = $state(false);
+  let lbMsg = $state<{ ok: boolean; text: string } | null>(null);
+
+  onMount(async () => {
+    try {
+      lbStatus = await getListenBrainzStatus();
+    } catch {
+      /* leave disconnected */
+    }
+  });
+
+  async function connectLB(e: Event) {
+    e.preventDefault();
+    const token = lbToken.trim();
+    if (!token || lbBusy) return;
+    lbBusy = true;
+    lbMsg = null;
+    try {
+      lbStatus = await connectListenBrainz(token);
+      lbToken = "";
+      lbMsg = {
+        ok: true,
+        text: lbStatus.username
+          ? `Connected as ${lbStatus.username} — your plays will scrobble.`
+          : "Connected — your plays will scrobble.",
+      };
+    } catch (err) {
+      lbMsg = { ok: false, text: err instanceof Error ? err.message : "Couldn't connect" };
+    } finally {
+      lbBusy = false;
+    }
+  }
+
+  async function disconnectLB() {
+    lbBusy = true;
+    lbMsg = null;
+    try {
+      lbStatus = await disconnectListenBrainz();
+      lbMsg = { ok: true, text: "Disconnected." };
+    } catch (err) {
+      lbMsg = { ok: false, text: err instanceof Error ? err.message : "Couldn't disconnect" };
+    } finally {
+      lbBusy = false;
     }
   }
 
@@ -308,6 +363,46 @@
         : "Generate password"}
   </button>
   {#if subMsg}<p class="msg">{subMsg}</p>{/if}
+
+  <p class="section">ListenBrainz</p>
+  <p class="sub hint">
+    Scrobble your plays to <a href="https://listenbrainz.org" target="_blank" rel="noopener noreferrer">ListenBrainz</a>
+    for listening stats and recommendations. A track counts once you've played
+    most of it. Paste your personal token (Settings → ListenBrainz on their site).
+  </p>
+  {#if lbStatus.connected}
+    <div class="row">
+      <div class="info">
+        <span class="t">Connected</span>
+        <span class="sub mono">{lbStatus.username ?? "your account"}</span>
+      </div>
+      <button class="ghost" onclick={disconnectLB} disabled={lbBusy}>
+        {lbBusy ? "Working…" : "Disconnect"}
+      </button>
+    </div>
+  {:else}
+    <form class="pw-form" onsubmit={connectLB}>
+      <div class="field-wrap">
+        <input
+          class="inp"
+          type="password"
+          bind:value={lbToken}
+          placeholder="ListenBrainz token"
+          autocomplete="off"
+        />
+        <button
+          class="in-btn"
+          type="submit"
+          disabled={lbBusy || !lbToken.trim()}
+          title="Connect"
+          aria-label="Connect"
+        >
+          <Icon name={lbBusy ? "progress_activity" : "check"} size={18} />
+        </button>
+      </div>
+    </form>
+  {/if}
+  {#if lbMsg}<p class="msg" class:err={!lbMsg.ok}>{lbMsg.text}</p>{/if}
 
   <p class="section">Account</p>
   <button class="signout" onclick={onSignOut}>

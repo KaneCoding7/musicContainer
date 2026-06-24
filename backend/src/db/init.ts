@@ -203,6 +203,16 @@ export function migrate(database: Database.Database): void {
       password   TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Per-user ListenBrainz scrobbling. The user pastes their personal
+    -- ListenBrainz token; we submit a "listen" each time they finish a track.
+    -- username is cached from token validation for display in settings.
+    CREATE TABLE IF NOT EXISTS listenbrainz_tokens (
+      user_id    TEXT PRIMARY KEY,
+      token      TEXT NOT NULL,
+      username   TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // Metadata columns added post-MVP (Cycle 9). Added conditionally so existing
@@ -264,6 +274,12 @@ export function migrate(database: Database.Database): void {
   // in the expanded player. Null until generated (lazily on first expand).
   if (!columns.includes("clip_filename")) {
     database.exec("ALTER TABLE songs ADD COLUMN clip_filename TEXT");
+  }
+  // MusicBrainz recording MBID captured at import; lets ListenBrainz match
+  // scrobbles precisely. Null for file uploads / no-match imports (those
+  // scrobble by artist+track name instead).
+  if (!columns.includes("mb_recording_id")) {
+    database.exec("ALTER TABLE songs ADD COLUMN mb_recording_id TEXT");
   }
   // Per-song opt-out: when 1, the expanded player won't show this song's clip.
   if (!columns.includes("clip_disabled")) {

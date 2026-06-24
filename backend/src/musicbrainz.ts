@@ -13,6 +13,9 @@ export interface TrackInfo {
   title: string;
   artist: string | null;
   album: string | null;
+  // MusicBrainz recording MBID, when matched — used for precise ListenBrainz
+  // scrobbling. Null for heuristic-only / unmatched tracks.
+  recordingMbid?: string | null;
 }
 
 // Parenth/bracket segments that are noise, not part of the song name.
@@ -109,6 +112,7 @@ interface MbRelease {
   "release-group"?: MbReleaseGroup;
 }
 interface MbRecording {
+  id?: string;
   score?: number | string;
   title?: string;
   length?: number;
@@ -218,7 +222,7 @@ export async function lookupMusicBrainz(
       album = top?.title ?? null;
     }
 
-    return { title, artist: artist || null, album };
+    return { title, artist: artist || null, album, recordingMbid: best.id ?? null };
   } catch {
     return null; // network/abort/parse — fall back to the heuristic guess
   }
@@ -260,6 +264,7 @@ export async function enrichTrackInfo(input: {
     title: mb.title || base.title,
     artist: mb.artist || base.artist,
     album: mb.album || base.album,
+    recordingMbid: mb.recordingMbid ?? null,
   };
 }
 

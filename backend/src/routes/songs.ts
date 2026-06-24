@@ -58,6 +58,11 @@ import {
   fetchCoverArt,
   fetchCoverArtDataUrl,
 } from "../musicbrainz.js";
+import {
+  getListenBrainzToken,
+  getScrobbleTrack,
+} from "../functional/listenbrainz.js";
+import { submitListen, submitPlayingNow } from "../listenbrainz.js";
 import { measureLoudness } from "../loudness.js";
 import { streamSongFile } from "../stream.js";
 import { serveArt } from "../thumbnails.js";
@@ -810,6 +815,7 @@ songsRouter.post("/import-link", importLimiter, async (req, res) => {
         pending: true, // awaits review before joining the library
         // Only video links support the "pick frame as art" feature.
         sourceUrl: isSpotify ? null : trackUrl,
+        mbRecordingId: info.recordingMbid ?? null,
       });
       if (!result.ok) {
         if (existsSync(dest)) {
@@ -1271,15 +1277,43 @@ songsRouter.put("/songs/:id/like", (req, res) => {
 });
 
 // POST /api/songs/:id/play — record a play (increments count, sets timestamp).
+// The client fires this once a track is ~75% through, i.e. a real listen — so
+// it's also where we scrobble to ListenBrainz (best-effort, fire-and-forget).
 songsRouter.post("/songs/:id/play", (req, res) => {
-  const result = recordPlay(getDb(), Number(req.params.id), req.userId!);
+  const db = getDb();
+  const id = Number(req.params.id);
+  const result = recordPlay(db, id, req.userId!);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))
       .json({ error: result.error });
   }
+  scrobble(db, id, req.userId!);
   return res.json({ song: result.value });
 });
+
+// POST /api/songs/:id/now-playing — set the user's ListenBrainz "now playing"
+// (fired when a track starts). No-op when the user hasn't connected an account.
+songsRouter.post("/songs/:id/now-playing", (req, res) => {
+  const db = getDb();
+  const token = getListenBrainzToken(db, req.userId!);
+  if (token) {
+    const track = getScrobbleTrack(db, Number(req.params.id), req.userId!);
+    if (track) submitPlayingNow(token, track).catch(() => {});
+  }
+  return res.status(204).end();
+});
+
+// Submits a completed listen to ListenBrainz if the user has connected an
+// account. Fire-and-forget: never blocks or fails the play request.
+function scrobble(db: ReturnType<typeof getDb>, songId: number, userId: string) {
+  const token = getListenBrainzToken(db, userId);
+  if (!token) return;
+  const track = getScrobbleTrack(db, songId, userId);
+  if (!track) return;
+  const listenedAt = Math.floor(Date.now() / 1000);
+  submitListen(token, track, listenedAt).catch(() => {});
+}
 
 // DELETE /api/songs/:id — remove a song (file + art + db + playlist refs).
 songsRouter.delete("/songs/:id", (req, res) => {
