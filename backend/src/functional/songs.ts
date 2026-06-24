@@ -164,6 +164,7 @@ export function recordSong(
     duration?: number | null;
     pending?: boolean;
     sourceUrl?: string | null;
+    mbRecordingId?: string | null;
   }
 ): Result<Song> {
   const filename = params.filename.trim();
@@ -175,7 +176,7 @@ export function recordSong(
   try {
     const info = db
       .prepare(
-        "INSERT INTO songs (filename, original_filename, artist, album, art_filename, duration, user_id, pending, source_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO songs (filename, original_filename, artist, album, art_filename, duration, user_id, pending, source_url, mb_recording_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         filename,
@@ -186,7 +187,8 @@ export function recordSong(
         params.duration ?? null,
         params.userId,
         params.pending ? 1 : 0,
-        params.sourceUrl ?? null
+        params.sourceUrl ?? null,
+        params.mbRecordingId ?? null
       );
 
     const row = db

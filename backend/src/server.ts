@@ -10,6 +10,7 @@ import { rateLimit } from "./rate-limit.js";
 import { attachSync } from "./sync.js";
 import { friendsRouter } from "./routes/friends.js";
 import { invitesRouter } from "./routes/invites.js";
+import { listenBrainzRouter } from "./routes/listenbrainz.js";
 import { playlistsRouter } from "./routes/playlists.js";
 import { publicRouter } from "./routes/public.js";
 import { registerRouter } from "./routes/register.js";
@@ -110,6 +111,7 @@ app.use("/rest", subsonicRouter);
 // Feature routes (require authentication; data is scoped per user).
 app.use("/api", requireAuth, songsRouter);
 app.use("/api", requireAuth, subsonicCredentialRouter);
+app.use("/api", requireAuth, listenBrainzRouter);
 app.use("/api", requireAuth, playlistsRouter);
 app.use("/api", requireAuth, invitesRouter);
 app.use("/api", requireAuth, sharesRouter);

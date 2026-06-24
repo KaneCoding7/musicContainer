@@ -10,6 +10,7 @@
     streamUrl,
     thumbUrl,
   } from "$lib/services/songService";
+  import { setNowPlaying } from "$lib/services/listenBrainzService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
   import type { Song } from "$lib/types";
 
@@ -35,6 +36,9 @@
   // The track id we've already counted a play for, so a play is recorded once
   // per listen (reset when the same track restarts — replay / repeat-one).
   let recordedSongId: number | null = null;
+  // The track id we've already sent a ListenBrainz "now playing" for, so it
+  // fires once when a new track starts (not on every resume from pause).
+  let nowPlayingSongId: number | null = null;
 
   // Read the queue + index directly (not vm.currentSong) so this subscribes to
   // the queue array itself — replaceSong() updating the *currently playing*
@@ -938,6 +942,12 @@
   onplay={() => {
     vm.isPlaying = true;
     awaitingFirstPlay = false; // playback really started; stop guarding pauses
+    // Set ListenBrainz "now playing" once per new track (active device only).
+    const id = song?.id;
+    if (active && id != null && id !== nowPlayingSongId) {
+      nowPlayingSongId = id;
+      setNowPlaying(id);
+    }
   }}
   onpause={() => {
     // While resuming after a refresh, a pause means autoplay was blocked, not a
