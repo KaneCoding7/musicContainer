@@ -195,13 +195,6 @@
     vm.uploadTotal ? Math.round((vm.uploadDone / vm.uploadTotal) * 100) : 0
   );
 
-  let linkUrl = $state("");
-  let linkMsg = $state<{ ok: boolean; text: string } | null>(null);
-  let playlistUrl = $state("");
-  let playlistMsg = $state<{ ok: boolean; text: string } | null>(null);
-  // Which import is running, so the progress bar shows in the right section.
-  let activeImport = $state<"track" | "playlist" | "search" | null>(null);
-
   function stageLabel(stage: string, pct: number | null): string {
     if (stage === "download")
       return pct != null ? `Downloading… ${Math.floor(pct)}%` : "Downloading…";
@@ -210,30 +203,6 @@
     if (stage === "ingest") return "Finishing up…";
     return "Working…";
   }
-
-  async function submitLink(e: Event) {
-    e.preventDefault();
-    const url = linkUrl.trim();
-    if (!url || vm.importing) return;
-    linkMsg = null;
-    activeImport = "track";
-    const n = await vm.importFromLink(url);
-    activeImport = null;
-    if (n > 0) {
-      linkMsg = { ok: true, text: "Imported — review it below" };
-      linkUrl = "";
-    } else {
-      linkMsg = { ok: false, text: vm.error ?? "Import failed" };
-    }
-  }
-
-  // --- Search YouTube by name, then import a picked result -----------------
-  let searchQuery = $state("");
-  let searchResults = $state<YouTubeResult[]>([]);
-  let searchMsg = $state<{ ok: boolean; text: string } | null>(null);
-  let searched = $state(false); // a search has run (controls "no results")
-  // Which result row is currently importing (shows its spinner + progress).
-  let importingResultId = $state<string | null>(null);
 
   function fmtDuration(secs: number | null): string {
     if (secs == null || !isFinite(secs)) return "";
@@ -245,54 +214,101 @@
   // YouTube CDN thumbnail for a video id (no extra API call needed).
   const ytThumb = (id: string) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
 
-  async function submitSearch(e: Event) {
+  // --- Unified "omni" add bar: link / playlist / search in one input -------
+  // Paste a link → import it; a playlist/album link reveals a "whole playlist?"
+  // toggle; plain text → search YouTube and pick from the results.
+  let omniInput = $state("");
+  let omniMsg = $state<{ ok: boolean; text: string } | null>(null);
+  let activeImport = $state<"import" | null>(null); // non-null shows progress
+  let importAsPlaylist = $state(false); // user toggle for playlist-capable links
+
+  let searchResults = $state<YouTubeResult[]>([]);
+  let searched = $state(false); // a search has run (controls "no results")
+  let importingResultId = $state<string | null>(null); // result row importing
+
+  const trimmedInput = $derived(omniInput.trim());
+  const isUrl = $derived(
+    /^https?:\/\/\S+$/i.test(trimmedInput) || /^spotify:\S+/i.test(trimmedInput)
+  );
+  // A link that can expand to many tracks (playlist / album / SoundCloud set).
+  const playlistCapable = $derived(
+    isUrl &&
+      /([?&]list=|\/playlist|\/sets\/|\/album\/|spotify\.com\/(playlist|album)|spotify:(playlist|album))/i.test(
+        trimmedInput
+      )
+  );
+  // A pure playlist/album link (no single video) can only import as a playlist.
+  const purePlaylist = $derived(
+    playlistCapable &&
+      !/([?&]v=|youtu\.be\/|\/watch\?|\/shorts\/)/i.test(trimmedInput)
+  );
+  const willImportPlaylist = $derived(
+    playlistCapable && (purePlaylist || importAsPlaylist)
+  );
+  // "empty" | "search" | "import"
+  const omniMode = $derived(
+    !trimmedInput ? "empty" : isUrl ? "import" : "search"
+  );
+  const omniBusy = $derived(vm.importing || vm.searching);
+
+  // Search results belong to a search; the moment the box holds a link (import
+  // mode), drop the stale results table.
+  $effect(() => {
+    if (omniMode === "import" && (searchResults.length || searched)) {
+      searchResults = [];
+      searched = false;
+    }
+  });
+
+  async function submitOmni(e: Event) {
     e.preventDefault();
-    const q = searchQuery.trim();
-    if (!q || vm.searching || vm.importing) return;
-    searchMsg = null;
-    searchResults = [];
-    searched = false;
-    const results = await vm.searchYouTube(q);
-    searched = true;
-    searchResults = results;
-    if (results.length === 0) {
-      searchMsg = { ok: false, text: vm.error ?? "No results found" };
+    const v = trimmedInput;
+    if (!v || omniBusy) return;
+    omniMsg = null;
+    if (omniMode === "search") {
+      searchResults = [];
+      searched = false;
+      const results = await vm.searchYouTube(v);
+      searched = true;
+      searchResults = results;
+      if (results.length === 0)
+        omniMsg = { ok: false, text: vm.error ?? "No results found" };
+      return;
+    }
+    // Import a single track or a whole playlist, depending on the link + toggle.
+    const playlist = willImportPlaylist;
+    activeImport = "import";
+    const n = await vm.importFromLink(v, playlist);
+    activeImport = null;
+    if (n > 0) {
+      omniMsg = {
+        ok: true,
+        text: playlist
+          ? `Imported ${n} track${n === 1 ? "" : "s"} — review below`
+          : "Imported — review it below",
+      };
+      omniInput = "";
+      importAsPlaylist = false;
+    } else {
+      omniMsg = { ok: false, text: vm.error ?? "Import failed" };
     }
   }
 
   async function importResult(r: YouTubeResult) {
-    if (vm.importing) return;
-    searchMsg = null;
+    if (omniBusy) return;
+    omniMsg = null;
     importingResultId = r.id;
-    activeImport = "search";
+    activeImport = "import";
     const n = await vm.importFromLink(r.url);
     activeImport = null;
     importingResultId = null;
     if (n > 0) {
-      searchMsg = { ok: true, text: `Added "${r.title}" — review it below` };
-      // Drop the imported pick from the list so it can't be added twice.
-      searchResults = searchResults.filter((x) => x.id !== r.id);
+      omniMsg = { ok: true, text: `Added "${r.title}" — review it below` };
+      // Clear the whole results table once a pick has been added.
+      searchResults = [];
+      searched = false;
     } else {
-      searchMsg = { ok: false, text: vm.error ?? "Import failed" };
-    }
-  }
-
-  async function submitPlaylist(e: Event) {
-    e.preventDefault();
-    const url = playlistUrl.trim();
-    if (!url || vm.importing) return;
-    playlistMsg = null;
-    activeImport = "playlist";
-    const n = await vm.importFromLink(url, true);
-    activeImport = null;
-    if (n > 0) {
-      playlistMsg = {
-        ok: true,
-        text: `Imported ${n} track${n === 1 ? "" : "s"} — review below`,
-      };
-      playlistUrl = "";
-    } else {
-      playlistMsg = { ok: false, text: vm.error ?? "Import failed" };
+      omniMsg = { ok: false, text: vm.error ?? "Import failed" };
     }
   }
 </script>
@@ -350,90 +366,71 @@
     </div>
   {/snippet}
 
-  <div class="divider"><span>or add a track from a link</span></div>
+  <div class="divider"><span>or paste a link · or search</span></div>
 
-  <form class="link-row" onsubmit={submitLink}>
-    <input
-      class="link-input"
-      type="url"
-      placeholder="Paste a YouTube, Spotify, SoundCloud… link"
-      bind:value={linkUrl}
-      disabled={vm.importing}
-    />
-    <button type="submit" class="link-btn" class:loading={activeImport === "track"} disabled={vm.importing || !linkUrl.trim()}>
-      {#if activeImport === "track"}
-        <Icon name="progress_activity" size={18} /> Importing…
-      {:else}
-        <Icon name="download" size={18} /> Add
-      {/if}
-    </button>
-  </form>
-  {#if activeImport === "track"}
-    {@render progressBar()}
-  {:else}
-    <p class="link-hint">Grabs one track's audio as MP3 (with cover art). Spotify links match the song on YouTube.</p>
-  {/if}
-  {#if linkMsg}
-    <p class="msg" class:ok={linkMsg.ok} class:err={!linkMsg.ok}>
-      {#if linkMsg.ok}<Icon name="check_circle" size={18} />{/if}{linkMsg.text}
-    </p>
-  {/if}
-
-  <div class="divider"><span>or import a whole playlist</span></div>
-
-  <form class="link-row" onsubmit={submitPlaylist}>
-    <input
-      class="link-input"
-      type="url"
-      placeholder="Paste a YouTube or Spotify playlist link"
-      bind:value={playlistUrl}
-      disabled={vm.importing}
-    />
-    <button type="submit" class="link-btn" class:loading={activeImport === "playlist"} disabled={vm.importing || !playlistUrl.trim()}>
-      {#if activeImport === "playlist"}
-        <Icon name="progress_activity" size={18} /> Importing…
-      {:else}
-        <Icon name="playlist_add" size={18} /> Import
-      {/if}
-    </button>
-  </form>
-  {#if activeImport === "playlist"}
-    {@render progressBar()}
-  {:else}
-    <p class="link-hint">Imports up to 50 tracks from the playlist into your review list. This can take a while.</p>
-  {/if}
-  {#if playlistMsg}
-    <p class="msg" class:ok={playlistMsg.ok} class:err={!playlistMsg.ok}>
-      {#if playlistMsg.ok}<Icon name="check_circle" size={18} />{/if}{playlistMsg.text}
-    </p>
-  {/if}
-
-  <div class="divider"><span>or search for a song</span></div>
-
-  <form class="link-row" onsubmit={submitSearch}>
-    <input
-      class="link-input"
-      type="text"
-      placeholder="Search by song name or artist — e.g. Daft Punk One More Time"
-      bind:value={searchQuery}
-      disabled={vm.importing}
-    />
+  <form class="omni-row" onsubmit={submitOmni}>
+    <div class="omni-field">
+      <span class="omni-icon">
+        <Icon name={omniMode === "search" ? "search" : "link"} size={20} />
+      </span>
+      <input
+        class="omni-input"
+        type="text"
+        placeholder="Paste a link or playlist, or search for a song…"
+        bind:value={omniInput}
+        disabled={vm.importing}
+      />
+    </div>
     <button
       type="submit"
       class="link-btn"
-      class:loading={vm.searching}
-      disabled={vm.searching || vm.importing || !searchQuery.trim()}
+      class:loading={activeImport === "import" || vm.searching}
+      disabled={omniBusy || omniMode === "empty"}
     >
       {#if vm.searching}
         <Icon name="progress_activity" size={18} /> Searching…
-      {:else}
+      {:else if activeImport === "import"}
+        <Icon name="progress_activity" size={18} /> Importing…
+      {:else if omniMode === "search"}
         <Icon name="search" size={18} /> Search
+      {:else if willImportPlaylist}
+        <Icon name="playlist_add" size={18} /> Import all
+      {:else}
+        <Icon name="download" size={18} /> Import
       {/if}
     </button>
   </form>
+
+  {#if playlistCapable && !purePlaylist}
+    <label class="omni-playlist">
+      <span class="switch">
+        <input
+          type="checkbox"
+          role="switch"
+          bind:checked={importAsPlaylist}
+          disabled={vm.importing}
+        />
+        <span class="slider"></span>
+      </span>
+      <span>This link is part of a playlist — import the whole thing (up to 50 tracks)</span>
+    </label>
+  {/if}
+
   <p class="link-hint">
-    Finds the track on YouTube and pulls the audio as MP3 (with cover art).
+    {#if omniMode === "search"}
+      Searches YouTube and pulls the match as MP3 (with cover art).
+    {:else if willImportPlaylist}
+      Imports up to 50 tracks from the playlist. This can take a while.
+    {:else if omniMode === "import"}
+      Grabs the track's audio as MP3 (with cover art). Spotify links match on YouTube.
+    {:else}
+      YouTube, Spotify or SoundCloud link / playlist — or just type a song name to search.
+    {/if}
   </p>
+
+  {#if activeImport === "import"}
+    {@render progressBar()}
+  {/if}
 
   {#if searchResults.length > 0}
     <ul class="yt-results">
@@ -446,11 +443,21 @@
               {[r.uploader, fmtDuration(r.duration)].filter(Boolean).join(" · ")}
             </span>
           </div>
+          <a
+            class="yt-open"
+            href={r.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Listen on YouTube first"
+            aria-label="Listen on YouTube first"
+          >
+            <Icon name="open_in_new" size={18} />
+          </a>
           <button
             class="yt-add"
             class:loading={importingResultId === r.id}
             onclick={() => importResult(r)}
-            disabled={vm.importing}
+            disabled={omniBusy}
           >
             {#if importingResultId === r.id}
               <Icon name="progress_activity" size={18} /> Importing…
@@ -461,16 +468,13 @@
         </li>
       {/each}
     </ul>
-  {:else if searched && !vm.searching && !searchMsg}
+  {:else if searched && !vm.searching && !omniMsg}
     <p class="link-hint">No results — try a different search.</p>
   {/if}
 
-  {#if activeImport === "search"}
-    {@render progressBar()}
-  {/if}
-  {#if searchMsg}
-    <p class="msg" class:ok={searchMsg.ok} class:err={!searchMsg.ok}>
-      {#if searchMsg.ok}<Icon name="check_circle" size={18} />{/if}{searchMsg.text}
+  {#if omniMsg}
+    <p class="msg" class:ok={omniMsg.ok} class:err={!omniMsg.ok}>
+      {#if omniMsg.ok}<Icon name="check_circle" size={18} />{/if}{omniMsg.text}
     </p>
   {/if}
   </div>
@@ -703,26 +707,109 @@
     height: 1px;
     background: var(--surface-2);
   }
-  .link-row {
+  /* Unified omni add-bar: an icon-prefixed field + the action button. */
+  .omni-row {
     display: flex;
     gap: 0.5rem;
   }
-  .link-input {
+  .omni-field {
     flex: 1;
     min-width: 0;
-    padding: 0.6rem 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 0.8rem;
     background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: 0.5rem;
+  }
+  .omni-field:focus-within {
+    border-color: var(--accent);
+  }
+  .omni-icon {
+    display: flex;
+    flex-shrink: 0;
+    color: var(--dim);
+  }
+  .omni-field:focus-within .omni-icon {
+    color: var(--accent-text);
+  }
+  .omni-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.6rem 0;
+    background: transparent;
+    border: none;
     color: var(--text);
     font: inherit;
   }
-  .link-input:focus {
+  .omni-input:focus {
     outline: none;
+  }
+  .omni-input::placeholder {
+    color: var(--dim);
+  }
+  /* "Import the whole playlist?" toggle, shown only for playlist-capable links. */
+  .omni-playlist {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0.7rem 0 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  /* Switch: a hidden checkbox drives a sliding pill. */
+  .switch {
+    position: relative;
+    flex-shrink: 0;
+    width: 38px;
+    height: 22px;
+  }
+  .switch input {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    cursor: pointer;
+  }
+  .slider {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .slider::before {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text);
+    transition: transform 0.15s ease;
+  }
+  .switch input:checked + .slider {
+    background: var(--accent);
     border-color: var(--accent);
   }
-  .link-input::placeholder {
-    color: var(--dim);
+  .switch input:checked + .slider::before {
+    transform: translateX(16px);
+    background: #fff;
+  }
+  .switch input:focus-visible + .slider {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .switch input:disabled {
+    cursor: default;
+  }
+  .switch input:disabled + .slider {
+    opacity: 0.55;
   }
   .link-btn {
     display: inline-flex;
@@ -806,6 +893,24 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* Minimal icon button — open the video on YouTube before importing. */
+  .yt-open {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 0.35rem;
+    border: none;
+    border-radius: 0.35rem;
+    background: transparent;
+    color: var(--dim);
+    text-decoration: none;
+  }
+  @media (hover: hover) {
+    .yt-open:hover {
+      color: var(--text);
+    }
   }
   .yt-add {
     display: inline-flex;
