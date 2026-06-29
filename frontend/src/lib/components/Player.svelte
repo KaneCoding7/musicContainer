@@ -3,6 +3,7 @@
   import Icon from "$lib/components/Icon.svelte";
   import MiniPlayer from "$lib/components/MiniPlayer.svelte";
   import QueueView from "$lib/components/QueueView.svelte";
+  import SongMenu from "$lib/components/SongMenu.svelte";
   import {
     artUrl,
     clipUrl,
@@ -1155,32 +1156,39 @@
     ontouchmove={barTouchMove}
     ontouchend={barTouchEnd}
   >
-    <button
-      class="now-playing"
-      class:bar-dragging={barDragging}
-      style="transform: translateX({barDragX}px)"
-      onclick={() => {
-        if (barSwiped) return; // a swipe just happened — don't open the view
-        expanded = true;
-      }}
-      title="Open now playing"
-    >
-      <span class="np-art">
-        {#if song.hasArt}
-          <img src={thumbUrl(song.id, 128)} alt="" />
-        {:else}
-          <Icon name="music_note" size={20} />
-        {/if}
-      </span>
-      <span class="np-meta">
-        <span class="np-title" title={song.originalFilename}
-          >{song.originalFilename}</span
-        >
-        {#if song.artist}
-          <span class="np-artist" title={song.artist}>{song.artist}</span>
-        {/if}
-      </span>
-    </button>
+    <!-- Right-clicking (or long-pressing) the cover/details opens the same
+         track menu as the song lists — add to playlist, queue, like, etc.
+         SongMenu attaches its context-menu handler to this [data-song-menu-row]
+         wrapper; its own ⋮ trigger is hidden here to keep the bar uncluttered. -->
+    <div class="np-wrap" data-song-menu-row>
+      <button
+        class="now-playing"
+        class:bar-dragging={barDragging}
+        style="transform: translateX({barDragX}px)"
+        onclick={() => {
+          if (barSwiped) return; // a swipe just happened — don't open the view
+          expanded = true;
+        }}
+        title="Open now playing"
+      >
+        <span class="np-art">
+          {#if song.hasArt}
+            <img src={thumbUrl(song.id, 128)} alt="" />
+          {:else}
+            <Icon name="music_note" size={20} />
+          {/if}
+        </span>
+        <span class="np-meta">
+          <span class="np-title" title={song.originalFilename}
+            >{song.originalFilename}</span
+          >
+          {#if song.artist}
+            <span class="np-artist" title={song.artist}>{song.artist}</span>
+          {/if}
+        </span>
+      </button>
+      <SongMenu {vm} {song} showTrigger={false} />
+    </div>
 
     <div class="controls">
       <button
@@ -1645,11 +1653,19 @@
     -webkit-user-select: none;
     user-select: none; /* swiping the bar shouldn't select the title/artist */
   }
+  /* Wraps the now-playing button + its (hidden-trigger) right-click menu, and
+     takes the first grid column so the layout is unchanged. */
+  .np-wrap {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
   .now-playing {
     display: flex;
     align-items: center;
     gap: 0.6rem;
     min-width: 0;
+    flex: 1;
     background: transparent;
     border: none;
     padding: 0;
@@ -1891,7 +1907,7 @@
          PWA (0 in Safari, where dvh already accounts for the toolbar). */
       padding: 0.6rem 0.8rem calc(0.6rem + env(safe-area-inset-bottom, 0px));
     }
-    .now-playing {
+    .np-wrap {
       grid-area: now;
     }
     .controls {

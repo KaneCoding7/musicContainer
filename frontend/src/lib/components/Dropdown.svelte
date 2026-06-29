@@ -2,6 +2,7 @@
   // Custom themed dropdown — looks identical on every platform (unlike a native
   // <select> popup, which the OS draws). Trigger is either an icon button
   // (icon-only mode) or a labelled pill.
+  import { tick } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
 
   type Option = { value: string; label: string };
@@ -26,15 +27,57 @@
   } = $props();
 
   let open = $state(false);
+  let wrapEl = $state<HTMLElement | null>(null);
+  let menuEl = $state<HTMLElement | null>(null);
+  // Final clamped viewport coordinates for the (position: fixed) menu; null until
+  // measured so it doesn't flash at the wrong spot.
+  let placed = $state<{ left: number; top: number } | null>(null);
   const selected = $derived(options.find((o) => o.value === value) ?? null);
 
   function choose(v: string) {
     onSelect(v);
     open = false;
   }
+
+  // Place the menu under (or above) the trigger and clamp it to the viewport so
+  // it never runs off the screen, regardless of how many options it has.
+  function placeMenu() {
+    if (!open || !menuEl || !wrapEl) return;
+    const margin = 8;
+    const r = menuEl.getBoundingClientRect();
+    const a = wrapEl.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    // Honour the requested horizontal alignment, then clamp.
+    let left = align === "right" ? a.right - r.width : a.left;
+    let top = a.bottom + 6;
+    // Flip above the trigger if there isn't room below but there is above.
+    if (top + r.height > vh - margin && a.top - r.height - 6 >= margin) {
+      top = a.top - r.height - 6;
+    }
+    placed = {
+      left: Math.max(margin, Math.min(left, vw - r.width - margin)),
+      top: Math.max(margin, Math.min(top, vh - r.height - margin)),
+    };
+  }
+
+  $effect(() => {
+    if (!open) {
+      placed = null;
+      return;
+    }
+    tick().then(placeMenu);
+    const onMove = () => placeMenu();
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => {
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
+    };
+  });
 </script>
 
-<div class="dd-wrap">
+<div class="dd-wrap" bind:this={wrapEl}>
   {#if icon}
     <button
       class="dd-icon"
@@ -70,7 +113,15 @@
       tabindex="-1"
       onclick={() => (open = false)}
     ></button>
-    <div class="dd-menu" class:right={align === "right"} role="listbox" aria-label={ariaLabel}>
+    <div
+      class="dd-menu"
+      bind:this={menuEl}
+      role="listbox"
+      aria-label={ariaLabel}
+      style={placed
+        ? `left:${placed.left}px; top:${placed.top}px;`
+        : "visibility:hidden;"}
+    >
       {#each options as o (o.value)}
         <button
           class="dd-opt"
@@ -153,13 +204,14 @@
     padding: 0;
     cursor: default;
   }
+  /* Positioned via JS (placeMenu) in viewport coordinates so it never runs off
+     the screen; it flips above the trigger when there's no room below. */
   .dd-menu {
-    position: absolute;
-    top: calc(100% + 0.35rem);
-    left: 0;
+    position: fixed;
     z-index: 70;
     min-width: 12rem;
-    max-height: 18rem;
+    max-width: calc(100vw - 16px);
+    max-height: min(18rem, calc(100vh - 16px));
     overflow-y: auto;
     background: var(--surface);
     border: 1px solid var(--border-strong);
@@ -168,10 +220,6 @@
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     display: flex;
     flex-direction: column;
-  }
-  .dd-menu.right {
-    left: auto;
-    right: 0;
   }
   .dd-opt {
     display: flex;

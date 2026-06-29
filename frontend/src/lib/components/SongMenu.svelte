@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getContext, tick } from "svelte";
   import EditSongDialog from "$lib/components/EditSongDialog.svelte";
   import Icon from "$lib/components/Icon.svelte";
   import {
@@ -11,7 +12,13 @@
     type SongMetadata,
   } from "$lib/services/songService";
   import type { Playlist, Song } from "$lib/types";
+  import type { PlaylistViewModel } from "$lib/viewmodels/playlistViewModel.svelte";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
+
+  // The shared playlist view-model, provided by the page via setContext. When
+  // present, adds route through it so the playlist list (track counts / covers)
+  // and the open playlist's songs update live — instead of only after a reload.
+  const playlistVm = getContext<PlaylistViewModel | undefined>("playlistVm");
 
   // Reusable per-row "⋮" menu: queue actions + edit / download / delete. Drop
   // one next to any song row. Manages its own edit dialog and delete confirm.
@@ -27,6 +34,7 @@
     onAddToLibrary,
     inLibrary = false,
     canModify = true,
+    showTrigger = true,
   }: {
     vm: SongViewModel;
     song: Song;
@@ -42,14 +50,82 @@
     // False for tracks the viewer doesn't own (shared/org playlists): hides the
     // library-editing actions (Edit / Delete) they're not allowed to perform.
     canModify?: boolean;
+    // When false, the "⋮" trigger button is hidden and the menu opens only via
+    // right-click / long-press on the row (used in the player's now-playing bar).
+    showTrigger?: boolean;
   } = $props();
 
   let open = $state(false);
   let editing = $state(false);
   let wrapEl = $state<HTMLElement | null>(null);
-  // When opened by right-click, the menu is positioned at the cursor; null means
-  // anchored to the ⋮ button instead.
+  let menuEl = $state<HTMLElement | null>(null);
+  // The requested open point. When opened by right-click this is the cursor;
+  // null means "anchored to the ⋮ button" instead. Either way the final on-screen
+  // position is computed by placeMenu() so the menu never runs off the viewport.
   let cursorPos = $state<{ x: number; y: number } | null>(null);
+  // Final clamped viewport coordinates applied to the (position: fixed) menu.
+  // Null until measured, so the menu stays hidden for one frame instead of
+  // flashing at the wrong spot.
+  let placed = $state<{ left: number; top: number } | null>(null);
+
+  // Position the menu so it's fully on screen. Works for both modes: it measures
+  // the rendered menu's real size (which varies a lot with the conditional items
+  // and the playlists submenu), places it at the cursor or under the ⋮ button,
+  // flips it above the anchor when there's no room below, then clamps to the
+  // viewport with an 8px margin.
+  function placeMenu() {
+    if (!open || !menuEl) return;
+    const margin = 8;
+    const r = menuEl.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let left: number;
+    let top: number;
+    if (cursorPos) {
+      left = cursorPos.x;
+      top = cursorPos.y;
+      // Prefer opening above the cursor if it would overflow the bottom but
+      // there's room above (feels better than just clamping up).
+      if (top + r.height > vh - margin && cursorPos.y - r.height >= margin) {
+        top = cursorPos.y - r.height;
+      }
+    } else {
+      const a = wrapEl?.getBoundingClientRect();
+      // Right-align the menu with the ⋮ button, opening downward by default.
+      left = a ? a.right - r.width : margin;
+      top = a ? a.bottom + 4 : margin;
+      // Not enough room below the button → open upward above it.
+      if (a && top + r.height > vh - margin && a.top - r.height - 4 >= margin) {
+        top = a.top - r.height - 4;
+      }
+    }
+    placed = {
+      left: Math.max(margin, Math.min(left, vw - r.width - margin)),
+      top: Math.max(margin, Math.min(top, vh - r.height - margin)),
+    };
+  }
+
+  // Re-place after the menu (or its size-changing contents) renders, and keep it
+  // on screen if the window resizes or the page scrolls underneath.
+  $effect(() => {
+    if (!open) {
+      placed = null;
+      return;
+    }
+    // Touch the size-affecting state so this re-runs when the menu changes shape.
+    void showPlaylists;
+    void playlists.length;
+    void plBusy;
+    void plDone;
+    tick().then(placeMenu);
+    const onMove = () => placeMenu();
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => {
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
+    };
+  });
 
   // "Add to playlist" submenu. Playlists are fetched the first time it's opened.
   let showPlaylists = $state(false);
@@ -66,6 +142,13 @@
 
   async function openPlaylists() {
     showPlaylists = true;
+    // Show the page's already-loaded list instantly when available; otherwise
+    // fetch it on first open.
+    if (playlistVm && playlistVm.playlists.length > 0) {
+      playlists = playlistVm.playlists;
+      plBusy = false;
+      return;
+    }
     plBusy = true;
     try {
       playlists = await fetchPlaylists();
@@ -78,7 +161,10 @@
 
   async function addToPlaylist(p: Playlist) {
     try {
-      await addSongToPlaylist(p.id, song.id);
+      // Route through the shared view-model when present so the playlists list
+      // and any open playlist reflect the new song immediately (no refresh).
+      if (playlistVm) await playlistVm.addSongs(p.id, [song.id]);
+      else await addSongToPlaylist(p.id, song.id);
       plDone = p.name;
       setTimeout(close, 800); // brief confirmation, then close
     } catch {
@@ -95,12 +181,9 @@
     if (!row) return;
     const onContext = (e: MouseEvent) => {
       e.preventDefault();
-      const MENU_W = 180;
-      const MENU_H = 230;
-      cursorPos = {
-        x: Math.max(8, Math.min(e.clientX, window.innerWidth - MENU_W - 8)),
-        y: Math.max(8, Math.min(e.clientY, window.innerHeight - MENU_H - 8)),
-      };
+      // Store the raw cursor point; placeMenu() measures the rendered menu and
+      // clamps it so it never runs off the screen, whatever its height.
+      cursorPos = { x: e.clientX, y: e.clientY };
       open = true;
     };
     row.addEventListener("contextmenu", onContext);
@@ -135,24 +218,28 @@
 </script>
 
 <div class="menu-wrap" bind:this={wrapEl}>
-  <button
-    class="dots"
-    title="More options"
-    aria-label="More options"
-    onclick={(e) => {
-      e.stopPropagation();
-      cursorPos = null;
-      open = !open;
-    }}
-  >
-    <Icon name="more_vert" size={20} />
-  </button>
+  {#if showTrigger}
+    <button
+      class="dots"
+      title="More options"
+      aria-label="More options"
+      onclick={(e) => {
+        e.stopPropagation();
+        cursorPos = null;
+        open = !open;
+      }}
+    >
+      <Icon name="more_vert" size={20} />
+    </button>
+  {/if}
 
   {#if open}
     <div
       class="menu"
-      class:at-cursor={cursorPos}
-      style={cursorPos ? `left:${cursorPos.x}px; top:${cursorPos.y}px;` : ""}
+      bind:this={menuEl}
+      style={placed
+        ? `left:${placed.left}px; top:${placed.top}px;`
+        : "visibility:hidden;"}
     >
       {#if showPlaylists}
         <button class="back" onclick={() => (showPlaylists = false)}>
@@ -275,12 +362,15 @@
       color: var(--text);
     }
   }
+  /* Always positioned via JS (placeMenu) in viewport coordinates so it can never
+     run off the screen, whether opened by the ⋮ button or by right-click. */
   .menu {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 0.25rem);
+    position: fixed;
     z-index: 30;
     min-width: 170px;
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
     background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: 0.5rem;
@@ -288,11 +378,6 @@
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     display: flex;
     flex-direction: column;
-  }
-  /* When opened by right-click, inline left/top place it at the cursor. */
-  .menu.at-cursor {
-    position: fixed;
-    right: auto;
   }
   .menu button,
   .menu .item {

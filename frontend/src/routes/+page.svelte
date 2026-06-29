@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, setContext } from "svelte";
   import { fade, slide } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
   import { goto } from "$app/navigation";
@@ -33,6 +33,10 @@
   const playlistVm = new PlaylistViewModel();
   const friendsVm = new FriendsViewModel();
   const sync = new SyncController(vm);
+
+  // Share the playlist view-model with descendants (e.g. SongMenu in the player
+  // and song lists) so "Add to playlist" updates the playlist state live.
+  setContext("playlistVm", playlistVm);
 
   // Load the signed-in user's library.
   function loadLibrary() {
