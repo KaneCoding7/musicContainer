@@ -64,13 +64,14 @@ interface SongRow {
   liked: number;
   loudness: number | null;
   sort_order: number | null;
+  album_sort_order: number | null;
   source_url: string | null;
   clip_filename: string | null;
   clip_disabled: number;
 }
 
 const SONG_COLUMNS =
-  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness, sort_order, source_url, clip_filename, clip_disabled";
+  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness, sort_order, album_sort_order, source_url, clip_filename, clip_disabled";
 
 function rowToSong(row: SongRow): Song {
   return {
@@ -87,6 +88,7 @@ function rowToSong(row: SongRow): Song {
     liked: row.liked === 1,
     loudness: row.loudness,
     sortOrder: row.sort_order,
+    albumSortOrder: row.album_sort_order,
     hasSource: row.source_url !== null,
     hasClip: row.clip_filename !== null,
     clipDisabled: row.clip_disabled === 1,
@@ -116,6 +118,31 @@ export function setSongsOrder(
     return ok(undefined);
   } catch (e) {
     return err("internal", `Failed to set order: ${(e as Error).message}`);
+  }
+}
+
+// Persists a manual ordering for the tracks within an album, using a separate
+// album_sort_order column so it doesn't disturb the artist ordering (sort_order)
+// of songs that belong to both. Owner-scoped, in one transaction.
+export function setAlbumSongsOrder(
+  db: Database,
+  ids: number[],
+  userId: string
+): Result<void> {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return err("validation", "No songs to order");
+  }
+  try {
+    const stmt = db.prepare(
+      "UPDATE songs SET album_sort_order = ? WHERE id = ? AND user_id = ?"
+    );
+    const run = db.transaction((list: number[]) => {
+      list.forEach((id, index) => stmt.run(index, id, userId));
+    });
+    run(ids);
+    return ok(undefined);
+  } catch (e) {
+    return err("internal", `Failed to set album order: ${(e as Error).message}`);
   }
 }
 

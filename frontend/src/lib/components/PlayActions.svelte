@@ -10,13 +10,25 @@
     compact = false,
     compactMobile = false,
     shuffle = true,
+    queue = true,
   }: {
     vm: SongViewModel;
     songs: Song[];
     compact?: boolean;
     compactMobile?: boolean; // icon-only on mobile only (labels on desktop)
     shuffle?: boolean;
+    queue?: boolean; // show an "Add to queue" button for the whole list
   } = $props();
+
+  // Brief "Added" confirmation after enqueuing the list.
+  let queued = $state(false);
+  let queuedTimer: ReturnType<typeof setTimeout> | undefined;
+  function addAllToQueue() {
+    vm.addManyToQueue(songs);
+    queued = true;
+    clearTimeout(queuedTimer);
+    queuedTimer = setTimeout(() => (queued = false), 1500);
+  }
 </script>
 
 {#if songs.length > 0}
@@ -34,6 +46,17 @@
       >
         <Icon name="shuffle" size={compact ? 18 : 20} />
         <span class="label">Shuffle</span>
+      </button>
+    {/if}
+    {#if queue}
+      <button
+        class="queue"
+        onclick={addAllToQueue}
+        title="Add all to queue"
+        aria-label="Add all to queue"
+      >
+        <Icon name={queued ? "check" : "queue_music"} size={compact ? 18 : 20} />
+        <span class="label">{queued ? "Added" : "Add to queue"}</span>
       </button>
     {/if}
   </div>
@@ -67,13 +90,15 @@
       background: var(--accent-hover);
     }
   }
-  .shuffle {
+  .shuffle,
+  .queue {
     background: var(--surface-2);
     color: var(--text);
     border: 1px solid var(--border-strong);
   }
   @media (hover: hover) {
-    .shuffle:hover {
+    .shuffle:hover,
+    .queue:hover {
       background: var(--hover);
     }
   }

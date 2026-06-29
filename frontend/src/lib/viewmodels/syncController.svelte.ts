@@ -218,6 +218,9 @@ export class SyncController {
       case "addToQueue":
         vm.addToQueue(p.song);
         break;
+      case "addManyToQueue":
+        vm.addManyToQueue(p.songs);
+        break;
       case "playNext":
         vm.playNext(p.song);
         break;

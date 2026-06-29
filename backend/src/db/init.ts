@@ -267,6 +267,12 @@ export function migrate(database: Database.Database): void {
   if (!columns.includes("sort_order")) {
     database.exec("ALTER TABLE songs ADD COLUMN sort_order REAL");
   }
+  // Manual sort order within an ALBUM grouping, kept separate from sort_order
+  // (which is the artist grouping) — a song belongs to both an artist and an
+  // album, so reordering one must not disturb the other. Null until reordered.
+  if (!columns.includes("album_sort_order")) {
+    database.exec("ALTER TABLE songs ADD COLUMN album_sort_order REAL");
+  }
   // Uploaded/imported tracks awaiting review; hidden from the library until the
   // user confirms them. Existing rows default to 0 (already in the library).
   if (!columns.includes("pending")) {

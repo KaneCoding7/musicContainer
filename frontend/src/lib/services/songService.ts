@@ -220,6 +220,17 @@ export async function reorderSongs(ids: number[]): Promise<void> {
   if (!res.ok) throw new Error(await errorMessage(res));
 }
 
+// Persists a manual ordering for an album's tracks (album_sort_order), in order.
+// Separate from reorderSongs so album order doesn't disturb artist order.
+export async function reorderAlbumSongs(ids: number[]): Promise<void> {
+  const res = await fetch(`${apiBase()}/api/songs/album-order`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
 // Sets a song's liked flag; returns the updated song.
 export async function setLiked(songId: number, liked: boolean): Promise<Song> {
   const res = await fetch(`${apiBase()}/api/songs/${songId}/like`, {
