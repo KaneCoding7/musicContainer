@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getContext } from "svelte";
   import EditSongDialog from "$lib/components/EditSongDialog.svelte";
   import Icon from "$lib/components/Icon.svelte";
   import {
@@ -11,7 +12,13 @@
     type SongMetadata,
   } from "$lib/services/songService";
   import type { Playlist, Song } from "$lib/types";
+  import type { PlaylistViewModel } from "$lib/viewmodels/playlistViewModel.svelte";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
+
+  // The shared playlist view-model, provided by the page via setContext. When
+  // present, adds route through it so the playlist list (track counts / covers)
+  // and the open playlist's songs update live — instead of only after a reload.
+  const playlistVm = getContext<PlaylistViewModel | undefined>("playlistVm");
 
   // Reusable per-row "⋮" menu: queue actions + edit / download / delete. Drop
   // one next to any song row. Manages its own edit dialog and delete confirm.
@@ -27,6 +34,7 @@
     onAddToLibrary,
     inLibrary = false,
     canModify = true,
+    showTrigger = true,
   }: {
     vm: SongViewModel;
     song: Song;
@@ -42,6 +50,9 @@
     // False for tracks the viewer doesn't own (shared/org playlists): hides the
     // library-editing actions (Edit / Delete) they're not allowed to perform.
     canModify?: boolean;
+    // When false, the "⋮" trigger button is hidden and the menu opens only via
+    // right-click / long-press on the row (used in the player's now-playing bar).
+    showTrigger?: boolean;
   } = $props();
 
   let open = $state(false);
@@ -66,6 +77,13 @@
 
   async function openPlaylists() {
     showPlaylists = true;
+    // Show the page's already-loaded list instantly when available; otherwise
+    // fetch it on first open.
+    if (playlistVm && playlistVm.playlists.length > 0) {
+      playlists = playlistVm.playlists;
+      plBusy = false;
+      return;
+    }
     plBusy = true;
     try {
       playlists = await fetchPlaylists();
@@ -78,7 +96,10 @@
 
   async function addToPlaylist(p: Playlist) {
     try {
-      await addSongToPlaylist(p.id, song.id);
+      // Route through the shared view-model when present so the playlists list
+      // and any open playlist reflect the new song immediately (no refresh).
+      if (playlistVm) await playlistVm.addSongs(p.id, [song.id]);
+      else await addSongToPlaylist(p.id, song.id);
       plDone = p.name;
       setTimeout(close, 800); // brief confirmation, then close
     } catch {
@@ -135,18 +156,20 @@
 </script>
 
 <div class="menu-wrap" bind:this={wrapEl}>
-  <button
-    class="dots"
-    title="More options"
-    aria-label="More options"
-    onclick={(e) => {
-      e.stopPropagation();
-      cursorPos = null;
-      open = !open;
-    }}
-  >
-    <Icon name="more_vert" size={20} />
-  </button>
+  {#if showTrigger}
+    <button
+      class="dots"
+      title="More options"
+      aria-label="More options"
+      onclick={(e) => {
+        e.stopPropagation();
+        cursorPos = null;
+        open = !open;
+      }}
+    >
+      <Icon name="more_vert" size={20} />
+    </button>
+  {/if}
 
   {#if open}
     <div
