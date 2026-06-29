@@ -57,6 +57,7 @@
 
   let open = $state(false);
   let editing = $state(false);
+  let viewing = $state(false); // read-only details (tracks you can't edit)
   let wrapEl = $state<HTMLElement | null>(null);
   let menuEl = $state<HTMLElement | null>(null);
   // The requested open point. When opened by right-click this is the cursor;
@@ -299,6 +300,10 @@
           <button onclick={() => { editing = true; close(); }}>
             <Icon name="edit" size={18} /> Edit
           </button>
+        {:else}
+          <button onclick={() => { viewing = true; close(); }}>
+            <Icon name="info" size={18} /> View details
+          </button>
         {/if}
         <a class="item" href={downloadUrl(song.id)} onclick={close}>
           <Icon name="download" size={18} /> Download
@@ -337,6 +342,10 @@
     }}
     onClose={() => (editing = false)}
   />
+{/if}
+
+{#if viewing}
+  <EditSongDialog {song} readOnly onClose={() => (viewing = false)} />
 {/if}
 
 <style>

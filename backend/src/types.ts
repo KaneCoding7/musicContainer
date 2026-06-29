@@ -14,6 +14,7 @@ export interface Song {
   liked: boolean;
   loudness: number | null; // integrated loudness in LUFS, for normalization
   sortOrder: number | null; // manual order within a grouping (e.g. artist)
+  albumSortOrder: number | null; // manual order within an album grouping
   hasSource: boolean; // imported from a video link (can offer frame artwork)
   hasClip: boolean; // has a cached looping canvas clip (from the source video)
   clipDisabled: boolean; // per-song opt-out: don't show this song's clip

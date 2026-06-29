@@ -6,6 +6,7 @@
   import PlayActions from "$lib/components/PlayActions.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
+  import { reorderHandle } from "$lib/actions/reorderHandle";
   import { thumbUrl } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -40,7 +41,13 @@
     return [...map.entries()]
       .map(([name, songs]) => ({
         name,
-        songs,
+        // Honour a manual album order (albumSortOrder) when the user has
+        // reordered; otherwise fall back to library order (newest first).
+        songs: [...songs].sort((a, b) => {
+          const ao = a.albumSortOrder ?? Infinity;
+          const bo = b.albumSortOrder ?? Infinity;
+          return ao !== bo ? ao - bo : 0;
+        }),
         artId: songs.find((s) => s.hasArt)?.id ?? null,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -50,6 +57,19 @@
 
   function durationLabel(songs: Song[]): string {
     return `${songs.length} ${songs.length === 1 ? "track" : "tracks"}`;
+  }
+
+  // Drag-to-reorder the open album's tracks. Off by default — toggled with the
+  // Edit button so the handles only appear when rearranging.
+  let reordering = $state(false);
+
+  function moveTrack(from: number, to: number) {
+    const songs = current?.songs ?? [];
+    if (from === to || songs.length === 0) return;
+    const ids = songs.map((s) => s.id);
+    const [moved] = ids.splice(from, 1);
+    ids.splice(to, 0, moved);
+    vm.reorderAlbumSongs(ids);
   }
 </script>
 
@@ -71,7 +91,20 @@
     <div>
       <h3>{current.name}</h3>
       <p class="muted">{durationLabel(current.songs)}</p>
-      <PlayActions {vm} songs={current.songs} />
+      <div class="head-actions">
+        <PlayActions {vm} songs={current.songs} compactMobile />
+        {#if current.songs.length > 1}
+          <button
+            class="edit-order"
+            class:on={reordering}
+            onclick={() => (reordering = !reordering)}
+            title={reordering ? "Done" : "Edit order"}
+          >
+            <Icon name={reordering ? "check" : "edit"} size={18} />
+            <span class="btn-label">{reordering ? "Done" : "Edit"}</span>
+          </button>
+        {/if}
+      </div>
     </div>
   </div>
   <div class="list-head" aria-hidden="true">
@@ -86,8 +119,21 @@
       {@const isCurrent = song.id === vm.currentSong?.id}
       <li
         class:current={isCurrent}
-        use:swipeQueue={{ onQueue: () => vm.playNext(song) }}
+        data-reorder-index={i}
+        use:swipeQueue={{
+          onQueue: () => vm.playNext(song),
+          disabled: reordering,
+        }}
       >
+        {#if reordering}
+          <span
+            class="handle"
+            title="Drag to reorder"
+            use:reorderHandle={{ index: i, onMove: moveTrack }}
+          >
+            <Icon name="drag_indicator" size={18} />
+          </span>
+        {/if}
         <button class="track" onclick={() => vm.playQueue(current.songs, i)}>
           {#if isCurrent && vm.isPlaying}
             <span class="num"><EqualizerBars size={14} /></span>
@@ -219,6 +265,42 @@
     margin: 0 0 0.25rem;
     font-size: 1.6rem;
   }
+  .head-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .edit-order {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.9rem;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 2rem;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .edit-order.on {
+    background: var(--active-bg);
+    color: var(--accent-text);
+    border-color: var(--accent);
+  }
+  .handle {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: var(--dim);
+    cursor: grab;
+    padding-left: 0.25rem;
+  }
+  .handle:active {
+    cursor: grabbing;
+  }
   ol {
     list-style: none;
     padding: 0;
@@ -319,6 +401,14 @@
     /* No column headers on phones. Scoped to .detail so it wins regardless of
        source order. */
     .detail .list-head {
+      display: none;
+    }
+    /* Icon-only round Edit button on mobile so it sits neatly beside Play. */
+    .edit-order {
+      padding: 0.65rem;
+      border-radius: 50%;
+    }
+    .btn-label {
       display: none;
     }
     .detail {

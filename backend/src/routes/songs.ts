@@ -36,6 +36,7 @@ import {
   setSongClipDisabled,
   setSongLoudness,
   setSongsOrder,
+  setAlbumSongsOrder,
   updateSong,
   updateSongsBulk,
   validateUpload,
@@ -1218,6 +1219,27 @@ songsRouter.patch("/songs/order", (req, res) => {
     });
   }
   const result = setSongsOrder(getDb(), ids, req.userId!);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ ok: true });
+});
+
+// PATCH /api/songs/album-order — persist a manual ordering for an album's tracks
+// (separate from /songs/order so it doesn't clobber the artist order). Body:
+// { ids: number[] } in desired order.
+songsRouter.patch("/songs/album-order", (req, res) => {
+  const ids = Array.isArray(req.body?.ids)
+    ? req.body.ids.map(Number).filter((n: number) => Number.isFinite(n))
+    : null;
+  if (!ids) {
+    return res.status(400).json({
+      error: { code: "validation", message: "ids array is required" },
+    });
+  }
+  const result = setAlbumSongsOrder(getDb(), ids, req.userId!);
   if (!result.ok) {
     return res
       .status(statusForError(result.error.code))

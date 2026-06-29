@@ -26,6 +26,7 @@ interface SongRow {
   liked: number;
   loudness: number | null;
   sort_order: number | null;
+  album_sort_order: number | null;
   source_url: string | null;
   clip_filename: string | null;
   clip_disabled: number;
@@ -55,6 +56,7 @@ function rowToSong(row: SongRow): Song {
     liked: row.liked === 1,
     loudness: row.loudness,
     sortOrder: row.sort_order,
+    albumSortOrder: row.album_sort_order,
     hasSource: row.source_url !== null,
     hasClip: row.clip_filename !== null,
     clipDisabled: row.clip_disabled === 1,
@@ -348,6 +350,7 @@ export function songsInPlaylist(
       `SELECT s.id, s.filename, s.original_filename, s.uploaded_at,
               s.artist, s.album, s.art_filename, s.duration,
               s.play_count, s.last_played_at, s.liked, s.loudness, s.sort_order,
+              s.album_sort_order,
               s.source_url, s.clip_filename, s.clip_disabled, au.name AS added_by_name,
               ps.added_by AS added_by_id, s.user_id AS song_user_id
        FROM playlist_songs ps
@@ -415,9 +418,12 @@ export function addSongToPlaylist(
       return err("conflict", "Song is already in this playlist");
     }
 
+    // Newly added songs go to the TOP of the playlist (smallest position, since
+    // tracks are ordered by position ASC). Manual drag-to-reorder still works —
+    // it rewrites positions to 1..n — and the next add lands above that again.
     const { next } = db
       .prepare(
-        "SELECT COALESCE(MAX(position), 0) + 1 AS next FROM playlist_songs WHERE playlist_id = ?"
+        "SELECT COALESCE(MIN(position), 1) - 1 AS next FROM playlist_songs WHERE playlist_id = ?"
       )
       .get(playlistId) as { next: number };
 
@@ -477,11 +483,6 @@ export function addSongsToPlaylist(
   try {
     let added = 0;
     const apply = db.transaction((ids: number[]) => {
-      let { next } = db
-        .prepare(
-          "SELECT COALESCE(MAX(position), 0) + 1 AS next FROM playlist_songs WHERE playlist_id = ?"
-        )
-        .get(playlistId) as { next: number };
       const songExists = db.prepare(
         "SELECT id FROM songs WHERE id = ? AND user_id = ?"
       );
@@ -491,11 +492,26 @@ export function addSongsToPlaylist(
       const insert = db.prepare(
         "INSERT INTO playlist_songs (playlist_id, song_id, position, added_by) VALUES (?, ?, ?, ?)"
       );
+      // Work out which ids are actually insertable first, preserving their order.
+      const toInsert: number[] = [];
       for (const songId of ids) {
         if (!Number.isInteger(songId)) continue;
         if (!songExists.get(songId, userId)) continue;
         if (already.get(playlistId, songId)) continue;
-        insert.run(playlistId, songId, next++, userId);
+        if (toInsert.includes(songId)) continue; // skip intra-batch duplicates
+        toInsert.push(songId);
+      }
+      // Insert the batch at the TOP (below the current minimum position), keeping
+      // the given order among the new songs. Tracks render by position ASC, so
+      // the most recently added end up first. Manual reorder still works.
+      const { minPos } = db
+        .prepare(
+          "SELECT COALESCE(MIN(position), 1) AS minPos FROM playlist_songs WHERE playlist_id = ?"
+        )
+        .get(playlistId) as { minPos: number };
+      let pos = minPos - toInsert.length;
+      for (const songId of toInsert) {
+        insert.run(playlistId, songId, pos++, userId);
         added++;
       }
     });

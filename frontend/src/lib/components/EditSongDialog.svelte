@@ -37,11 +37,16 @@
     onSave,
     onClose,
     onArtChanged,
+    readOnly = false,
   }: {
     song: Song;
-    onSave: (id: number, fields: SongMetadata) => void;
+    // Not required in read-only mode (nothing to save).
+    onSave?: (id: number, fields: SongMetadata) => void;
     onClose: () => void;
     onArtChanged?: (song: Song) => void;
+    // View-only: show the same fields you'd normally edit, but not editable and
+    // with no save. Used for tracks the viewer doesn't own (shared playlists).
+    readOnly?: boolean;
   } = $props();
 
   // The dialog mounts fresh per edit, so seed the form from the song once.
@@ -100,6 +105,7 @@
   let publicCopied = $state(false);
   let publicBusy = $state(false);
   $effect(() => {
+    if (readOnly) return; // owner-only action; not shown when viewing
     getSongPublicToken(song.id)
       .then((t) => (publicToken = t))
       .catch(() => {});
@@ -166,7 +172,7 @@
       }
       artBusy = false;
     }
-    onSave(song.id, {
+    onSave?.(song.id, {
       originalFilename: name.trim(),
       artist: artist.trim(),
       album: album.trim(),
@@ -178,8 +184,13 @@
 <svelte:window onkeydown={(e) => e.key === "Escape" && onClose()} />
 
 <div class="backdrop" use:portal>
-  <div class="dialog" role="dialog" aria-modal="true" aria-label="Edit song">
-    <h3>Edit song</h3>
+  <div
+    class="dialog"
+    role="dialog"
+    aria-modal="true"
+    aria-label={readOnly ? "Song details" : "Edit song"}
+  >
+    <h3>{readOnly ? "Song details" : "Edit song"}</h3>
 
     <div class="art-row">
       <span class="art-thumb">
@@ -191,6 +202,11 @@
           <Icon name="music_note" size={26} />
         {/if}
       </span>
+      {#if readOnly}
+        <div class="art-actions">
+          <span class="art-hint">{hasArt ? "Album art" : "No album art"}</span>
+        </div>
+      {:else}
       <div class="art-actions">
         <input
           class="art-file"
@@ -229,6 +245,7 @@
         </div>
         {#if artError}<span class="art-error">{artError}</span>{/if}
       </div>
+      {/if}
     </div>
 
     {#if framePicking}
@@ -239,18 +256,33 @@
       />
     {/if}
 
-    <label>
-      Name
-      <input bind:value={name} />
-    </label>
-    <label>
-      Artist
-      <input bind:value={artist} placeholder="Unknown artist" />
-    </label>
-    <label>
-      Album
-      <input bind:value={album} placeholder="No album" />
-    </label>
+    {#if readOnly}
+      <label>
+        Name
+        <p class="ro-value">{name || "Untitled"}</p>
+      </label>
+      <label>
+        Artist
+        <p class="ro-value" class:empty={!artist}>{artist || "Unknown artist"}</p>
+      </label>
+      <label>
+        Album
+        <p class="ro-value" class:empty={!album}>{album || "No album"}</p>
+      </label>
+    {:else}
+      <label>
+        Name
+        <input bind:value={name} />
+      </label>
+      <label>
+        Artist
+        <input bind:value={artist} placeholder="Unknown artist" />
+      </label>
+      <label>
+        Album
+        <input bind:value={album} placeholder="No album" />
+      </label>
+    {/if}
 
     {#if song.sourceUrl}
       <div class="source-block">
@@ -267,28 +299,34 @@
       </div>
     {/if}
 
-    <div class="public-block">
-      <div class="public-head">
-        <span><Icon name="public" size={18} /> Public link</span>
-        <button type="button" class="link-toggle" onclick={togglePublic} disabled={publicBusy}>
-          {publicToken ? "Turn off" : "Create"}
-        </button>
-      </div>
-      {#if publicToken}
-        <div class="public-url">
-          <span class="url">{publicLink(publicToken)}</span>
-          <button type="button" class="copy" onclick={copyPublic}>
-            <Icon name={publicCopied ? "check" : "content_copy"} size={16} />
-            {publicCopied ? "Copied" : "Copy"}
+    {#if !readOnly}
+      <div class="public-block">
+        <div class="public-head">
+          <span><Icon name="public" size={18} /> Public link</span>
+          <button type="button" class="link-toggle" onclick={togglePublic} disabled={publicBusy}>
+            {publicToken ? "Turn off" : "Create"}
           </button>
         </div>
-        <p class="hint">Anyone with this link can listen — no account needed.</p>
-      {/if}
-    </div>
+        {#if publicToken}
+          <div class="public-url">
+            <span class="url">{publicLink(publicToken)}</span>
+            <button type="button" class="copy" onclick={copyPublic}>
+              <Icon name={publicCopied ? "check" : "content_copy"} size={16} />
+              {publicCopied ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <p class="hint">Anyone with this link can listen — no account needed.</p>
+        {/if}
+      </div>
+    {/if}
 
     <div class="actions">
-      <button class="secondary" onclick={onClose}>Cancel</button>
-      <button onclick={save} disabled={!name.trim() || artBusy}>Save</button>
+      {#if readOnly}
+        <button onclick={onClose}>Close</button>
+      {:else}
+        <button class="secondary" onclick={onClose}>Cancel</button>
+        <button onclick={save} disabled={!name.trim() || artBusy}>Save</button>
+      {/if}
     </div>
   </div>
 </div>
@@ -434,6 +472,20 @@
     border-radius: 0.5rem;
     color: var(--text);
     font: inherit;
+  }
+  /* Read-only field value — looks like a disabled input, not editable. */
+  .ro-value {
+    margin: 0.25rem 0 0;
+    padding: 0.5rem 0.7rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    color: var(--text);
+    font: inherit;
+    word-break: break-word;
+  }
+  .ro-value.empty {
+    color: var(--dim);
   }
   .source-block {
     margin-bottom: 0.75rem;

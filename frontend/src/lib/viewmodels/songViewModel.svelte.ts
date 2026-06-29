@@ -9,6 +9,7 @@ import {
   importLink,
   recordPlay,
   reorderSongs as reorderSongsApi,
+  reorderAlbumSongs as reorderAlbumSongsApi,
   searchYouTube as searchYouTubeApi,
   setLiked,
   updateSongMeta,
@@ -397,6 +398,28 @@ export class SongViewModel {
     }
   }
 
+  // Adds many songs to the END of the manual queue in order — e.g. "add this
+  // whole playlist to the queue". Mirrors addToQueue for a list. If nothing is
+  // playing, the first becomes the current track and the rest follow.
+  addManyToQueue(songs: Song[]): void {
+    if (songs.length === 0) return;
+    if (this.remoteSink?.("addManyToQueue", { songs })) return;
+    if (this.currentIndex === null) {
+      this.queue = [...songs];
+      this.currentIndex = 0;
+      this.isPlaying = true;
+      this.queuedCount = 0;
+    } else {
+      const at = this.manualEnd;
+      this.queue = [
+        ...this.queue.slice(0, at),
+        ...songs,
+        ...this.queue.slice(at),
+      ];
+      this.queuedCount += songs.length;
+    }
+  }
+
   // Inserts a song at the FRONT of the manual queue — it plays right after the
   // current track, ahead of anything already queued.
   playNext(song: Song): void {
@@ -504,6 +527,21 @@ export class SongViewModel {
     );
     try {
       await reorderSongsApi(ids);
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : "Failed to save order";
+    }
+  }
+
+  // Persists a manual order for an album's tracks, updating albumSortOrder
+  // locally so the album view re-sorts immediately. Independent of reorderSongs
+  // so it doesn't disturb the artist ordering.
+  async reorderAlbumSongs(ids: number[]): Promise<void> {
+    const pos = new Map(ids.map((id, i) => [id, i]));
+    this.songs = this.songs.map((s) =>
+      pos.has(s.id) ? { ...s, albumSortOrder: pos.get(s.id)! } : s
+    );
+    try {
+      await reorderAlbumSongsApi(ids);
     } catch (e) {
       this.error = e instanceof Error ? e.message : "Failed to save order";
     }
