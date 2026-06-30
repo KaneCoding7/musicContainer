@@ -110,14 +110,16 @@
   .compact .label {
     display: none;
   }
-  /* Compact on mobile only: keep the labels on desktop, drop to icon-only pills
-     on small screens so a header row stays tidy. */
+  /* On mobile the header rows get tight — Play + Shuffle + Add-to-queue plus
+     each view's own controls (search / sort / select). Collapse every action to
+     an icon-only round button so nothing overflows. Labels stay on desktop.
+     (The compactMobile prop predates this and is now the default behaviour.) */
   @media (max-width: 768px) {
-    .compact-mobile button {
+    .play-actions button {
       padding: 0.65rem;
       border-radius: 50%;
     }
-    .compact-mobile .label {
+    .play-actions .label {
       display: none;
     }
   }
