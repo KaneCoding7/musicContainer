@@ -1278,7 +1278,9 @@ songsRouter.post("/songs/download-zip", async (req, res) => {
   }
   const rawName = typeof req.body?.name === "string" ? req.body.name : "album";
   const zipName = (rawName || "album").replace(/[^\w.\- ]+/g, "_");
-  await streamSongsZip(db, res, orderedIds, zipName, MUSIC_DIR, ART_DIR);
+  await streamSongsZip(db, res, orderedIds, zipName, MUSIC_DIR, ART_DIR, {
+    numberTracks: true,
+  });
 });
 
 // PATCH /api/songs/bulk — edit metadata (artist, album) on many songs at once.
