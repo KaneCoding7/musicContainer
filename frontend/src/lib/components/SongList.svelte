@@ -173,7 +173,7 @@
     </p>
     <div class="control-row">
     <div class="actions-bar">
-      <PlayActions {vm} songs={vm.filteredSongs} />
+      <PlayActions {vm} songs={vm.filteredSongs} queue={false} />
     </div>
     <div class="toolbar">
       <div class="search" class:open={searchOpen}>
@@ -776,14 +776,15 @@
       overflow-y: auto;
       overflow-x: hidden;
     }
-    /* Search fills the row with the sort dropdown to its right, both the same
-       height. */
+    /* The toolbar stays right-aligned; the collapsed search remains a compact
+       icon on the right (next to sort). Only when OPENED does it expand to fill
+       the row, with the sort dropdown to its right — both the same height. */
     .toolbar {
       flex-wrap: nowrap;
       margin-top: 0.25rem;
       align-items: stretch;
     }
-    .search {
+    .search.open {
       flex: 1 1 auto;
       max-width: none;
     }
