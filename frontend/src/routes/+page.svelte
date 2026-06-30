@@ -413,7 +413,7 @@
         <RecentlyPlayedView {vm} />
       {:else if view === "stats"}
         <h2>Listening Stats</h2>
-        <ListeningStatsView onConnect={() => goTo("settings")} />
+        <ListeningStatsView {vm} onConnect={() => goTo("settings")} />
       {:else if view === "friends"}
         <h2>Friends</h2>
         <FriendsView vm={friendsVm} />
