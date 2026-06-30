@@ -937,6 +937,14 @@ export class SongViewModel {
     }
   }
 
+  // Appends already-imported pending songs to the review list. Used by the
+  // discover / listening-stats page, which runs its own per-row search+import
+  // and needs the result to show up on the Upload page instantly (no refresh).
+  addStaged(songs: Song[]): void {
+    if (songs.length === 0) return;
+    this.staged = [...this.staged, ...songs];
+  }
+
   // Uploads a file, then refreshes the list. Returns true on success.
   async upload(file: File): Promise<boolean> {
     this.uploading = true;

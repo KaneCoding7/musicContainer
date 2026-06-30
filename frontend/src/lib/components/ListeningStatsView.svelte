@@ -12,9 +12,11 @@
   } from "$lib/services/listenBrainzService";
   import { getLastfmStats, getLastfmStatus } from "$lib/services/lastfmService";
   import { searchYouTube, importLink } from "$lib/services/songService";
+  import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
-  // Lets the not-connected state jump to Settings.
-  let { onConnect }: { onConnect?: () => void } = $props();
+  // `vm` (shared with the Upload page) so an added track lands in the review
+  // list instantly. onConnect lets the not-connected state jump to Settings.
+  let { vm, onConnect }: { vm: SongViewModel; onConnect?: () => void } = $props();
 
   const RANGES: { id: StatsRange; label: string }[] = [
     { id: "week", label: "Week" },
@@ -89,8 +91,10 @@
   });
 
   // One-click "discover → import": find the track on YouTube and stage it for
-  // review (lands in the Upload review list, like any import).
-  let importingKey = $state<string | null>(null);
+  // review (lands in the Upload review list, like any import). Tracked per-row in
+  // a Set so several can import at once — adding one never blocks the others.
+  let adding = $state<Set<string>>(new Set());
+  const isAdding = (key: string) => adding.has(key);
   let toast = $state<{ ok: boolean; text: string } | null>(null);
   let toastTimer: ReturnType<typeof setTimeout> | null = null;
   function flashToast(ok: boolean, text: string) {
@@ -99,19 +103,31 @@
     toastTimer = setTimeout(() => (toast = null), 6000);
   }
 
-  async function importByName(query: string, label: string, key: string) {
-    if (importingKey) return;
-    importingKey = key;
+  // onAdded runs after a successful import so the caller can drop the row from
+  // its discover list.
+  async function importByName(
+    query: string,
+    label: string,
+    key: string,
+    onAdded?: () => void
+  ) {
+    if (adding.has(key)) return;
+    adding = new Set(adding).add(key);
     try {
       const results = await searchYouTube(query);
       if (!results.length) throw new Error("No match found on YouTube");
       const songs = await importLink(results[0].url);
       if (!songs.length) throw new Error("Import failed");
+      // Push into the shared review list so Upload updates instantly.
+      vm.addStaged(songs);
+      onAdded?.();
       flashToast(true, `Added “${label}” to your review list — open Upload to confirm.`);
     } catch (e) {
       flashToast(false, e instanceof Error ? e.message : "Couldn't import");
     } finally {
-      importingKey = null;
+      const next = new Set(adding);
+      next.delete(key);
+      adding = next;
     }
   }
 
@@ -287,10 +303,16 @@
               </span>
               <button
                 class="disc-add"
-                disabled={!!importingKey}
-                onclick={() => importByName(`${r.artist ?? ""} ${r.track}`.trim(), r.track, `rec:${r.recordingMbid}`)}
+                disabled={isAdding(`rec:${r.recordingMbid}`)}
+                onclick={() =>
+                  importByName(
+                    `${r.artist ?? ""} ${r.track}`.trim(),
+                    r.track,
+                    `rec:${r.recordingMbid}`,
+                    () => (recs = recs.filter((x) => x.recordingMbid !== r.recordingMbid))
+                  )}
               >
-                {#if importingKey === `rec:${r.recordingMbid}`}
+                {#if isAdding(`rec:${r.recordingMbid}`)}
                   <Icon name="progress_activity" size={16} /> Adding…
                 {:else}
                   <Icon name="add" size={16} /> Add
@@ -318,10 +340,16 @@
               </span>
               <button
                 class="disc-add"
-                disabled={!!importingKey}
-                onclick={() => importByName(`${f.artist ?? ""} ${f.release}`.trim(), f.release, `fresh:${f.releaseMbid ?? f.release}`)}
+                disabled={isAdding(`fresh:${f.releaseMbid ?? f.release}`)}
+                onclick={() =>
+                  importByName(
+                    `${f.artist ?? ""} ${f.release}`.trim(),
+                    f.release,
+                    `fresh:${f.releaseMbid ?? f.release}`,
+                    () => (fresh = fresh.filter((x) => x !== f))
+                  )}
               >
-                {#if importingKey === `fresh:${f.releaseMbid ?? f.release}`}
+                {#if isAdding(`fresh:${f.releaseMbid ?? f.release}`)}
                   <Icon name="progress_activity" size={16} /> Adding…
                 {:else}
                   <Icon name="add" size={16} /> Add
