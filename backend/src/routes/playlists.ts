@@ -1,8 +1,7 @@
-import { existsSync, mkdtempSync, rmSync, unlinkSync } from "node:fs";
+import { existsSync, unlinkSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { dirname, extname, join } from "node:path";
-import { ZipArchive } from "archiver";
-import { preparedDownload } from "../functional/download.js";
+import { extname, join } from "node:path";
+import { streamSongsZip } from "../functional/download.js";
 import { Router } from "express";
 import multer from "multer";
 import { ART_DIR, getDb, MUSIC_DIR } from "../db/init.js";
@@ -74,54 +73,14 @@ playlistsRouter.get("/playlists/:id/download", async (req, res) => {
     .get(id) as { name: string } | undefined;
   const zipName = (nameRow?.name ?? "playlist").replace(/[^\w.\- ]+/g, "_");
 
-  // Embed library metadata into each track (same tagging as the single-track
-  // download) before zipping, so re-uploading the zip keeps artist/album/art/
-  // source. Tagged temp files live in workDir until the archive finishes.
-  const work = mkdtempSync(join(dirname(MUSIC_DIR), "zip-"));
-  let cleaned = false;
-  const cleanup = () => {
-    if (cleaned) return;
-    cleaned = true;
-    try {
-      rmSync(work, { recursive: true, force: true });
-    } catch {
-      /* best-effort */
-    }
-  };
-
-  const used = new Set<string>();
-  const files: { path: string; entry: string }[] = [];
-  for (const song of songs) {
-    const prepared = await preparedDownload(db, song.id, MUSIC_DIR, ART_DIR, work);
-    if (!prepared) continue;
-    const ext = extname(prepared.name) || extname(song.filename);
-    let entry = extname(prepared.name) ? prepared.name : `${prepared.name}${ext}`;
-    // De-duplicate identical entry names within the zip.
-    if (used.has(entry)) {
-      const base = entry.slice(0, entry.length - extname(entry).length);
-      let i = 2;
-      while (used.has(`${base} (${i})${extname(entry)}`)) i++;
-      entry = `${base} (${i})${extname(entry)}`;
-    }
-    used.add(entry);
-    files.push({ path: prepared.path, entry });
-  }
-
-  res.setHeader("Content-Type", "application/zip");
-  res.setHeader("Content-Disposition", `attachment; filename="${zipName}.zip"`);
-
-  const archive = new ZipArchive({ zlib: { level: 0 } }); // store; audio is already compressed
-  archive.on("error", () => {
-    if (!res.headersSent) res.status(500);
-    res.end();
-  });
-  // Remove the tagged temp files once the archive is fully streamed.
-  archive.on("end", cleanup);
-  res.on("close", cleanup);
-  archive.pipe(res);
-
-  for (const f of files) archive.file(f.path, { name: f.entry });
-  archive.finalize();
+  await streamSongsZip(
+    db,
+    res,
+    songs.map((s) => s.id),
+    zipName,
+    MUSIC_DIR,
+    ART_DIR
+  );
 });
 
 // POST /api/playlists — create a playlist.

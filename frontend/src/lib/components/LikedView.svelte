@@ -64,7 +64,7 @@
 {:else}
   <div class="liked">
   <div class="control-row">
-    <div class="actions-bar"><PlayActions {vm} songs={filtered} /></div>
+    <div class="actions-bar"><PlayActions {vm} songs={filtered} queue={false} /></div>
     <div class="search" class:open={searchOpen}>
       <button
         class="icon-btn search-icon"

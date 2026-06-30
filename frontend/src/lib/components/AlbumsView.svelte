@@ -7,7 +7,7 @@
   import SongMenu from "$lib/components/SongMenu.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
   import { reorderHandle } from "$lib/actions/reorderHandle";
-  import { thumbUrl } from "$lib/services/songService";
+  import { thumbUrl, downloadSongsZip } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -71,6 +71,23 @@
     ids.splice(to, 0, moved);
     vm.reorderAlbumSongs(ids);
   }
+
+  // Download the whole album as a zip.
+  let downloading = $state(false);
+  async function downloadAlbum() {
+    if (downloading || !current) return;
+    downloading = true;
+    try {
+      await downloadSongsZip(
+        current.songs.map((s) => s.id),
+        current.name
+      );
+    } catch (e) {
+      vm.error = e instanceof Error ? e.message : "Download failed";
+    } finally {
+      downloading = false;
+    }
+  }
 </script>
 
 {#if vm.songs.length === 0}
@@ -104,6 +121,17 @@
             <span class="btn-label">{reordering ? "Done" : "Edit"}</span>
           </button>
         {/if}
+        <button
+          class="edit-order"
+          class:loading={downloading}
+          onclick={downloadAlbum}
+          disabled={downloading}
+          title="Download album as zip"
+          aria-label="Download album as zip"
+        >
+          <Icon name={downloading ? "progress_activity" : "download"} size={18} />
+          <span class="btn-label">{downloading ? "Downloading…" : "Download"}</span>
+        </button>
       </div>
     </div>
   </div>
@@ -289,6 +317,18 @@
     background: var(--active-bg);
     color: var(--accent-text);
     border-color: var(--accent);
+  }
+  .edit-order:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  .edit-order.loading :global(.material-symbols-rounded) {
+    animation: spin 1.1s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   .handle {
     display: inline-flex;

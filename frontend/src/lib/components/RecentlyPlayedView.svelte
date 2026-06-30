@@ -32,7 +32,7 @@
   <p class="muted">Nothing played yet. Play a song to see it here.</p>
 {:else}
   <div class="recent">
-  <div class="actions-bar"><PlayActions {vm} songs={vm.recentlyPlayed} /></div>
+  <div class="actions-bar"><PlayActions {vm} songs={vm.recentlyPlayed} queue={false} /></div>
   <div class="list-head" aria-hidden="true">
     <span class="head-title">Title</span>
     <div class="row-end">

@@ -15,7 +15,7 @@ import { dirname, extname, join } from "node:path";
 import { Router } from "express";
 import multer from "multer";
 import { ART_DIR, CLIPS_DIR, getDb, MUSIC_DIR } from "../db/init.js";
-import { preparedDownload } from "../functional/download.js";
+import { preparedDownload, streamSongsZip } from "../functional/download.js";
 import {
   copySongToLibrary,
   deleteSong,
@@ -1246,6 +1246,41 @@ songsRouter.patch("/songs/album-order", (req, res) => {
       .json({ error: result.error });
   }
   return res.json({ ok: true });
+});
+
+// POST /api/songs/download-zip — download a set of the caller's own songs as a
+// zip, in the given order. Albums have no server-side id (they're a client-side
+// grouping by name), so the frontend sends the album's song ids + a name for the
+// file. Body: { ids: number[], name?: string }.
+songsRouter.post("/songs/download-zip", async (req, res) => {
+  const ids = Array.isArray(req.body?.ids)
+    ? req.body.ids.map(Number).filter((n: number) => Number.isFinite(n))
+    : null;
+  if (!ids || ids.length === 0) {
+    return res.status(400).json({
+      error: { code: "validation", message: "ids array is required" },
+    });
+  }
+  const db = getDb();
+  // Restrict to the caller's own songs, and keep the requested order.
+  const placeholders = ids.map(() => "?").join(",");
+  const owned = db
+    .prepare(
+      `SELECT id FROM songs WHERE id IN (${placeholders}) AND user_id = ? AND pending = 0`
+    )
+    .all(...ids, req.userId!) as { id: number }[];
+  const ownedSet = new Set(owned.map((r) => r.id));
+  const orderedIds = ids.filter((id: number) => ownedSet.has(id));
+  if (orderedIds.length === 0) {
+    return res.status(404).json({
+      error: { code: "not_found", message: "No downloadable songs" },
+    });
+  }
+  const rawName = typeof req.body?.name === "string" ? req.body.name : "album";
+  const zipName = (rawName || "album").replace(/[^\w.\- ]+/g, "_");
+  await streamSongsZip(db, res, orderedIds, zipName, MUSIC_DIR, ART_DIR, {
+    numberTracks: true,
+  });
 });
 
 // PATCH /api/songs/bulk — edit metadata (artist, album) on many songs at once.
