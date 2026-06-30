@@ -53,7 +53,7 @@ describe("playlists", () => {
     expect(getPlaylist(db, p, bob).ok).toBe(false);
   });
 
-  it("adds songs, rejects duplicates, returns ordered list", () => {
+  it("adds songs newest-first, rejects duplicates, returns ordered list", () => {
     const p = playlist(alice);
     const s1 = song(alice, "s1");
     const s2 = song(alice, "s2");
@@ -63,7 +63,8 @@ describe("playlists", () => {
     expect(dup.ok).toBe(false);
     if (!dup.ok) expect(dup.error.code).toBe("conflict");
     const songs = getPlaylistSongs(db, p, alice);
-    expect(songs.ok && songs.value.map((s) => s.id)).toEqual([s1, s2]);
+    // Most recently added is shown at the top, so s2 comes before s1.
+    expect(songs.ok && songs.value.map((s) => s.id)).toEqual([s2, s1]);
   });
 
   it("won't add another user's song", () => {
@@ -80,6 +81,9 @@ describe("playlists", () => {
     const bobSong = song(bob, "b");
     const first = addSongsToPlaylist(db, p, [s1, s2], alice);
     expect(first.ok && first.value.added).toBe(2);
+    // The batch lands at the top, preserving the given order among new songs.
+    const ordered = getPlaylistSongs(db, p, alice);
+    expect(ordered.ok && ordered.value.map((s) => s.id)).toEqual([s1, s2]);
     const second = addSongsToPlaylist(db, p, [s1, 9999, bobSong], alice);
     expect(second.ok && second.value.added).toBe(0);
   });

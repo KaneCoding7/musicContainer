@@ -231,6 +231,29 @@ export async function reorderAlbumSongs(ids: number[]): Promise<void> {
   if (!res.ok) throw new Error(await errorMessage(res));
 }
 
+// Downloads a set of songs (e.g. a whole album) as a zip, saved client-side.
+// `name` becomes the .zip filename. Mirrors downloadPlaylistZip.
+export async function downloadSongsZip(
+  ids: number[],
+  name: string
+): Promise<void> {
+  const res = await fetch(`${apiBase()}/api/songs/download-zip`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ ids, name }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${(name || "album").replace(/[^\w.\- ]+/g, "_")}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // Sets a song's liked flag; returns the updated song.
 export async function setLiked(songId: number, liked: boolean): Promise<Song> {
   const res = await fetch(`${apiBase()}/api/songs/${songId}/like`, {

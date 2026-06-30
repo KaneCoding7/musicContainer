@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { extname, join } from "node:path";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { dirname, extname, join } from "node:path";
+import { ZipArchive } from "archiver";
+import type { Response } from "express";
 import type { Database } from "better-sqlite3";
 
 function run(cmd: string, args: string[]): Promise<void> {
@@ -83,4 +85,63 @@ export async function preparedDownload(
   } catch {
     return { path: src, name };
   }
+}
+
+// Streams a set of songs (by id, in the given order) to the response as a zip,
+// re-tagging each track via preparedDownload first. Shared by the playlist-zip
+// and album-zip downloads so they behave identically. `zipName` is used for the
+// attachment filename and is sanitized by the caller.
+export async function streamSongsZip(
+  db: Database,
+  res: Response,
+  songIds: number[],
+  zipName: string,
+  musicDir: string,
+  artDir: string
+): Promise<void> {
+  // Tagged temp files live in workDir until the archive finishes streaming.
+  const work = mkdtempSync(join(dirname(musicDir), "zip-"));
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    try {
+      rmSync(work, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
+  };
+
+  const used = new Set<string>();
+  const files: { path: string; entry: string }[] = [];
+  for (const songId of songIds) {
+    const prepared = await preparedDownload(db, songId, musicDir, artDir, work);
+    if (!prepared) continue;
+    // preparedDownload already ensures the name carries an extension.
+    let entry = prepared.name;
+    // De-duplicate identical entry names within the zip.
+    if (used.has(entry)) {
+      const base = entry.slice(0, entry.length - extname(entry).length);
+      let i = 2;
+      while (used.has(`${base} (${i})${extname(entry)}`)) i++;
+      entry = `${base} (${i})${extname(entry)}`;
+    }
+    used.add(entry);
+    files.push({ path: prepared.path, entry });
+  }
+
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", `attachment; filename="${zipName}.zip"`);
+
+  const archive = new ZipArchive({ zlib: { level: 0 } }); // store; audio is already compressed
+  archive.on("error", () => {
+    if (!res.headersSent) res.status(500);
+    res.end();
+  });
+  archive.on("end", cleanup);
+  res.on("close", cleanup);
+  archive.pipe(res);
+
+  for (const f of files) archive.file(f.path, { name: f.entry });
+  archive.finalize();
 }
