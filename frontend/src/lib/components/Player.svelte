@@ -386,9 +386,15 @@
     });
   }
 
+  // How many tracks have failed to start in a row, reset the moment any track
+  // makes real playback progress. Guards handleTrackError against wiping the
+  // whole queue during a broad outage / going offline (where every track errors).
+  let consecutiveStreamErrors = 0;
+
   function onTimeUpdate() {
     if (seeking) return; // don't fight an active scrub
     currentTime = audio?.currentTime ?? 0;
+    if (currentTime > 1) consecutiveStreamErrors = 0; // a track is really playing
     vm.position = currentTime; // tracked for refresh-resume persistence
     updatePositionState();
     maybeRecordPlay();
@@ -468,17 +474,39 @@
     else vm.isPlaying = false;
   }
 
-  // A track failed to play (network drop or decode error). Don't silently pause
-  // and strand the queue, and don't loop a broken file under repeat-one — just
-  // skip to the next track, exactly like a normal end-of-track advance.
+  // A track failed to play. The common real-world cause is that its file was
+  // deleted server-side while we were streaming it — e.g. someone removed the
+  // song from a shared playlist. Drop that entry from the queue and continue
+  // with the next track. Removing it (rather than just skipping) means repeat /
+  // next can never loop back onto the dead track — that loop is what caused the
+  // "song keeps restarting and jumps around" thrash. A run of failures (server
+  // down / offline) stops playback instead of emptying the whole queue.
   function handleTrackError() {
     if (vm.sleepAtTrackEnd) {
       vm.isPlaying = false;
       vm.cancelSleep();
       return;
     }
-    if (vm.next()) playCurrent();
-    else vm.isPlaying = false;
+    // Offline: don't mangle the queue — pause and let it resume on reconnect.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      vm.isPlaying = false;
+      return;
+    }
+    const idx = vm.currentIndex;
+    if (idx == null) {
+      vm.isPlaying = false;
+      return;
+    }
+    consecutiveStreamErrors++;
+    if (consecutiveStreamErrors > 3) {
+      // Several in a row — likely a broad outage, not one dead file. Stop rather
+      // than dropping every track.
+      vm.isPlaying = false;
+      consecutiveStreamErrors = 0;
+      return;
+    }
+    vm.removeFromQueue(idx); // drop the dead track; index now points at the next
+    if (vm.currentIndex != null && vm.isPlaying) playCurrent();
   }
 
   // Safety net for the "song finishes but the next one never starts" hang.
