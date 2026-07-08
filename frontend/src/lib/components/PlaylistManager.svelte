@@ -1414,8 +1414,9 @@
     .head {
       flex-direction: column;
       align-items: center;
-      gap: 1rem;
+      gap: 0.6rem;
       text-align: center;
+      margin-bottom: 0.75rem;
     }
     .head-info {
       display: flex;
@@ -1424,6 +1425,11 @@
     }
     .head-info h3 {
       align-items: center;
+      margin-bottom: 0.15rem;
+    }
+    /* Tighter vertical rhythm so the centered hero stays compact. */
+    .head-info .muted {
+      margin-bottom: 0.35rem;
     }
     /* Center the action icons (edit/download/share/delete) under the title. */
     .head-actions-mobile .detail-actions {
@@ -1432,10 +1438,11 @@
     /* Center the Play / Shuffle / Queue controls to match the centered hero. */
     .toolbar-row {
       justify-content: center;
+      margin-bottom: 0.6rem;
     }
     .cover-lg {
-      width: 200px;
-      height: 200px;
+      width: 160px;
+      height: 160px;
     }
   }
   /* --- Immersive cover-art backdrop for the open playlist ---------------
