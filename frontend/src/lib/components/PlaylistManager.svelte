@@ -862,7 +862,12 @@
                     <span class="thumb-wave"><EqualizerBars size={18} /></span>
                   {/if}
                 </span>
-                <span class="name">{song.originalFilename}</span>
+                <span class="meta">
+                  <span class="name">{song.originalFilename}</span>
+                  {#if song.artist}
+                    <span class="artist">{song.artist}</span>
+                  {/if}
+                </span>
               </button>
               {#if (collaborative || isSavedCopy) && song.addedBy}
                 <span class="added-by" title={`Added by ${song.addedBy}`}>
@@ -1638,8 +1643,8 @@
       margin-bottom: 0.6rem;
     }
     .detail .cover-lg {
-      width: 240px;
-      height: 240px;
+      width: 280px;
+      height: 280px;
     }
   }
   /* --- Immersive cover-art backdrop for the open playlist ---------------
@@ -1723,8 +1728,8 @@
   }
   .cover-lg {
     flex-shrink: 0;
-    width: 220px;
-    height: 220px;
+    width: 260px;
+    height: 260px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2183,10 +2188,23 @@
       opacity: 0;
     }
   }
-  .name {
+  /* Title + artist stacked, matching the All Songs table. */
+  .meta {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
     text-align: left;
+  }
+  .name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .artist {
+    color: var(--muted);
+    font-size: 0.8rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
