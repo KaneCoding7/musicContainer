@@ -1407,6 +1407,11 @@
       top: -1rem;
       height: 480px;
     }
+    /* Keep the bigger cover from crowding the title on narrow screens. */
+    .cover-lg {
+      width: 156px;
+      height: 156px;
+    }
   }
   /* --- Immersive cover-art backdrop for the open playlist ---------------
      The playlist's cover, heavily blurred and color-washed, bleeds to the
@@ -1489,8 +1494,8 @@
   }
   .cover-lg {
     flex-shrink: 0;
-    width: 168px;
-    height: 168px;
+    width: 220px;
+    height: 220px;
     display: flex;
     align-items: center;
     justify-content: center;
