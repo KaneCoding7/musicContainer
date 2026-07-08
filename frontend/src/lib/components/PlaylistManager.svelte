@@ -1407,10 +1407,16 @@
       top: -1rem;
       height: 480px;
     }
-    /* Keep the bigger cover from crowding the title on narrow screens. */
+    /* On phones, stack the header: cover art on top, with the title, track
+       count, members and action icons underneath it instead of beside it. */
+    .head {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1rem;
+    }
     .cover-lg {
-      width: 156px;
-      height: 156px;
+      width: 200px;
+      height: 200px;
     }
   }
   /* --- Immersive cover-art backdrop for the open playlist ---------------
