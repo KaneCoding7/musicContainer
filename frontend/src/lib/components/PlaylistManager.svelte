@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import Icon from "$lib/components/Icon.svelte";
@@ -444,6 +444,48 @@
   // Mobile only: the edit/download/share/delete actions collapse into a "⋮"
   // overflow menu (they're shown inline on desktop). This toggles it.
   let moreOpen = $state(false);
+  let moreWrapEl = $state<HTMLElement | null>(null);
+  let moreMenuEl = $state<HTMLElement | null>(null);
+  // Final viewport coords for the (position: fixed) menu. Null until measured,
+  // so it stays hidden for a frame instead of flashing at the wrong spot.
+  let morePlaced = $state<{ left: number; top: number } | null>(null);
+
+  // Anchor the menu under the ⋮ button, right-aligned; flip it above when there
+  // isn't room below, then clamp to the viewport. Same approach as SongMenu so
+  // the whole menu is always on screen without scrolling.
+  function placeMoreMenu() {
+    if (!moreOpen || !moreMenuEl) return;
+    const margin = 8;
+    const r = moreMenuEl.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const a = moreWrapEl?.getBoundingClientRect();
+    let left = a ? a.right - r.width : margin;
+    let top = a ? a.bottom + 4 : margin;
+    if (a && top + r.height > vh - margin && a.top - r.height - 4 >= margin) {
+      top = a.top - r.height - 4;
+    }
+    morePlaced = {
+      left: Math.max(margin, Math.min(left, vw - r.width - margin)),
+      top: Math.max(margin, Math.min(top, vh - r.height - margin)),
+    };
+  }
+
+  // Re-place once the menu has rendered, and keep it on screen on resize/scroll.
+  $effect(() => {
+    if (!moreOpen) {
+      morePlaced = null;
+      return;
+    }
+    tick().then(placeMoreMenu);
+    const onMove = () => placeMoreMenu();
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => {
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
+    };
+  });
 
   function moveTrack(from: number, to: number) {
     if (from === to) return;
@@ -679,7 +721,7 @@
 
         <!-- Mobile: everything but Play/Shuffle tucks into a ⋮ menu pinned to
              the right of the controls row. -->
-        <div class="more-wrap">
+        <div class="more-wrap" bind:this={moreWrapEl}>
           {#if reordering}
             <button
               class="more-btn on"
@@ -702,7 +744,14 @@
               <Icon name="more_vert" size={22} />
             </button>
             {#if moreOpen}
-              <div class="more-menu" role="menu">
+              <div
+                class="more-menu"
+                role="menu"
+                bind:this={moreMenuEl}
+                style={morePlaced
+                  ? `left:${morePlaced.left}px; top:${morePlaced.top}px;`
+                  : "visibility:hidden;"}
+              >
                 {#if vm.selectedSongs.length > 0}
                   <button
                     role="menuitem"
@@ -1489,12 +1538,14 @@
   .more-btn.on {
     background: var(--hover);
   }
+  /* Positioned in viewport coordinates via placeMoreMenu() (like SongMenu) so
+     it anchors under the ⋮, flips above when short on room, and never runs off
+     screen. */
   .more-menu {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 6px);
+    position: fixed;
     z-index: 30;
     min-width: 190px;
+    max-width: calc(100vw - 16px);
     background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: 0.5rem;
@@ -1530,7 +1581,7 @@
     position: fixed;
     inset: 0;
     z-index: 20;
-    background: rgba(0, 0, 0, 0.5);
+    background: transparent;
     border: none;
     padding: 0;
   }
@@ -1548,21 +1599,6 @@
       display: inline-flex;
       position: relative;
       margin-left: auto;
-    }
-    /* Present the overflow menu as a centered popup so the whole menu is on
-       screen at once, instead of a dropdown whose lower items fall below the
-       fold and need scrolling. */
-    .more-menu {
-      position: fixed;
-      left: 50%;
-      top: 50%;
-      right: auto;
-      transform: translate(-50%, -50%);
-      min-width: 240px;
-      max-width: calc(100vw - 2rem);
-    }
-    .more-menu button {
-      padding: 0.8rem;
     }
     /* The whole-playlist queue button moves into the ⋮ menu on phones. */
     .actions-bar :global(.play-actions .queue) {
@@ -1585,7 +1621,7 @@
       align-items: center;
       gap: 0.6rem;
       text-align: center;
-      margin-bottom: 0.4rem;
+      margin-bottom: 0.2rem;
     }
     .head-info {
       display: flex;
@@ -1598,7 +1634,7 @@
     }
     /* Tighter vertical rhythm so the centered hero stays compact. */
     .head-info .muted {
-      margin-bottom: 0.35rem;
+      margin-bottom: 0.1rem;
     }
     /* Left-align the Play / Shuffle / ⋮ group; the 0.5rem gap matches the
        spacing inside PlayActions so the ⋮ reads as part of the same row. */
