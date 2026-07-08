@@ -703,6 +703,17 @@
             </button>
             {#if moreOpen}
               <div class="more-menu" role="menu">
+                {#if vm.selectedSongs.length > 0}
+                  <button
+                    role="menuitem"
+                    onclick={() => {
+                      moreOpen = false;
+                      songVm.addManyToQueue(vm.selectedSongs);
+                    }}
+                  >
+                    <Icon name="queue_music" size={18} /> Add to queue
+                  </button>
+                {/if}
                 <button
                   role="menuitem"
                   onclick={() => {
@@ -1532,14 +1543,15 @@
     .head-actions-desktop {
       display: none;
     }
-    /* Reveal the ⋮ overflow menu, pinned to the right of the controls row
-       while Play/Shuffle stay centered. */
+    /* Show the ⋮ inline as the third control, taking the queue button's spot
+       in the Play/Shuffle group. */
     .more-wrap {
-      display: block;
-      position: absolute;
-      right: 0;
-      top: 50%;
-      transform: translateY(-50%);
+      display: inline-flex;
+      position: relative;
+    }
+    /* The whole-playlist queue button moves into the ⋮ menu on phones. */
+    .actions-bar :global(.play-actions .queue) {
+      display: none;
     }
     /* Match the narrower content gutter (.content padding = 1rem on phones)
        so the wash still bleeds edge-to-edge without causing side-scroll. */
@@ -1573,12 +1585,11 @@
     .head-info .muted {
       margin-bottom: 0.35rem;
     }
-    /* Center the Play / Shuffle controls; the ⋮ menu is pinned to the right
-       edge (absolute), so reserve height for it even with no Play bar. */
+    /* Center the Play / Shuffle / ⋮ group; the 0.5rem gap matches the spacing
+       inside PlayActions so the ⋮ reads as part of the same button row. */
     .toolbar-row {
-      position: relative;
       justify-content: center;
-      min-height: 44px;
+      gap: 0.5rem;
       margin-bottom: 0.6rem;
     }
     .cover-lg {
