@@ -461,10 +461,8 @@
     const vh = window.innerHeight;
     const a = moreWrapEl?.getBoundingClientRect();
     let left = a ? a.right - r.width : margin;
-    let top = a ? a.bottom + 4 : margin;
-    if (a && top + r.height > vh - margin && a.top - r.height - 4 >= margin) {
-      top = a.top - r.height - 4;
-    }
+    // Always open the menu upward, above the ⋮ button.
+    let top = a ? a.top - r.height - 4 : margin;
     morePlaced = {
       left: Math.max(margin, Math.min(left, vw - r.width - margin)),
       top: Math.max(margin, Math.min(top, vh - r.height - margin)),
@@ -1616,36 +1614,40 @@
        title, track count, members pill and action icons centered beneath it —
        and the Play/Shuffle/Queue row centered to match, so nothing fights the
        alignment. The track list below stays left-aligned. */
-    .head {
+    /* These are prefixed with .detail to out-specify the base .head /
+       .head-info / .cover-lg rules, which are defined LATER in this file (in
+       the backdrop section) and would otherwise win at equal specificity even
+       on mobile — silently reverting the mobile spacing and cover size. */
+    .detail .head {
       flex-direction: column;
       align-items: center;
-      gap: 0.6rem;
+      gap: 0.5rem;
       text-align: center;
       margin-bottom: 0.2rem;
     }
-    .head-info {
+    .detail .head-info {
       display: flex;
       flex-direction: column;
       align-items: center;
     }
-    .head-info h3 {
+    .detail .head-info h3 {
       align-items: center;
-      margin-bottom: 0.15rem;
+      margin-bottom: 0.1rem;
     }
     /* Tighter vertical rhythm so the centered hero stays compact. */
-    .head-info .muted {
+    .detail .head-info .muted {
       margin-bottom: 0.1rem;
     }
     /* Left-align the Play / Shuffle / ⋮ group; the 0.5rem gap matches the
        spacing inside PlayActions so the ⋮ reads as part of the same row. */
-    .toolbar-row {
+    .detail .toolbar-row {
       justify-content: flex-start;
       gap: 0.5rem;
       margin-bottom: 0.6rem;
     }
-    .cover-lg {
-      width: 180px;
-      height: 180px;
+    .detail .cover-lg {
+      width: 240px;
+      height: 240px;
     }
   }
   /* --- Immersive cover-art backdrop for the open playlist ---------------
