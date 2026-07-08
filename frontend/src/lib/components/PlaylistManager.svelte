@@ -441,6 +441,10 @@
   // pointer-based (works on touch) via the handle.
   let reordering = $state(false);
 
+  // Mobile only: the edit/download/share/delete actions collapse into a "⋮"
+  // overflow menu (they're shown inline on desktop). This toggles it.
+  let moreOpen = $state(false);
+
   function moveTrack(from: number, to: number) {
     if (from === to) return;
     const arr = [...vm.selectedSongs];
@@ -658,10 +662,6 @@
           {#if vm.selectedId !== null}
             <PlaylistMembers playlistId={vm.selectedId} refresh={memberRefresh} />
           {/if}
-          <!-- Mobile: icons stay in the header under the people pill. -->
-          <div class="head-actions-mobile">
-            {@render detailActions()}
-          </div>
         </div>
       </div>
 
@@ -676,7 +676,86 @@
         <div class="head-actions-desktop">
           {@render detailActions()}
         </div>
+
+        <!-- Mobile: everything but Play/Shuffle tucks into a ⋮ menu pinned to
+             the right of the controls row. -->
+        <div class="more-wrap">
+          {#if reordering}
+            <button
+              class="more-btn on"
+              title="Done reordering"
+              aria-label="Done reordering"
+              onclick={() => (reordering = false)}
+            >
+              <Icon name="check" size={22} />
+            </button>
+          {:else}
+            <button
+              class="more-btn"
+              class:on={moreOpen}
+              title="More options"
+              aria-label="More options"
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
+              onclick={() => (moreOpen = !moreOpen)}
+            >
+              <Icon name="more_vert" size={22} />
+            </button>
+            {#if moreOpen}
+              <div class="more-menu" role="menu">
+                <button
+                  role="menuitem"
+                  onclick={() => {
+                    moreOpen = false;
+                    openEdit();
+                  }}
+                >
+                  <Icon name="edit" size={18} /> Edit
+                </button>
+                {#if vm.selectedSongs.length > 0}
+                  <button
+                    role="menuitem"
+                    disabled={downloading}
+                    onclick={() => {
+                      moreOpen = false;
+                      downloadZip();
+                    }}
+                  >
+                    <Icon name={downloading ? "progress_activity" : "download"} size={18} />
+                    Download
+                  </button>
+                {/if}
+                <button
+                  role="menuitem"
+                  onclick={() => {
+                    moreOpen = false;
+                    shareOpen = true;
+                  }}
+                >
+                  <Icon name="share" size={18} /> Share
+                </button>
+                <button
+                  role="menuitem"
+                  class="danger"
+                  onclick={() => {
+                    moreOpen = false;
+                    deleteSelected();
+                  }}
+                >
+                  <Icon name="delete" size={18} /> Delete
+                </button>
+              </div>
+            {/if}
+          {/if}
+        </div>
       </div>
+      {#if moreOpen}
+        <button
+          class="more-backdrop"
+          aria-label="Close menu"
+          onclick={() => (moreOpen = false)}
+        ></button>
+      {/if}
 
       {#if vm.selectedSongs.length === 0}
         <p class="muted">No songs in this playlist yet.</p>
@@ -1378,9 +1457,71 @@
   .head-actions-desktop {
     margin-left: auto;
   }
-  /* Icons live in the header only on mobile. */
-  .head-actions-mobile {
+  /* The ⋮ overflow menu is mobile-only; desktop shows the inline icons. */
+  .more-wrap {
     display: none;
+  }
+  /* Round ⋮ trigger — matches the Shuffle/Queue pills next to it. */
+  .more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .more-btn.on {
+    background: var(--hover);
+  }
+  .more-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 30;
+    min-width: 190px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    padding: 0.25rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+  }
+  .more-menu button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.6rem 0.7rem;
+    background: transparent;
+    border: none;
+    border-radius: 0.35rem;
+    color: var(--text);
+    font: inherit;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+  }
+  .more-menu button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .more-menu .danger {
+    color: var(--danger-text);
+  }
+  .more-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: transparent;
+    border: none;
+    padding: 0;
   }
   @media (max-width: 768px) {
     /* No track-list column headers on phones. Scoped to .detail so it wins over
@@ -1391,13 +1532,14 @@
     .head-actions-desktop {
       display: none;
     }
-    .head-actions-mobile {
+    /* Reveal the ⋮ overflow menu, pinned to the right of the controls row
+       while Play/Shuffle stay centered. */
+    .more-wrap {
       display: block;
-      margin-top: 0.25rem;
-    }
-    /* Tighter icon spacing on phones for a more compact header. */
-    .head-actions-mobile .detail-actions {
-      gap: 0;
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
     }
     /* Match the narrower content gutter (.content padding = 1rem on phones)
        so the wash still bleeds edge-to-edge without causing side-scroll. */
@@ -1431,13 +1573,12 @@
     .head-info .muted {
       margin-bottom: 0.35rem;
     }
-    /* Center the action icons (edit/download/share/delete) under the title. */
-    .head-actions-mobile .detail-actions {
-      justify-content: center;
-    }
-    /* Center the Play / Shuffle / Queue controls to match the centered hero. */
+    /* Center the Play / Shuffle controls; the ⋮ menu is pinned to the right
+       edge (absolute), so reserve height for it even with no Play bar. */
     .toolbar-row {
+      position: relative;
       justify-content: center;
+      min-height: 44px;
       margin-bottom: 0.6rem;
     }
     .cover-lg {
