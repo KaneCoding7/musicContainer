@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import Icon from "$lib/components/Icon.svelte";
@@ -374,6 +374,17 @@
   let savingEdit = $state(false);
   let coverBust = $state(0); // bump to refresh cached cover after a change
 
+  // Art used for the immersive backdrop behind the open playlist: the playlist's
+  // own cover if it has one, else the cover borrowed from a song. Null → no
+  // backdrop (falls back to the plain header). Mirrors the header's cover logic.
+  const heroArt = $derived.by(() => {
+    const p = vm.selected;
+    if (!p) return null;
+    if (p.hasImage) return playlistImageUrl(p.id, 512, coverBust);
+    if (p.coverSongId != null) return thumbUrl(p.coverSongId, 512);
+    return null;
+  });
+
   function openEdit() {
     const cur = vm.selected;
     if (!cur) return;
@@ -430,6 +441,50 @@
   // pointer-based (works on touch) via the handle.
   let reordering = $state(false);
 
+  // Mobile only: the edit/download/share/delete actions collapse into a "⋮"
+  // overflow menu (they're shown inline on desktop). This toggles it.
+  let moreOpen = $state(false);
+  let moreWrapEl = $state<HTMLElement | null>(null);
+  let moreMenuEl = $state<HTMLElement | null>(null);
+  // Final viewport coords for the (position: fixed) menu. Null until measured,
+  // so it stays hidden for a frame instead of flashing at the wrong spot.
+  let morePlaced = $state<{ left: number; top: number } | null>(null);
+
+  // Anchor the menu under the ⋮ button, right-aligned; flip it above when there
+  // isn't room below, then clamp to the viewport. Same approach as SongMenu so
+  // the whole menu is always on screen without scrolling.
+  function placeMoreMenu() {
+    if (!moreOpen || !moreMenuEl) return;
+    const margin = 8;
+    const r = moreMenuEl.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const a = moreWrapEl?.getBoundingClientRect();
+    let left = a ? a.right - r.width : margin;
+    // Always open the menu upward, above the ⋮ button.
+    let top = a ? a.top - r.height - 4 : margin;
+    morePlaced = {
+      left: Math.max(margin, Math.min(left, vw - r.width - margin)),
+      top: Math.max(margin, Math.min(top, vh - r.height - margin)),
+    };
+  }
+
+  // Re-place once the menu has rendered, and keep it on screen on resize/scroll.
+  $effect(() => {
+    if (!moreOpen) {
+      morePlaced = null;
+      return;
+    }
+    tick().then(placeMoreMenu);
+    const onMove = () => placeMoreMenu();
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => {
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
+    };
+  });
+
   function moveTrack(from: number, to: number) {
     if (from === to) return;
     const arr = [...vm.selectedSongs];
@@ -439,7 +494,12 @@
   }
 </script>
 
-<div class="playlists">
+<div class="playlists" class:detail-open={openId !== null && heroArt}>
+  {#if openId !== null && heroArt}
+    <div class="pl-backdrop" aria-hidden="true">
+      <img src={heroArt} alt="" />
+    </div>
+  {/if}
   {#snippet detailActions()}
     <div class="detail-actions">
       {#if reordering}
@@ -615,7 +675,7 @@
       <Icon name="arrow_back" size={20} /> All playlists
     </button>
     {#if vm.selected}
-    <div class="detail">
+    <div class="detail" class:has-hero={heroArt}>
       <div class="head">
         <span class="cover-lg">
           {#if vm.selected.hasImage}
@@ -642,10 +702,6 @@
           {#if vm.selectedId !== null}
             <PlaylistMembers playlistId={vm.selectedId} refresh={memberRefresh} />
           {/if}
-          <!-- Mobile: icons stay in the header under the people pill. -->
-          <div class="head-actions-mobile">
-            {@render detailActions()}
-          </div>
         </div>
       </div>
 
@@ -660,7 +716,104 @@
         <div class="head-actions-desktop">
           {@render detailActions()}
         </div>
+
+        <!-- Mobile: everything but Play/Shuffle tucks into a ⋮ menu pinned to
+             the right of the controls row. -->
+        <div class="more-wrap" bind:this={moreWrapEl}>
+          {#if reordering}
+            <button
+              class="more-btn on"
+              title="Done reordering"
+              aria-label="Done reordering"
+              onclick={() => (reordering = false)}
+            >
+              <Icon name="check" size={22} />
+            </button>
+          {:else}
+            <button
+              class="more-btn"
+              class:on={moreOpen}
+              title="More options"
+              aria-label="More options"
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
+              onclick={() => (moreOpen = !moreOpen)}
+            >
+              <Icon name="more_vert" size={22} />
+            </button>
+            {#if moreOpen}
+              <div
+                class="more-menu"
+                role="menu"
+                bind:this={moreMenuEl}
+                style={morePlaced
+                  ? `left:${morePlaced.left}px; top:${morePlaced.top}px;`
+                  : "visibility:hidden;"}
+              >
+                {#if vm.selectedSongs.length > 0}
+                  <button
+                    role="menuitem"
+                    onclick={() => {
+                      moreOpen = false;
+                      songVm.addManyToQueue(vm.selectedSongs);
+                    }}
+                  >
+                    <Icon name="queue_music" size={18} /> Add to queue
+                  </button>
+                {/if}
+                <button
+                  role="menuitem"
+                  onclick={() => {
+                    moreOpen = false;
+                    openEdit();
+                  }}
+                >
+                  <Icon name="edit" size={18} /> Edit
+                </button>
+                {#if vm.selectedSongs.length > 0}
+                  <button
+                    role="menuitem"
+                    disabled={downloading}
+                    onclick={() => {
+                      moreOpen = false;
+                      downloadZip();
+                    }}
+                  >
+                    <Icon name={downloading ? "progress_activity" : "download"} size={18} />
+                    Download
+                  </button>
+                {/if}
+                <button
+                  role="menuitem"
+                  onclick={() => {
+                    moreOpen = false;
+                    shareOpen = true;
+                  }}
+                >
+                  <Icon name="share" size={18} /> Share
+                </button>
+                <button
+                  role="menuitem"
+                  class="danger"
+                  onclick={() => {
+                    moreOpen = false;
+                    deleteSelected();
+                  }}
+                >
+                  <Icon name="delete" size={18} /> Delete
+                </button>
+              </div>
+            {/if}
+          {/if}
+        </div>
       </div>
+      {#if moreOpen}
+        <button
+          class="more-backdrop"
+          aria-label="Close menu"
+          onclick={() => (moreOpen = false)}
+        ></button>
+      {/if}
 
       {#if vm.selectedSongs.length === 0}
         <p class="muted">No songs in this playlist yet.</p>
@@ -669,7 +822,6 @@
           <span class="head-title">Title</span>
           <span class="head-plays">Plays</span>
           <span class="head-menu"></span>
-          <span class="head-remove"></span>
         </div>
         <ol>
           {#each vm.selectedSongs as song, i (song.id)}
@@ -710,7 +862,12 @@
                     <span class="thumb-wave"><EqualizerBars size={18} /></span>
                   {/if}
                 </span>
-                <span class="name">{song.originalFilename}</span>
+                <span class="meta">
+                  <span class="name">{song.originalFilename}</span>
+                  {#if song.artist}
+                    <span class="artist">{song.artist}</span>
+                  {/if}
+                </span>
               </button>
               {#if (collaborative || isSavedCopy) && song.addedBy}
                 <span class="added-by" title={`Added by ${song.addedBy}`}>
@@ -751,13 +908,6 @@
                   if (vm.selectedId !== null) vm.select(vm.selectedId);
                 }}
               />
-              <button
-                class="remove"
-                title="Remove from playlist"
-                aria-label="Remove from playlist"
-                onclick={() => confirmRemoveSong(song)}
-                ><Icon name="close" size={20} /></button
-              >
             </li>
           {/each}
         </ol>
@@ -1362,9 +1512,73 @@
   .head-actions-desktop {
     margin-left: auto;
   }
-  /* Icons live in the header only on mobile. */
-  .head-actions-mobile {
+  /* The ⋮ overflow menu is mobile-only; desktop shows the inline icons. */
+  .more-wrap {
     display: none;
+  }
+  /* Round ⋮ trigger — matches the Shuffle/Queue pills next to it. */
+  .more-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .more-btn.on {
+    background: var(--hover);
+  }
+  /* Positioned in viewport coordinates via placeMoreMenu() (like SongMenu) so
+     it anchors under the ⋮, flips above when short on room, and never runs off
+     screen. */
+  .more-menu {
+    position: fixed;
+    z-index: 30;
+    min-width: 190px;
+    max-width: calc(100vw - 16px);
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    padding: 0.25rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+  }
+  .more-menu button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.6rem 0.7rem;
+    background: transparent;
+    border: none;
+    border-radius: 0.35rem;
+    color: var(--text);
+    font: inherit;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+  }
+  .more-menu button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .more-menu .danger {
+    color: var(--danger-text);
+  }
+  .more-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: transparent;
+    border: none;
+    padding: 0;
   }
   @media (max-width: 768px) {
     /* No track-list column headers on phones. Scoped to .detail so it wins over
@@ -1375,15 +1589,137 @@
     .head-actions-desktop {
       display: none;
     }
-    .head-actions-mobile {
-      display: block;
-      margin-top: 0.25rem;
+    /* Play/Shuffle sit on the left; push the ⋮ to the far right of the row. */
+    .more-wrap {
+      display: inline-flex;
+      position: relative;
+      margin-left: auto;
     }
-    /* Tighter icon spacing on phones for a more compact header. */
-    .head-actions-mobile .detail-actions {
-      gap: 0;
+    /* The whole-playlist queue button moves into the ⋮ menu on phones. */
+    .actions-bar :global(.play-actions .queue) {
+      display: none;
+    }
+    /* Match the narrower content gutter (.content padding = 1rem on phones)
+       so the wash still bleeds edge-to-edge without causing side-scroll. */
+    .pl-backdrop {
+      left: -1rem;
+      right: -1rem;
+      top: -1rem;
+      height: 480px;
+    }
+    /* On phones, stack the header as a centered hero: cover on top, then the
+       title, track count, members pill and action icons centered beneath it —
+       and the Play/Shuffle/Queue row centered to match, so nothing fights the
+       alignment. The track list below stays left-aligned. */
+    /* These are prefixed with .detail to out-specify the base .head /
+       .head-info / .cover-lg rules, which are defined LATER in this file (in
+       the backdrop section) and would otherwise win at equal specificity even
+       on mobile — silently reverting the mobile spacing and cover size. */
+    .detail .head {
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      text-align: center;
+      margin-bottom: 0.2rem;
+    }
+    .detail .head-info {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .detail .head-info h3 {
+      align-items: center;
+      margin-bottom: 0.1rem;
+    }
+    /* Tighter vertical rhythm so the centered hero stays compact. */
+    .detail .head-info .muted {
+      margin-bottom: 0.1rem;
+    }
+    /* Left-align the Play / Shuffle / ⋮ group; the 0.5rem gap matches the
+       spacing inside PlayActions so the ⋮ reads as part of the same row. */
+    .detail .toolbar-row {
+      justify-content: flex-start;
+      gap: 0.5rem;
+      margin-bottom: 0.6rem;
+    }
+    .detail .cover-lg {
+      width: 280px;
+      height: 280px;
     }
   }
+  /* --- Immersive cover-art backdrop for the open playlist ---------------
+     The playlist's cover, heavily blurred and color-washed, bleeds to the
+     content edges behind the header and fades down through the top of the
+     track list — so the art becomes the mood of the whole view, not just a
+     lone thumbnail. A page-background scrim (color-mix, theme-aware) keeps
+     the header text readable over any cover in both light and dark. */
+  .playlists {
+    position: relative;
+  }
+  /* When a playlist is open, its real content sits above the wash. */
+  .playlists.detail-open > :not(.pl-backdrop) {
+    position: relative;
+    z-index: 1;
+  }
+  .pl-backdrop {
+    position: absolute;
+    z-index: 0;
+    top: -1.5rem; /* .content top padding — reach the very top of the page */
+    left: -2rem; /* .content side padding — bleed to the window edges */
+    right: -2rem;
+    height: 620px; /* tall enough to carry well down behind the track list */
+    overflow: hidden;
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 0%,
+      #000 52%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(to bottom, #000 0%, #000 52%, transparent 100%);
+  }
+  .pl-backdrop img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: blur(44px) saturate(1.7);
+    transform: scale(1.3);
+    opacity: 0.85;
+    animation: hero-drift 34s ease-in-out infinite alternate;
+  }
+  /* Light theme-aware scrim — kept thin so the art stays bold and prominent
+     while the header text keeps enough contrast to read. */
+  .pl-backdrop::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--bg) 8%, transparent),
+      color-mix(in srgb, var(--bg) 34%, transparent)
+    );
+  }
+  /* With a bold wash behind them, give the header text a soft halo so it
+     stays legible over any cover. */
+  .detail.has-hero .head-info h3,
+  .detail.has-hero .head-info .muted {
+    text-shadow: 0 1px 14px rgba(0, 0, 0, 0.55);
+  }
+  /* Slow parallax drift so the wash feels alive without distracting. */
+  @keyframes hero-drift {
+    from {
+      transform: scale(1.3) translate3d(-1.5%, -1%, 0);
+    }
+    to {
+      transform: scale(1.45) translate3d(1.5%, 1.5%, 0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pl-backdrop img {
+      animation: none;
+    }
+  }
+
   .head {
     display: flex;
     gap: 1.25rem;
@@ -1392,8 +1728,8 @@
   }
   .cover-lg {
     flex-shrink: 0;
-    width: 168px;
-    height: 168px;
+    width: 260px;
+    height: 260px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1401,6 +1737,11 @@
     border-radius: 0.6rem;
     color: var(--dim);
     overflow: hidden;
+  }
+  /* Lift the crisp cover off the blurred wash behind it. */
+  .detail.has-hero .cover-lg {
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
   .cover-lg img {
     width: 100%;
@@ -1847,10 +2188,23 @@
       opacity: 0;
     }
   }
-  .name {
+  /* Title + artist stacked, matching the All Songs table. */
+  .meta {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
     text-align: left;
+  }
+  .name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .artist {
+    color: var(--muted);
+    font-size: 0.8rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1880,7 +2234,7 @@
     font-variant-numeric: tabular-nums;
   }
   /* Track-list column headers (web only). Spacers match the trailing controls
-     (menu 2.25rem, remove 2.45rem) so "Plays" lines up over the play counts. */
+     (menu 2.25rem) so "Plays" lines up over the play counts. */
   .list-head {
     display: flex;
     align-items: center;
@@ -1900,9 +2254,6 @@
   }
   .head-menu {
     width: 2.25rem;
-  }
-  .head-remove {
-    width: 2.45rem;
   }
   .to-lib {
     flex-shrink: 0;
@@ -1931,21 +2282,6 @@
   @keyframes spin {
     to {
       transform: rotate(360deg);
-    }
-  }
-  .remove {
-    display: inline-flex;
-    align-items: center;
-    border: none;
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-    padding: 0.4rem 0.6rem;
-  }
-  @media (hover: hover) {
-    .remove:hover {
-      background: var(--danger-bg);
-      color: var(--danger-text);
     }
   }
   .add-block {

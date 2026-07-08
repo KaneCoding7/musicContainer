@@ -93,6 +93,14 @@
   const albumOpen = $derived(
     view === "albums" && !!page.url.searchParams.get("album"),
   );
+  // True when a playlist (own or shared) detail is open. The playlist name is
+  // shown in the detail header, so the redundant "Playlists" page heading is
+  // dropped — which also lets the cover-art backdrop bleed to the very top.
+  const playlistOpen = $derived(
+    view === "playlists" &&
+      (!!page.url.searchParams.get("playlist") ||
+        !!page.url.searchParams.get("shared")),
+  );
 
   // The content area is its own scroll container and navigation uses noScroll,
   // so opening an artist would otherwise inherit the grid's scroll position and
@@ -100,7 +108,7 @@
   // opens.
   let contentEl = $state<HTMLElement | null>(null);
   $effect(() => {
-    if (artistOpen || albumOpen) contentEl?.scrollTo(0, 0);
+    if (artistOpen || albumOpen || playlistOpen) contentEl?.scrollTo(0, 0);
   });
 
   let queueOpen = $state(false);
@@ -400,7 +408,7 @@
         <h2>Liked</h2>
         <LikedView {vm} />
       {:else if view === "playlists"}
-        <h2>Playlists</h2>
+        {#if !playlistOpen}<h2>Playlists</h2>{/if}
         <PlaylistManager vm={playlistVm} songVm={vm} />
       {:else if view === "albums"}
         <h2 class:detail-hidden={albumOpen}>Albums</h2>
