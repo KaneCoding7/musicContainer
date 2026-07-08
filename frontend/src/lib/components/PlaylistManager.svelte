@@ -374,6 +374,17 @@
   let savingEdit = $state(false);
   let coverBust = $state(0); // bump to refresh cached cover after a change
 
+  // Art used for the immersive backdrop behind the open playlist: the playlist's
+  // own cover if it has one, else the cover borrowed from a song. Null → no
+  // backdrop (falls back to the plain header). Mirrors the header's cover logic.
+  const heroArt = $derived.by(() => {
+    const p = vm.selected;
+    if (!p) return null;
+    if (p.hasImage) return playlistImageUrl(p.id, 512, coverBust);
+    if (p.coverSongId != null) return thumbUrl(p.coverSongId, 512);
+    return null;
+  });
+
   function openEdit() {
     const cur = vm.selected;
     if (!cur) return;
@@ -615,7 +626,12 @@
       <Icon name="arrow_back" size={20} /> All playlists
     </button>
     {#if vm.selected}
-    <div class="detail">
+    <div class="detail" class:has-hero={heroArt}>
+      {#if heroArt}
+        <div class="pl-backdrop" aria-hidden="true">
+          <img src={heroArt} alt="" />
+        </div>
+      {/if}
       <div class="head">
         <span class="cover-lg">
           {#if vm.selected.hasImage}
@@ -1383,7 +1399,86 @@
     .head-actions-mobile .detail-actions {
       gap: 0;
     }
+    /* Match the narrower content gutter (.content padding = 1rem on phones)
+       so the wash still bleeds edge-to-edge without causing side-scroll. */
+    .pl-backdrop {
+      left: -1rem;
+      right: -1rem;
+      top: -1rem;
+      height: 360px;
+    }
   }
+  /* --- Immersive cover-art backdrop for the open playlist ---------------
+     The playlist's cover, heavily blurred and color-washed, bleeds to the
+     content edges behind the header and fades down through the top of the
+     track list — so the art becomes the mood of the whole view, not just a
+     lone thumbnail. A page-background scrim (color-mix, theme-aware) keeps
+     the header text readable over any cover in both light and dark. */
+  .detail {
+    position: relative;
+  }
+  /* Real content sits above the wash. */
+  .detail > :not(.pl-backdrop) {
+    position: relative;
+    z-index: 1;
+  }
+  .pl-backdrop {
+    position: absolute;
+    z-index: 0;
+    top: -1.5rem; /* reach up behind the "All playlists" back button */
+    left: -2rem; /* bleed into the content gutter (.content padding = 2rem) */
+    right: -2rem;
+    height: 460px;
+    overflow: hidden;
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.95) 0%,
+      rgba(0, 0, 0, 0.6) 42%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.95) 0%,
+      rgba(0, 0, 0, 0.6) 42%,
+      transparent 100%
+    );
+  }
+  .pl-backdrop img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: blur(52px) saturate(1.5);
+    transform: scale(1.35);
+    opacity: 0.6;
+    animation: hero-drift 34s ease-in-out infinite alternate;
+  }
+  /* Theme-aware legibility scrim tinted toward the page background. */
+  .pl-backdrop::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--bg) 22%, transparent),
+      color-mix(in srgb, var(--bg) 48%, transparent)
+    );
+  }
+  /* Slow parallax drift so the wash feels alive without distracting. */
+  @keyframes hero-drift {
+    from {
+      transform: scale(1.3) translate3d(-1.5%, -1%, 0);
+    }
+    to {
+      transform: scale(1.45) translate3d(1.5%, 1.5%, 0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pl-backdrop img {
+      animation: none;
+    }
+  }
+
   .head {
     display: flex;
     gap: 1.25rem;
@@ -1401,6 +1496,11 @@
     border-radius: 0.6rem;
     color: var(--dim);
     overflow: hidden;
+  }
+  /* Lift the crisp cover off the blurred wash behind it. */
+  .detail.has-hero .cover-lg {
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
   .cover-lg img {
     width: 100%;
