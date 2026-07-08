@@ -1407,12 +1407,31 @@
       top: -1rem;
       height: 480px;
     }
-    /* On phones, stack the header: cover art on top, with the title, track
-       count, members and action icons underneath it instead of beside it. */
+    /* On phones, stack the header as a centered hero: cover on top, then the
+       title, track count, members pill and action icons centered beneath it —
+       and the Play/Shuffle/Queue row centered to match, so nothing fights the
+       alignment. The track list below stays left-aligned. */
     .head {
       flex-direction: column;
-      align-items: flex-start;
+      align-items: center;
       gap: 1rem;
+      text-align: center;
+    }
+    .head-info {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .head-info h3 {
+      align-items: center;
+    }
+    /* Center the action icons (edit/download/share/delete) under the title. */
+    .head-actions-mobile .detail-actions {
+      justify-content: center;
+    }
+    /* Center the Play / Shuffle / Queue controls to match the centered hero. */
+    .toolbar-row {
+      justify-content: center;
     }
     .cover-lg {
       width: 200px;
