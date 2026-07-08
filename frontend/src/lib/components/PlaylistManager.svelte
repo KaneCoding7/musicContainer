@@ -822,7 +822,6 @@
           <span class="head-title">Title</span>
           <span class="head-plays">Plays</span>
           <span class="head-menu"></span>
-          <span class="head-remove"></span>
         </div>
         <ol>
           {#each vm.selectedSongs as song, i (song.id)}
@@ -904,13 +903,6 @@
                   if (vm.selectedId !== null) vm.select(vm.selectedId);
                 }}
               />
-              <button
-                class="remove"
-                title="Remove from playlist"
-                aria-label="Remove from playlist"
-                onclick={() => confirmRemoveSong(song)}
-                ><Icon name="close" size={20} /></button
-              >
             </li>
           {/each}
         </ol>
@@ -2224,7 +2216,7 @@
     font-variant-numeric: tabular-nums;
   }
   /* Track-list column headers (web only). Spacers match the trailing controls
-     (menu 2.25rem, remove 2.45rem) so "Plays" lines up over the play counts. */
+     (menu 2.25rem) so "Plays" lines up over the play counts. */
   .list-head {
     display: flex;
     align-items: center;
@@ -2244,9 +2236,6 @@
   }
   .head-menu {
     width: 2.25rem;
-  }
-  .head-remove {
-    width: 2.45rem;
   }
   .to-lib {
     flex-shrink: 0;
@@ -2275,21 +2264,6 @@
   @keyframes spin {
     to {
       transform: rotate(360deg);
-    }
-  }
-  .remove {
-    display: inline-flex;
-    align-items: center;
-    border: none;
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-    padding: 0.4rem 0.6rem;
-  }
-  @media (hover: hover) {
-    .remove:hover {
-      background: var(--danger-bg);
-      color: var(--danger-text);
     }
   }
   .add-block {
