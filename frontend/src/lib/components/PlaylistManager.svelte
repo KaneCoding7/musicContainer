@@ -1543,11 +1543,11 @@
     .head-actions-desktop {
       display: none;
     }
-    /* Show the ⋮ inline as the third control, taking the queue button's spot
-       in the Play/Shuffle group. */
+    /* Play/Shuffle sit on the left; push the ⋮ to the far right of the row. */
     .more-wrap {
       display: inline-flex;
       position: relative;
+      margin-left: auto;
     }
     /* The whole-playlist queue button moves into the ⋮ menu on phones. */
     .actions-bar :global(.play-actions .queue) {
