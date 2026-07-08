@@ -450,7 +450,12 @@
   }
 </script>
 
-<div class="playlists">
+<div class="playlists" class:detail-open={openId !== null && heroArt}>
+  {#if openId !== null && heroArt}
+    <div class="pl-backdrop" aria-hidden="true">
+      <img src={heroArt} alt="" />
+    </div>
+  {/if}
   {#snippet detailActions()}
     <div class="detail-actions">
       {#if reordering}
@@ -627,11 +632,6 @@
     </button>
     {#if vm.selected}
     <div class="detail" class:has-hero={heroArt}>
-      {#if heroArt}
-        <div class="pl-backdrop" aria-hidden="true">
-          <img src={heroArt} alt="" />
-        </div>
-      {/if}
       <div class="head">
         <span class="cover-lg">
           {#if vm.selected.hasImage}
@@ -1405,7 +1405,7 @@
       left: -1rem;
       right: -1rem;
       top: -1rem;
-      height: 360px;
+      height: 480px;
     }
   }
   /* --- Immersive cover-art backdrop for the open playlist ---------------
@@ -1414,55 +1414,57 @@
      track list — so the art becomes the mood of the whole view, not just a
      lone thumbnail. A page-background scrim (color-mix, theme-aware) keeps
      the header text readable over any cover in both light and dark. */
-  .detail {
+  .playlists {
     position: relative;
   }
-  /* Real content sits above the wash. */
-  .detail > :not(.pl-backdrop) {
+  /* When a playlist is open, its real content sits above the wash. */
+  .playlists.detail-open > :not(.pl-backdrop) {
     position: relative;
     z-index: 1;
   }
   .pl-backdrop {
     position: absolute;
     z-index: 0;
-    top: -1.5rem; /* reach up behind the "All playlists" back button */
-    left: -2rem; /* bleed into the content gutter (.content padding = 2rem) */
+    top: -1.5rem; /* .content top padding — reach the very top of the page */
+    left: -2rem; /* .content side padding — bleed to the window edges */
     right: -2rem;
-    height: 460px;
+    height: 620px; /* tall enough to carry well down behind the track list */
     overflow: hidden;
     pointer-events: none;
     -webkit-mask-image: linear-gradient(
       to bottom,
-      rgba(0, 0, 0, 0.95) 0%,
-      rgba(0, 0, 0, 0.6) 42%,
+      #000 0%,
+      #000 52%,
       transparent 100%
     );
-    mask-image: linear-gradient(
-      to bottom,
-      rgba(0, 0, 0, 0.95) 0%,
-      rgba(0, 0, 0, 0.6) 42%,
-      transparent 100%
-    );
+    mask-image: linear-gradient(to bottom, #000 0%, #000 52%, transparent 100%);
   }
   .pl-backdrop img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    filter: blur(52px) saturate(1.5);
-    transform: scale(1.35);
-    opacity: 0.6;
+    filter: blur(44px) saturate(1.7);
+    transform: scale(1.3);
+    opacity: 0.85;
     animation: hero-drift 34s ease-in-out infinite alternate;
   }
-  /* Theme-aware legibility scrim tinted toward the page background. */
+  /* Light theme-aware scrim — kept thin so the art stays bold and prominent
+     while the header text keeps enough contrast to read. */
   .pl-backdrop::after {
     content: "";
     position: absolute;
     inset: 0;
     background: linear-gradient(
       to bottom,
-      color-mix(in srgb, var(--bg) 22%, transparent),
-      color-mix(in srgb, var(--bg) 48%, transparent)
+      color-mix(in srgb, var(--bg) 8%, transparent),
+      color-mix(in srgb, var(--bg) 34%, transparent)
     );
+  }
+  /* With a bold wash behind them, give the header text a soft halo so it
+     stays legible over any cover. */
+  .detail.has-hero .head-info h3,
+  .detail.has-hero .head-info .muted {
+    text-shadow: 0 1px 14px rgba(0, 0, 0, 0.55);
   }
   /* Slow parallax drift so the wash feels alive without distracting. */
   @keyframes hero-drift {
