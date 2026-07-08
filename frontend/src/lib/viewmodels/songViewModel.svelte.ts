@@ -364,13 +364,22 @@ export class SongViewModel {
     // Leaving the current context: clean up any un-kept suggestions being
     // dropped (no-op when re-playing within the same queue).
     this.discardDroppedSuggestions(songs);
-    if (this.shuffle && songs.length > 1) {
+    // Jumping WITHIN the current queue (e.g. tapping a track in the queue view,
+    // which passes the current queue back in) must keep the existing order —
+    // never reshuffle. Only a fresh context (a different list) gets shuffled.
+    const inQueueJump =
+      songs.length === this.queue.length &&
+      songs.every((s, i) => s.id === this.queue[i]?.id);
+    if (this.shuffle && songs.length > 1 && !inQueueJump) {
       const picked = songs[index];
       this.preShuffleQueue = [...songs];
       this.queue = [picked, ...this.shuffled(songs.filter((_, i) => i !== index))];
       this.currentIndex = 0;
     } else {
-      this.preShuffleQueue = null;
+      // Fresh un-shuffled context, or an in-queue jump. Keep the given order and
+      // just move to the chosen track. Preserve preShuffleQueue on an in-queue
+      // jump so toggling shuffle off can still restore the original order.
+      if (!inQueueJump) this.preShuffleQueue = null;
       this.queue = songs;
       this.currentIndex = index;
     }
