@@ -4,7 +4,8 @@ import cors from "cors";
 import express from "express";
 import { auth, DEV_AUTH_SECRET } from "./auth.js";
 import { requireAuth } from "./auth-middleware.js";
-import { getDb } from "./db/init.js";
+import { ART_DIR, getDb, MUSIC_DIR } from "./db/init.js";
+import { sweepStaleSuggestions } from "./functional/songs.js";
 import { allowAllOrigins, configuredOrigins, isPrivateOrigin } from "./origins.js";
 import { rateLimit } from "./rate-limit.js";
 import { attachSync } from "./sync.js";
@@ -121,6 +122,21 @@ app.use("/api", requireAuth, friendsRouter);
 
 // Initialize the database (creates schema + data dirs) before serving.
 getDb();
+
+// Suggestion-radio safety net: purge un-kept suggestion tracks (played, never
+// kept/liked/added to a playlist) that the client failed to discard — closed
+// tab, crash, or went offline mid-listen. Runs once on boot and hourly so
+// nothing accumulates on disk. Best-effort; a failure never stops the server.
+const sweepSuggestions = () => {
+  try {
+    const n = sweepStaleSuggestions(getDb(), MUSIC_DIR, ART_DIR);
+    if (n > 0) console.log(`Swept ${n} stale suggestion track(s)`);
+  } catch {
+    /* best-effort */
+  }
+};
+sweepSuggestions();
+setInterval(sweepSuggestions, 60 * 60 * 1000).unref();
 
 // Use an explicit HTTP server so the cross-device sync WebSocket can attach.
 const server = createServer(app);

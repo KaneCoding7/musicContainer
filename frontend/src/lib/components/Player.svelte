@@ -248,6 +248,18 @@
       .catch(() => {}); // aborted on track change, or offline — ignore
   }
 
+  // Suggestion radio: once the current track is the LAST one in the queue (and
+  // we're playing with repeat off), download a similar track ahead of time and
+  // append it — so the synchronous `ended` handler can advance straight into it,
+  // which is what keeps mobile autoplay alive. prefetchSuggestion() no-ops
+  // unless the radio actually applies and nothing is already in flight.
+  $effect(() => {
+    // Read the reactive state the buffer depends on so this re-runs as the
+    // queue fills and as we advance through it — keeping ~4 suggestions queued.
+    void [song, vm.isPlaying, vm.currentIndex, vm.queue.length, vm.repeat, vm.suggestRadio];
+    if (active && vm.isPlaying) vm.topUpSuggestions();
+  });
+
   // Keep volume + normalization in sync. With the Web Audio graph active, the
   // element stays at unity and the gain node carries volume × normalization
   // (so quiet tracks can be boosted past 1). Without it, use element volume.
@@ -470,8 +482,18 @@
       audio.play().catch(() => {});
       return;
     }
-    if (vm.next()) playCurrent();
-    else vm.isPlaying = false;
+    if (vm.next()) {
+      playCurrent();
+      return;
+    }
+    // Queue exhausted. With suggestion radio on (and not repeating), a similar
+    // track may already be downloading — mark that we're waiting so it
+    // auto-plays when it lands, and make sure a fetch is in flight.
+    if (vm.suggestRadio && vm.repeat === "off" && vm.currentIndex !== null) {
+      vm.radioWaiting = true;
+      vm.topUpSuggestions();
+    }
+    vm.isPlaying = false;
   }
 
   // A track failed to play. The common real-world cause is that its file was

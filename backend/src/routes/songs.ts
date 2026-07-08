@@ -19,6 +19,7 @@ import { preparedDownload, streamSongsZip } from "../functional/download.js";
 import {
   copySongToLibrary,
   deleteSong,
+  discardSuggestions,
   finalizeSongs,
   getSong,
   getSongSource,
@@ -37,6 +38,7 @@ import {
   setSongLoudness,
   setSongsOrder,
   setAlbumSongsOrder,
+  trackKey,
   updateSong,
   updateSongsBulk,
   validateUpload,
@@ -74,6 +76,11 @@ import { streamSongFile } from "../stream.js";
 import { serveArt } from "../thumbnails.js";
 import { rateLimit } from "../rate-limit.js";
 import { assertSafeRemoteUrl } from "../url-safety.js";
+import {
+  buildCandidates,
+  type SuggestionCandidate,
+} from "../functional/suggestions.js";
+import { parseYouTubeId, ytRelated } from "../youtube.js";
 
 export const songsRouter = Router();
 
@@ -853,6 +860,262 @@ songsRouter.post("/import-link", importLimiter, async (req, res) => {
     rmSync(work, { recursive: true, force: true });
     res.end();
   }
+});
+
+// Downloads a single YouTube watch URL and ingests it as a pending SUGGESTION
+// track (mirrors the single-video path of /import-link, minus the NDJSON
+// progress stream). Returns the created Song, or null if nothing usable landed.
+// Kept self-contained so suggestion radio can't disturb the import route.
+async function ingestSuggestion(
+  watchUrl: string,
+  userId: string,
+  hint: { artist: string | null; title: string; recordingMbid: string | null }
+): Promise<import("../types.js").Song | null> {
+  const work = mkdtempSync(join(dirname(MUSIC_DIR), "suggest-"));
+  try {
+    await runYtDlp(watchUrl, work, () => {}, false);
+    const produced = readdirSync(work).filter((f) =>
+      f.toLowerCase().endsWith(".mp3")
+    );
+    if (produced.length === 0) return null;
+    const name = produced[0];
+    const stored = `${randomUUID()}.mp3`;
+    const dest = join(MUSIC_DIR, stored);
+    copyFileSync(join(work, name), dest);
+    const meta = await extractMetadata(dest, ART_DIR);
+
+    // Prefer each track's own webpage_url (sidecar .info.json) as the source.
+    let trackUrl: string | null = watchUrl;
+    const infoPath = join(work, name.replace(/\.mp3$/i, ".info.json"));
+    if (existsSync(infoPath)) {
+      try {
+        const info = JSON.parse(readFileSync(infoPath, "utf8"));
+        if (typeof info.webpage_url === "string") trackUrl = info.webpage_url;
+        else if (typeof info.original_url === "string") trackUrl = info.original_url;
+      } catch {
+        /* keep the search URL */
+      }
+    }
+
+    // Trust the recommendation's artist/title as tag hints so the stored track
+    // reads cleanly, then let enrichTrackInfo + MusicBrainz refine it.
+    const info = await enrichTrackInfo({
+      rawTitle: name.replace(/\.mp3$/i, ""),
+      uploader: null,
+      durationSec: meta.duration,
+      tagTitle: hint.title,
+      tagArtist: hint.artist,
+      tagAlbum: null,
+      useMusicBrainz: true,
+    });
+    const cleanName = info.title.trim() || hint.title;
+
+    let artFilename = meta.artFilename;
+    if (info.artist && info.album) {
+      const cover = await fetchCoverArt({ artist: info.artist, album: info.album });
+      if (cover) {
+        const fn = `${randomUUID()}.${cover.ext}`;
+        try {
+          writeFileSync(join(ART_DIR, fn), cover.buffer);
+          if (meta.artFilename) {
+            try {
+              unlinkSync(join(ART_DIR, meta.artFilename));
+            } catch {
+              /* best-effort */
+            }
+          }
+          artFilename = fn;
+        } catch {
+          /* keep the thumbnail */
+        }
+      }
+    }
+
+    const result = recordSong(getDb(), {
+      filename: stored,
+      originalFilename: cleanName,
+      userId,
+      artist: info.artist ?? meta.artist ?? hint.artist,
+      album: info.album ?? meta.album,
+      artFilename,
+      duration: meta.duration,
+      pending: true,
+      suggestion: true,
+      sourceUrl: trackUrl,
+      mbRecordingId: info.recordingMbid ?? hint.recordingMbid,
+    });
+    if (!result.ok) {
+      if (existsSync(dest)) {
+        try {
+          unlinkSync(dest);
+        } catch {
+          /* best-effort */
+        }
+      }
+      return null;
+    }
+    const songId = result.value.id;
+    measureLoudness(dest)
+      .then((lufs) => {
+        if (lufs !== null) setSongLoudness(getDb(), songId, lufs);
+      })
+      .catch(() => {});
+    return result.value;
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+}
+
+// Per-user memory of recently suggested tracks (tokens: artist|title key and
+// "yt:<videoId>"), so the radio doesn't keep offering the same one or two picks
+// — a discarded suggestion leaves the library, so without this it could be
+// re-picked as the mix's top related track immediately. In-memory only; resets
+// on restart, which is fine (a fresh session can re-suggest old tracks).
+const recentSuggestionsByUser = new Map<string, Set<string>>();
+const RECENT_CAP = 40;
+
+function candidateTokens(c: {
+  artist: string | null;
+  title: string;
+  watchUrl?: string | null;
+}): string[] {
+  const tokens = [trackKey(c.artist, c.title)];
+  const yt = parseYouTubeId(c.watchUrl ?? null);
+  if (yt) tokens.push(`yt:${yt}`);
+  return tokens;
+}
+
+function rememberSuggestion(userId: string, tokens: string[]): void {
+  let set = recentSuggestionsByUser.get(userId);
+  if (!set) {
+    set = new Set();
+    recentSuggestionsByUser.set(userId, set);
+  }
+  for (const t of tokens) set.add(t);
+  // Trim to the most-recent RECENT_CAP tokens (Set preserves insertion order).
+  if (set.size > RECENT_CAP) {
+    const trimmed = new Set([...set].slice(-RECENT_CAP));
+    recentSuggestionsByUser.set(userId, trimmed);
+  }
+}
+
+// Fisher–Yates shuffle so we don't always take the mix's #1 pick — gives variety
+// across rounds even when the seed (and thus the mix) is similar.
+function shuffled<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// GET /api/suggestions/next?seedArtist=&seedTitle=&seedSongId= — pick a blended
+// candidate (ListenBrainz recs + Last.fm similar + YouTube's autoplay Mix for
+// the seed, minus what's already owned or recently suggested), download it as a
+// pending suggestion, and return the Song. The client appends it to the queue
+// when repeat is off and the queue runs dry. Tries a few candidates so one
+// dead/unfindable pick doesn't fail the whole request. 204 when there's nothing
+// to suggest.
+songsRouter.get("/suggestions/next", importLimiter, async (req, res) => {
+  const seedArtist =
+    typeof req.query.seedArtist === "string" ? req.query.seedArtist.trim() : "";
+  const seedTitle =
+    typeof req.query.seedTitle === "string" ? req.query.seedTitle.trim() : "";
+  const seedSongId = Number(req.query.seedSongId);
+  try {
+    // Find a YouTube video id to seed the Mix (YouTube's own "up next"). Prefer
+    // the seed track's own source link when it was a YouTube import (exact);
+    // otherwise search YouTube by name to anchor the mix.
+    let seedVideoId: string | null = null;
+    if (Number.isInteger(seedSongId) && seedSongId > 0) {
+      const s = getSong(getDb(), seedSongId, req.userId!);
+      if (s.ok) seedVideoId = parseYouTubeId(s.value.sourceUrl);
+    }
+    if (!seedVideoId && (seedArtist || seedTitle)) {
+      try {
+        const hits = await runYtSearch(`${seedArtist} ${seedTitle}`.trim());
+        if (hits.length > 0) seedVideoId = hits[0].id;
+      } catch {
+        /* no seed video — YouTube source just stays empty */
+      }
+    }
+    const youtube: SuggestionCandidate[] = seedVideoId
+      ? (await ytRelated(seedVideoId)).map((e) => ({
+          artist: e.uploader,
+          title: e.title,
+          recordingMbid: null,
+          source: "youtube" as const,
+          watchUrl: e.url,
+        }))
+      : [];
+
+    const recent = recentSuggestionsByUser.get(req.userId!) ?? new Set();
+    const candidates = await buildCandidates(
+      getDb(),
+      req.userId!,
+      { artist: seedArtist || null, title: seedTitle || null },
+      youtube,
+      recent
+    );
+    if (candidates.length === 0) return res.status(204).end();
+
+    // Shuffle so we don't always take the mix's #1, then try a few until one
+    // resolves + downloads. Cap the attempts so a request can't spawn an
+    // unbounded run of yt-dlp processes. YouTube picks already carry their video
+    // URL (no search needed); scrobbler picks are resolved to a video by name.
+    for (const c of shuffled(candidates).slice(0, 4)) {
+      let watchUrl = c.watchUrl ?? null;
+      if (!watchUrl) {
+        const query = `${c.artist ? `${c.artist} - ` : ""}${c.title}`;
+        try {
+          const hits = await runYtSearch(query);
+          if (hits.length > 0) watchUrl = hits[0].url;
+        } catch {
+          continue;
+        }
+      }
+      if (!watchUrl) continue;
+      const song = await ingestSuggestion(watchUrl, req.userId!, {
+        artist: c.artist,
+        title: c.title,
+        recordingMbid: c.recordingMbid,
+      });
+      if (song) {
+        // Record BOTH the intended pick and the actually-downloaded video so
+        // neither recurs next round.
+        rememberSuggestion(req.userId!, [
+          ...candidateTokens(c),
+          ...candidateTokens({ artist: song.artist, title: song.originalFilename, watchUrl: song.sourceUrl }),
+        ]);
+        return res.json({ song });
+      }
+    }
+    return res.status(204).end();
+  } catch (e) {
+    return res.status(502).json({
+      error: {
+        code: "import_failed",
+        message: e instanceof Error ? e.message : "Could not fetch a suggestion",
+      },
+    });
+  }
+});
+
+// POST /api/suggestions/discard — { ids } — drop suggestion tracks the user
+// moved past without keeping. Safe by construction: only un-kept, un-liked,
+// not-in-a-playlist suggestion rows are removed (see discardSuggestions).
+songsRouter.post("/suggestions/discard", (req, res) => {
+  const ids = Array.isArray(req.body?.ids)
+    ? (req.body.ids as unknown[]).filter((x): x is number => typeof x === "number")
+    : [];
+  const result = discardSuggestions(getDb(), ids, req.userId!, MUSIC_DIR, ART_DIR);
+  if (!result.ok) {
+    return res
+      .status(statusForError(result.error.code))
+      .json({ error: result.error });
+  }
+  return res.json({ discarded: result.value });
 });
 
 // GET /api/songs — list all songs.

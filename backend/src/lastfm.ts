@@ -152,6 +152,50 @@ export async function updateNowPlaying(
   return !!d && !d.error;
 }
 
+interface LfSimilarResp {
+  similartracks?: {
+    track?: {
+      name?: string;
+      mbid?: string;
+      artist?: { name?: string };
+    }[];
+  };
+}
+
+export interface SimilarTrack {
+  track: string;
+  artist: string | null;
+  recordingMbid: string | null;
+}
+
+// Tracks similar to a given (artist, track), via the public track.getSimilar
+// method (no session needed — only the app API key). Used to seed suggestion
+// radio off whatever just played. Returns [] when unconfigured or on any error.
+export async function getSimilar(
+  artist: string,
+  track: string,
+  limit = 20
+): Promise<SimilarTrack[]> {
+  if (!isConfigured() || !artist || !track) return [];
+  const d = await call<LfSimilarResp>({
+    method: "track.getSimilar",
+    artist,
+    track,
+    autocorrect: "1",
+    limit: String(limit),
+  });
+  const out: SimilarTrack[] = [];
+  for (const t of d?.similartracks?.track ?? []) {
+    if (!t.name) continue;
+    out.push({
+      track: t.name,
+      artist: t.artist?.name ?? null,
+      recordingMbid: t.mbid || null,
+    });
+  }
+  return out;
+}
+
 export type LfPeriod = "7day" | "1month" | "12month" | "overall";
 
 export function periodFor(range: StatsRange): LfPeriod {

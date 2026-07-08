@@ -29,6 +29,7 @@
     onToggleTheme,
     onToggleNormalize,
     onToggleClips,
+    onToggleSuggestRadio,
     onSignOut,
   }: {
     vm: AuthViewModel;
@@ -37,6 +38,7 @@
     onToggleTheme: () => void;
     onToggleNormalize: () => void;
     onToggleClips: () => void;
+    onToggleSuggestRadio: () => void;
     onSignOut: () => void;
   } = $props();
 
@@ -258,6 +260,22 @@
   </div>
 
   <p class="section">Playback</p>
+  <div class="row">
+    <div class="info">
+      <span class="t">Suggestion radio</span>
+      <span class="sub">
+        When a queue ends (and repeat is off), keep playing similar tracks you
+        can add to your library or let expire
+      </span>
+    </div>
+    <button
+      class="switch"
+      role="switch"
+      aria-checked={songVm.suggestRadio}
+      aria-label="Suggestion radio"
+      onclick={onToggleSuggestRadio}><span class="knob"></span></button
+    >
+  </div>
   <div class="row">
     <div class="info">
       <span class="t">Video clips</span>

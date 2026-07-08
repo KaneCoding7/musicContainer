@@ -60,13 +60,24 @@
             {/if}
           </span>
           <span class="meta">
-            <span class="name">{song.originalFilename}</span>
+            <span class="name">
+              {song.originalFilename}
+              {#if song.isSuggestion}<span class="tag">Suggested</span>{/if}
+            </span>
             {#if song.artist}<span class="artist">{song.artist}</span>{/if}
           </span>
           {#if isCurrent}
             <span class="badge">Now playing</span>
           {/if}
         </button>
+        {#if song.isSuggestion}
+          <button
+            class="keep"
+            title="Add to your library"
+            aria-label="Add to your library"
+            onclick={() => vm.keepSuggestion(song.id)}><Icon name="add" size={18} /></button
+          >
+        {/if}
         <SongMenu {vm} {song} />
         <button
           class="remove"
@@ -204,6 +215,35 @@
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+  }
+  .tag {
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.35rem;
+    border-radius: 0.6rem;
+    background: var(--surface-2);
+    color: var(--muted);
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .keep {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    background: transparent;
+    border: none;
+    color: var(--accent-text);
+    cursor: pointer;
+    padding: 0.4rem 0.5rem;
+    border-radius: 0.35rem;
+  }
+  @media (hover: hover) {
+    .keep:hover {
+      background: var(--surface-2);
+    }
   }
 
   /* On touch/mobile, removal is a left-swipe (see use:swipeRemove), so the

@@ -19,6 +19,7 @@ export interface Song {
   hasClip: boolean; // has a cached looping canvas clip (from the source video)
   clipDisabled: boolean; // per-song opt-out: don't show this song's clip
   sourceUrl: string | null; // the original import link (e.g. YouTube), if any
+  isSuggestion?: boolean; // auto-queued suggestion-radio track awaiting keep/discard
   addedBy?: string | null; // name of who added it to a playlist (playlist views)
   addedByMe?: boolean; // viewer added this track (org/team playlists)
   ownedByMe?: boolean; // viewer owns the underlying song (org/team playlists)

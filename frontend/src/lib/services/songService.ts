@@ -159,6 +159,39 @@ export async function finalizeSongs(ids: number[]): Promise<Song[]> {
   return (await res.json()).songs as Song[];
 }
 
+// Fetches the next suggestion-radio track (server downloads it as a pending
+// suggestion). `seed` is the track that just played, used to find similar
+// music. Returns null when the server has nothing to suggest (HTTP 204).
+export async function fetchNextSuggestion(seed?: {
+  artist: string | null;
+  title: string | null;
+  songId?: number | null;
+}): Promise<Song | null> {
+  const params = new URLSearchParams();
+  if (seed?.artist) params.set("seedArtist", seed.artist);
+  if (seed?.title) params.set("seedTitle", seed.title);
+  if (seed?.songId) params.set("seedSongId", String(seed.songId));
+  const qs = params.toString();
+  const res = await fetch(
+    `${apiBase()}/api/suggestions/next${qs ? `?${qs}` : ""}`,
+    { headers: authHeaders() }
+  );
+  if (res.status === 204) return null;
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).song as Song;
+}
+
+// Discards suggestion tracks the user moved past without keeping. Best-effort:
+// the server also sweeps these on a timer, so a failed call is not fatal.
+export async function discardSuggestions(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+  await fetch(`${apiBase()}/api/suggestions/discard`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ ids }),
+  });
+}
+
 // Editable song metadata fields.
 export interface SongMetadata {
   originalFilename?: string;

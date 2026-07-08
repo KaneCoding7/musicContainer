@@ -3,6 +3,8 @@
 import { untrack } from "svelte";
 import {
   deleteSong,
+  discardSuggestions,
+  fetchNextSuggestion,
   fetchPendingSongs,
   fetchSongs,
   finalizeSongs,
@@ -160,6 +162,20 @@ export class SongViewModel {
   // Global toggle for the expanded-player canvas clips. Persisted by the page.
   showClips = $state(true);
 
+  // Suggestion radio: when the queue runs out with repeat off, keep playing by
+  // auto-fetching similar tracks (downloaded server-side as pending
+  // "suggestions" the user can keep or let expire). Persisted by the page.
+  suggestRadio = $state(true);
+  // True while a suggestion is being fetched/downloaded — drives a "finding your
+  // next song…" hint in the player.
+  suggestLoading = $state(false);
+  // The single in-flight suggestion fetch, so prefetch never doubles up.
+  private suggestInFlight: Promise<Song | null> | null = null;
+  // Set when the queue ended with the radio on but the next suggestion hadn't
+  // finished downloading yet — so when it lands we auto-advance into it. Cleared
+  // by a manual pause so a late download can't override the user's intent.
+  radioWaiting = $state(false);
+
   // --- Now-playing persistence (survive a page refresh) ---
   // Live playback position in seconds (written by the player on timeupdate).
   position = $state(0);
@@ -180,6 +196,8 @@ export class SongViewModel {
   togglePlay(): void {
     if (this.remoteSink?.("togglePlay")) return;
     if (this.currentSong) this.isPlaying = !this.isPlaying;
+    // A manual pause overrides a pending radio auto-advance.
+    if (!this.isPlaying) this.radioWaiting = false;
   }
 
   // Seeks to a position in seconds (forwarded when remote; applied by the
@@ -343,6 +361,9 @@ export class SongViewModel {
   playQueue(songs: Song[], index: number): void {
     if (this.remoteSink?.("playQueue", { songs, index })) return;
     if (index < 0 || index >= songs.length) return;
+    // Leaving the current context: clean up any un-kept suggestions being
+    // dropped (no-op when re-playing within the same queue).
+    this.discardDroppedSuggestions(songs);
     if (this.shuffle && songs.length > 1) {
       const picked = songs[index];
       this.preShuffleQueue = [...songs];
@@ -460,6 +481,108 @@ export class SongViewModel {
     }
     if (inManual) this.queuedCount -= 1;
     this.clampQueued();
+  }
+
+  // --- Suggestion radio ---------------------------------------------------
+  // How many suggestion tracks to keep queued up next, so you can skip through
+  // a few. The buffer fills one at a time (first pick fast, then the rest) and
+  // is topped back up as you consume them.
+  private readonly suggestionTarget = 4;
+
+  // Count of tracks after the current one that are (not) suggestions.
+  private aheadCount(suggestion: boolean): number {
+    if (this.currentIndex === null) return 0;
+    let n = 0;
+    for (let i = this.currentIndex + 1; i < this.queue.length; i++) {
+      if (!!this.queue[i].isSuggestion === suggestion) n++;
+    }
+    return n;
+  }
+
+  // Whether the radio should act right now: enabled, repeat off, playing from a
+  // real queue position, and no *real* (non-suggestion) tracks left ahead — the
+  // buffer only grows once your own queued songs are exhausted.
+  private radioApplies(): boolean {
+    return (
+      this.suggestRadio &&
+      this.repeat === "off" &&
+      this.currentIndex !== null &&
+      this.aheadCount(false) === 0
+    );
+  }
+
+  // Tops the up-next suggestion buffer back up toward the target, one download
+  // at a time. Appends each pick to the end of the queue; when the buffer had
+  // run dry and playback stopped at the end (and the user didn't pause), it also
+  // advances into the first arrival so the radio resumes itself.
+  //
+  // Drives itself: after each append it calls itself again until the buffer is
+  // full. Safe to call repeatedly (the in-flight guard means only one download
+  // runs at a time). Only the active (audio-outputting) device should call this
+  // — the Player gates it on `active`. We can't guard on remoteSink here because
+  // the sync controller sets a sink on every device (it returns false on the
+  // active one), so a remoteSink check would wrongly bail on the active device.
+  topUpSuggestions(): void {
+    if (!this.radioApplies() || this.suggestInFlight) return;
+    if (this.aheadCount(true) >= this.suggestionTarget) return;
+    // Seed off the current track (drifts naturally as you advance into picks).
+    const s = this.currentSong;
+    const seed = s
+      ? { artist: s.artist, title: s.originalFilename, songId: s.id }
+      : undefined;
+    this.suggestLoading = true;
+    const p = fetchNextSuggestion(seed)
+      .catch(() => null)
+      .then((song) => {
+        this.suggestInFlight = null;
+        this.suggestLoading = false;
+        // Bail if the situation moved on while downloading (new context, repeat
+        // toggled, radio switched off, real tracks queued).
+        if (!song || !this.radioApplies()) return song;
+        const wasWaitingAtEnd =
+          this.radioWaiting &&
+          !this.isPlaying &&
+          this.currentIndex !== null &&
+          this.currentIndex >= this.queue.length - 1;
+        this.queue = [...this.queue, song];
+        if (wasWaitingAtEnd && this.currentIndex !== null) {
+          this.radioWaiting = false;
+          this.currentIndex = this.currentIndex + 1;
+          this.isPlaying = true;
+        }
+        // Keep filling toward the target.
+        this.topUpSuggestions();
+        return song;
+      });
+    this.suggestInFlight = p;
+  }
+
+  // Keeps a suggestion in the library permanently (clears its pending flag).
+  // Reflects the change locally so it loses its "suggestion" treatment and is
+  // never swept/discarded.
+  async keepSuggestion(songId: number): Promise<void> {
+    const [kept] = await finalizeSongs([songId]);
+    if (kept) this.replaceSong({ ...kept, isSuggestion: false });
+    // Bring it into the library list if it isn't there yet.
+    if (kept && !this.songs.some((s) => s.id === kept.id)) {
+      this.songs = [kept, ...this.songs];
+    }
+  }
+
+  // Discards un-kept suggestion tracks from the OUTGOING queue that aren't in
+  // the incoming list — i.e., when you leave a radio session for a new context.
+  // Suggestions stay put while you're still in the session (so you can scroll
+  // back, replay, or keep them); they're only cleaned up here, on the switch.
+  // Comparing against the next list means jumping within the same queue (e.g.
+  // tapping a track in the queue view) never deletes the session's suggestions.
+  // Best-effort; the server also sweeps orphans on a timer.
+  private discardDroppedSuggestions(nextSongs: Song[]): void {
+    if (this.queue.length === 0) return;
+    const keepIds = new Set(nextSongs.map((s) => s.id));
+    const drop = this.queue
+      .filter((s) => s.isSuggestion && !keepIds.has(s.id))
+      .map((s) => s.id);
+    if (drop.length > 0) discardSuggestions(drop).catch(() => {});
   }
 
   // Moves a queue entry, keeping the current track pointer correct.

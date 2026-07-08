@@ -302,6 +302,16 @@ export function migrate(database: Database.Database): void {
       "ALTER TABLE songs ADD COLUMN clip_disabled INTEGER NOT NULL DEFAULT 0"
     );
   }
+  // Auto-queued "suggestion radio" track (downloaded when the queue ran out
+  // with repeat off). Always paired with pending=1 until the user keeps it
+  // (finalize clears pending). Un-kept suggestions are swept off disk, so this
+  // flag is what the sweep and the review inbox use to tell them apart from
+  // ordinary imports awaiting review.
+  if (!columns.includes("suggestion")) {
+    database.exec(
+      "ALTER TABLE songs ADD COLUMN suggestion INTEGER NOT NULL DEFAULT 0"
+    );
+  }
   const plColumns = (
     database.prepare("PRAGMA table_info(playlists)").all() as { name: string }[]
   ).map((c) => c.name);

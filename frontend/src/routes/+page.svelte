@@ -137,6 +137,11 @@
     localStorage.setItem("showClips", String(vm.showClips));
   }
 
+  function toggleSuggestRadio() {
+    vm.suggestRadio = !vm.suggestRadio;
+    localStorage.setItem("suggestRadio", String(vm.suggestRadio));
+  }
+
   const nav: { id: View; label: string; icon: string }[] = [
     { id: "home", label: "Home", icon: "home" },
     { id: "songs", label: "All Songs", icon: "library_music" },
@@ -165,6 +170,7 @@
     document.documentElement.dataset.theme = theme;
     vm.normalize = localStorage.getItem("normalize") !== "false"; // default on
     vm.showClips = localStorage.getItem("showClips") !== "false"; // default on
+    vm.suggestRadio = localStorage.getItem("suggestRadio") !== "false"; // default on
     await authVm.init();
     if (authVm.isAuthed) {
       loadLibrary();
@@ -437,6 +443,7 @@
           onToggleTheme={toggleTheme}
           onToggleNormalize={toggleNormalize}
           onToggleClips={toggleClips}
+          onToggleSuggestRadio={toggleSuggestRadio}
           onSignOut={handleLogout}
         />
       {/if}

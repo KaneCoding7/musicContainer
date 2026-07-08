@@ -3,6 +3,7 @@ import type { Database } from "better-sqlite3";
 import { copyFileSync, existsSync, statSync, unlinkSync } from "node:fs";
 import { extname, join } from "node:path";
 import type { Song } from "../types.js";
+import { parseYouTubeId } from "../youtube.js";
 import { err, ok, type AppError, type Result } from "./result.js";
 import { canAccessSong } from "./shares.js";
 
@@ -68,10 +69,11 @@ interface SongRow {
   source_url: string | null;
   clip_filename: string | null;
   clip_disabled: number;
+  suggestion: number;
 }
 
 const SONG_COLUMNS =
-  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness, sort_order, album_sort_order, source_url, clip_filename, clip_disabled";
+  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness, sort_order, album_sort_order, source_url, clip_filename, clip_disabled, suggestion";
 
 function rowToSong(row: SongRow): Song {
   return {
@@ -93,6 +95,7 @@ function rowToSong(row: SongRow): Song {
     hasClip: row.clip_filename !== null,
     clipDisabled: row.clip_disabled === 1,
     sourceUrl: row.source_url,
+    isSuggestion: row.suggestion === 1,
   };
 }
 
@@ -190,6 +193,7 @@ export function recordSong(
     artFilename?: string | null;
     duration?: number | null;
     pending?: boolean;
+    suggestion?: boolean;
     sourceUrl?: string | null;
     mbRecordingId?: string | null;
   }
@@ -203,7 +207,7 @@ export function recordSong(
   try {
     const info = db
       .prepare(
-        "INSERT INTO songs (filename, original_filename, artist, album, art_filename, duration, user_id, pending, source_url, mb_recording_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO songs (filename, original_filename, artist, album, art_filename, duration, user_id, pending, suggestion, source_url, mb_recording_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         filename,
@@ -214,6 +218,7 @@ export function recordSong(
         params.duration ?? null,
         params.userId,
         params.pending ? 1 : 0,
+        params.suggestion ? 1 : 0,
         params.sourceUrl ?? null,
         params.mbRecordingId ?? null
       );
@@ -362,7 +367,7 @@ export function listPendingSongs(db: Database, userId: string): Result<Song[]> {
   try {
     const rows = db
       .prepare(
-        `SELECT ${SONG_COLUMNS} FROM songs WHERE user_id = ? AND pending = 1 ORDER BY id ASC`
+        `SELECT ${SONG_COLUMNS} FROM songs WHERE user_id = ? AND pending = 1 AND suggestion = 0 ORDER BY id ASC`
       )
       .all(userId) as SongRow[];
     return ok(rows.map(rowToSong));
@@ -396,6 +401,151 @@ export function finalizeSongs(
     return ok(rows.map(rowToSong));
   } catch (e) {
     return err("internal", `Failed to confirm songs: ${(e as Error).message}`);
+  }
+}
+
+// Normalized "artist|title" key for loose de-duplication of suggestion
+// candidates against what the user already has. Lowercased, punctuation and
+// bracketed qualifiers (feat./remaster/live/…) stripped, whitespace collapsed —
+// so "Song (Remastered 2011)" and "song" collide and we don't re-suggest a
+// track that's effectively already in the library.
+export function trackKey(artist: string | null, title: string | null): string {
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  return `${norm(artist ?? "")}|${norm(title ?? "")}`;
+}
+
+// The set of recording MBIDs, normalized artist|title keys, and YouTube video
+// ids the user already has — across BOTH the confirmed library and any un-swept
+// pending suggestions. Suggestion selection subtracts this so we never download
+// a duplicate (and a track downloaded once stays excluded until it's swept).
+export function libraryTrackKeys(
+  db: Database,
+  userId: string
+): { mbids: Set<string>; keys: Set<string>; ytIds: Set<string> } {
+  const rows = db
+    .prepare(
+      "SELECT artist, original_filename, mb_recording_id, source_url FROM songs WHERE user_id = ?"
+    )
+    .all(userId) as {
+    artist: string | null;
+    original_filename: string;
+    mb_recording_id: string | null;
+    source_url: string | null;
+  }[];
+  const mbids = new Set<string>();
+  const keys = new Set<string>();
+  const ytIds = new Set<string>();
+  for (const r of rows) {
+    if (r.mb_recording_id) mbids.add(r.mb_recording_id);
+    keys.add(trackKey(r.artist, r.original_filename));
+    const yt = parseYouTubeId(r.source_url);
+    if (yt) ytIds.add(yt);
+  }
+  return { mbids, keys, ytIds };
+}
+
+// Removes the physical file + art for a song row (best-effort), then the row.
+// Shared by the per-user discard and the global sweep.
+function purgeSongRow(
+  db: Database,
+  row: { id: number; filename: string; art_filename: string | null },
+  musicDir: string,
+  artDir: string
+): void {
+  const removeFile = (p: string) => {
+    if (existsSync(p)) {
+      try {
+        unlinkSync(p);
+      } catch {
+        /* best-effort */
+      }
+    }
+  };
+  db.prepare("DELETE FROM songs WHERE id = ?").run(row.id);
+  removeFile(join(musicDir, row.filename));
+  if (row.art_filename) removeFile(join(artDir, row.art_filename));
+}
+
+// Discards specific suggestion tracks the user moved past without keeping.
+// Deliberately conservative: only rows that are still suggestion=1, pending=1,
+// not liked, and not referenced by any playlist are touched — so a track the
+// user kept (finalized), liked, or added to a playlist can never be deleted
+// here even if its id is passed in. Returns the ids actually removed.
+export function discardSuggestions(
+  db: Database,
+  ids: number[],
+  userId: string,
+  musicDir: string,
+  artDir: string
+): Result<number[]> {
+  const clean = (Array.isArray(ids) ? ids : []).filter(
+    (x): x is number => Number.isInteger(x) && x > 0
+  );
+  if (clean.length === 0) return ok([]);
+  try {
+    const placeholders = clean.map(() => "?").join(", ");
+    const rows = db
+      .prepare(
+        `SELECT id, filename, art_filename FROM songs
+         WHERE user_id = ? AND id IN (${placeholders})
+           AND suggestion = 1 AND pending = 1 AND liked = 0
+           AND id NOT IN (SELECT song_id FROM playlist_songs)`
+      )
+      .all(userId, ...clean) as {
+      id: number;
+      filename: string;
+      art_filename: string | null;
+    }[];
+    const removed: number[] = [];
+    db.transaction(() => {
+      for (const row of rows) {
+        purgeSongRow(db, row, musicDir, artDir);
+        removed.push(row.id);
+      }
+    })();
+    return ok(removed);
+  } catch (e) {
+    return err("internal", `Failed to discard suggestions: ${(e as Error).message}`);
+  }
+}
+
+// Safety-net sweep (runs on boot + on an interval): removes un-kept suggestion
+// tracks that were played but never kept, liked, or added to a playlist.
+// Catches orphans the client failed to discard (closed tab, crash, offline).
+// The 10-minute age guard means it only ever touches genuinely stale rows, so
+// it can't race a suggestion the listener is still hearing (the client discards
+// those immediately on skip). Scoped globally since it runs off a timer, not a
+// request. Returns the count removed.
+export function sweepStaleSuggestions(
+  db: Database,
+  musicDir: string,
+  artDir: string
+): number {
+  try {
+    const rows = db
+      .prepare(
+        `SELECT id, filename, art_filename FROM songs
+         WHERE suggestion = 1 AND pending = 1 AND liked = 0
+           AND last_played_at IS NOT NULL
+           AND last_played_at < datetime('now', '-10 minutes')
+           AND id NOT IN (SELECT song_id FROM playlist_songs)`
+      )
+      .all() as {
+      id: number;
+      filename: string;
+      art_filename: string | null;
+    }[];
+    db.transaction(() => {
+      for (const row of rows) purgeSongRow(db, row, musicDir, artDir);
+    })();
+    return rows.length;
+  } catch {
+    return 0;
   }
 }
 
