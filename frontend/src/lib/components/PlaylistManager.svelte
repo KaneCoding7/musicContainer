@@ -1530,7 +1530,7 @@
     position: fixed;
     inset: 0;
     z-index: 20;
-    background: transparent;
+    background: rgba(0, 0, 0, 0.5);
     border: none;
     padding: 0;
   }
@@ -1548,6 +1548,21 @@
       display: inline-flex;
       position: relative;
       margin-left: auto;
+    }
+    /* Present the overflow menu as a centered popup so the whole menu is on
+       screen at once, instead of a dropdown whose lower items fall below the
+       fold and need scrolling. */
+    .more-menu {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      right: auto;
+      transform: translate(-50%, -50%);
+      min-width: 240px;
+      max-width: calc(100vw - 2rem);
+    }
+    .more-menu button {
+      padding: 0.8rem;
     }
     /* The whole-playlist queue button moves into the ⋮ menu on phones. */
     .actions-bar :global(.play-actions .queue) {
