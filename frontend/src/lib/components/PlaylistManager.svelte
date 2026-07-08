@@ -1585,7 +1585,7 @@
       align-items: center;
       gap: 0.6rem;
       text-align: center;
-      margin-bottom: 0.75rem;
+      margin-bottom: 0.4rem;
     }
     .head-info {
       display: flex;
@@ -1608,8 +1608,8 @@
       margin-bottom: 0.6rem;
     }
     .cover-lg {
-      width: 160px;
-      height: 160px;
+      width: 180px;
+      height: 180px;
     }
   }
   /* --- Immersive cover-art backdrop for the open playlist ---------------
