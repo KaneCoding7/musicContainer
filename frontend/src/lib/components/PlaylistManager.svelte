@@ -1585,10 +1585,10 @@
     .head-info .muted {
       margin-bottom: 0.35rem;
     }
-    /* Center the Play / Shuffle / ⋮ group; the 0.5rem gap matches the spacing
-       inside PlayActions so the ⋮ reads as part of the same button row. */
+    /* Left-align the Play / Shuffle / ⋮ group; the 0.5rem gap matches the
+       spacing inside PlayActions so the ⋮ reads as part of the same row. */
     .toolbar-row {
-      justify-content: center;
+      justify-content: flex-start;
       gap: 0.5rem;
       margin-bottom: 0.6rem;
     }
