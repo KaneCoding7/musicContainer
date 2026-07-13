@@ -69,6 +69,24 @@
   // flashing at the wrong spot.
   let placed = $state<{ left: number; top: number } | null>(null);
 
+  // Lift the menu (and its backdrop) up to the app's top-level container so they
+  // aren't nested inside the scrolling song list or a swipe-handling row. iOS
+  // Safari mis-computes the hit region of a position:fixed element trapped in
+  // such an ancestor, so taps fall straight through to whatever is behind it —
+  // the menu appears but every item "clicks through" and just dismisses it. We
+  // target ".layout" (not <body>) so the nodes stay within Svelte's event-
+  // delegation root and the menu's own buttons keep firing. Same pattern as
+  // EditSongDialog/FramePickerDialog.
+  function portal(node: HTMLElement) {
+    const target = document.querySelector(".layout") ?? document.body;
+    target.appendChild(node);
+    return {
+      destroy() {
+        node.parentNode?.removeChild(node);
+      },
+    };
+  }
+
   // Position the menu so it's fully on screen. Works for both modes: it measures
   // the rendered menu's real size (which varies a lot with the conditional items
   // and the playlists submenu), places it at the cursor or under the ⋮ button,
@@ -237,6 +255,7 @@
   {#if open}
     <div
       class="menu"
+      use:portal
       bind:this={menuEl}
       style={placed
         ? `left:${placed.left}px; top:${placed.top}px;`
@@ -321,6 +340,7 @@
 {#if open}
   <button
     class="backdrop"
+    use:portal
     aria-label="Close menu"
     onpointerdown={(e) => {
       // Swallow the press so it only dismisses the menu — it shouldn't click
@@ -375,7 +395,9 @@
      run off the screen, whether opened by the ⋮ button or by right-click. */
   .menu {
     position: fixed;
-    z-index: 30;
+    /* Above the mobile bottom bar (z 40); matches Dropdown's popover layer.
+       Portaled into .layout, so this competes with the app chrome directly. */
+    z-index: 70;
     min-width: 170px;
     max-width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
@@ -448,7 +470,7 @@
   .backdrop {
     position: fixed;
     inset: 0;
-    z-index: 20;
+    z-index: 65; /* just under .menu (70), above the mobile bottom bar (40) */
     background: transparent;
     border: none;
     padding: 0;
