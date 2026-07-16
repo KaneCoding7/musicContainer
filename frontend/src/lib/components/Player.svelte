@@ -627,6 +627,26 @@
     togglePlay();
   }
 
+  // Keeping a suggestion finalizes the song, so it immediately stops being a
+  // suggestion and the + would just vanish. Flash a ✓ in its place for a beat
+  // first so it's clear the add worked, then let the button clear itself.
+  let keptId = $state<number | null>(null);
+  let keptTimer: ReturnType<typeof setTimeout> | null = null;
+  function keepCurrent() {
+    if (!song) return;
+    const id = song.id;
+    keptId = id;
+    if (keptTimer) clearTimeout(keptTimer);
+    keptTimer = setTimeout(() => {
+      if (keptId === id) keptId = null;
+    }, 1800);
+    vm.keepSuggestion(id).catch(() => {});
+  }
+  // Show the keep control for a suggestion, and keep showing it (as a ✓) briefly
+  // after it's kept so the confirmation is visible before it disappears.
+  const keptNow = $derived(!!song && keptId === song.id);
+  const showKeep = $derived(!!song && (song.isSuggestion || keptNow));
+
   // Full-screen now-playing overlay (Cycle 36).
   let expanded = $state(false);
   // Queue sheet that slides up over the now-playing screen.
@@ -1196,7 +1216,7 @@
     <div class="npf-controls">
       <!-- Balancing spacer so the transport (shuffle…repeat) stays centered when
            the keep-suggestion button is present on the right. -->
-      {#if song.isSuggestion}
+      {#if showKeep}
         <span class="npf-ctl-spacer" aria-hidden="true"></span>
       {/if}
       <button
@@ -1224,14 +1244,18 @@
           size={26}
         /></button
       >
-      {#if song.isSuggestion}
+      {#if showKeep}
         <!-- Suggestion-radio track: keep it in the library (same action as the +
-             in the queue view). Sits by the repeat button. -->
+             in the queue view). Sits by the repeat button; flips to a ✓ once
+             kept, then clears itself. -->
         <button
           class="npf-keep"
-          onclick={() => vm.keepSuggestion(song.id)}
-          title="Add to your library"
-          aria-label="Add to your library"><Icon name="add" size={26} /></button
+          class:kept={keptNow}
+          onclick={keepCurrent}
+          disabled={keptNow}
+          title={keptNow ? "Added to your library" : "Add to your library"}
+          aria-label={keptNow ? "Added to your library" : "Add to your library"}
+          ><Icon name={keptNow ? "check" : "add"} size={26} /></button
         >
       {/if}
     </div>
@@ -1719,6 +1743,15 @@
     box-sizing: border-box;
     width: 2.5rem;
     color: var(--accent-text);
+    transition: color 0.15s ease;
+  }
+  /* Confirmed state: a green ✓ (reads on both the dark clip scrim and light
+     theme) so it's clear the add worked. */
+  .npf-controls .npf-keep.kept {
+    color: #22c55e;
+  }
+  .npf-controls .npf-keep:disabled {
+    cursor: default;
   }
   .npf-ctl-spacer {
     width: 2.5rem;
