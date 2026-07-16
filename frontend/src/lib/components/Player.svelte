@@ -1712,7 +1712,9 @@
     align-items: center;
     gap: 0.5rem;
     width: min(520px, 90vw);
-    margin-top: -0.35rem;
+    /* Pull the row tight under the title (cancels most of the .np-full 1rem
+       flex gap) so the artist sits right beneath it. */
+    margin-top: -0.85rem;
   }
   .npf-actions-artist {
     flex: 1;
