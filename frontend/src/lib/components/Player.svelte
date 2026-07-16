@@ -1712,9 +1712,10 @@
     align-items: center;
     gap: 0.5rem;
     width: min(520px, 90vw);
-    /* Pull the row tight under the title (cancels most of the .np-full 1rem
-       flex gap) so the artist sits right beneath it. */
+    /* Cancel most of the .np-full 1rem flex gap on both sides so the row sits
+       tight under the title and close down onto the progress bar. */
     margin-top: -0.85rem;
+    margin-bottom: -0.8rem;
   }
   .npf-actions-artist {
     flex: 1;
