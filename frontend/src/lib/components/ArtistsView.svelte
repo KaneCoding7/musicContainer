@@ -846,28 +846,47 @@
   .artist-backdrop {
     position: absolute;
     z-index: 0;
-    top: -1.5rem; /* .content top padding — reach the very top of the page */
-    left: -2rem; /* .content side padding — bleed to the window edges */
-    right: -2rem;
-    height: 620px;
+    top: -1.5rem; /* reach the very top of the page */
+    left: -2rem; /* start at the content's left edge, behind the avatar */
+    /* Contained behind the header (not a full-width cover like Playlists): a
+       bounded, left-anchored panel whose radial mask fades the wash out toward
+       the right and bottom, so it tucks around the avatar/name and the rest of
+       the page stays plain. */
+    width: min(760px, calc(100% + 4rem));
+    height: 360px;
     overflow: hidden;
     pointer-events: none;
-    -webkit-mask-image: linear-gradient(
-      to bottom,
-      #000 0%,
-      #000 52%,
-      transparent 100%
+    -webkit-mask-image: radial-gradient(
+      125% 120% at 22% 0%,
+      #000 30%,
+      transparent 72%
     );
-    mask-image: linear-gradient(to bottom, #000 0%, #000 52%, transparent 100%);
+    mask-image: radial-gradient(125% 120% at 22% 0%, #000 30%, transparent 72%);
+  }
+  /* Phones have no sidebar and a centered header, so let it span the width and
+     center the wash instead of anchoring it left. */
+  @media (max-width: 768px) {
+    .artist-backdrop {
+      width: auto;
+      right: -2rem;
+      -webkit-mask-image: radial-gradient(
+        140% 120% at 50% 0%,
+        #000 34%,
+        transparent 76%
+      );
+      mask-image: radial-gradient(140% 120% at 50% 0%, #000 34%, transparent 76%);
+    }
   }
   .artist-backdrop img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    filter: blur(44px) saturate(1.7);
-    transform: scale(1.3);
-    opacity: 0.85;
-    animation: hero-drift 34s ease-in-out infinite alternate;
+    /* Calmer than Playlists: softer blur, muted saturation, lower opacity and a
+       gentler zoom so it's subtle, not crazy. */
+    filter: blur(52px) saturate(1.2);
+    transform: scale(1.16);
+    opacity: 0.5;
+    animation: artist-drift 40s ease-in-out infinite alternate;
   }
   .artist-backdrop::after {
     content: "";
@@ -875,8 +894,8 @@
     inset: 0;
     background: linear-gradient(
       to bottom,
-      color-mix(in srgb, var(--bg) 8%, transparent),
-      color-mix(in srgb, var(--bg) 34%, transparent)
+      color-mix(in srgb, var(--bg) 18%, transparent),
+      color-mix(in srgb, var(--bg) 55%, transparent)
     );
   }
   /* Soft halo keeps the header text legible over any cover. */
@@ -884,12 +903,13 @@
   .detail.has-hero .head p.muted {
     text-shadow: 0 1px 14px rgba(0, 0, 0, 0.55);
   }
-  @keyframes hero-drift {
+  /* Gentler drift than Playlists — a small, slow sway rather than a big pan. */
+  @keyframes artist-drift {
     from {
-      transform: scale(1.3) translate3d(-1.5%, -1%, 0);
+      transform: scale(1.16) translate3d(-0.8%, -0.6%, 0);
     }
     to {
-      transform: scale(1.45) translate3d(1.5%, 1.5%, 0);
+      transform: scale(1.22) translate3d(0.8%, 0.8%, 0);
     }
   }
   @media (prefers-reduced-motion: reduce) {
