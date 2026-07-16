@@ -428,7 +428,9 @@
         {#if !playlistOpen}<h2>Playlists</h2>{/if}
         <PlaylistManager vm={playlistVm} songVm={vm} />
       {:else if view === "albums"}
-        <h2 class:detail-hidden={albumOpen}>Albums</h2>
+        <!-- Drop the heading when an album is open so the immersive backdrop
+             reaches the top of the page (like Playlists / Artists). -->
+        {#if !albumOpen}<h2>Albums</h2>{/if}
         <AlbumsView {vm} />
       {:else if view === "artists"}
         <!-- Drop the section heading when an artist is open (like Playlists) so
@@ -793,11 +795,6 @@
     }
     .content h2 {
       font-size: 1.2rem;
-    }
-    /* On the artist detail page the top bar already says "Artists", so the
-       section heading is a redundant second copy — drop it on mobile. */
-    .content h2.detail-hidden {
-      display: none;
     }
     .queue-panel {
       max-height: 45vh;

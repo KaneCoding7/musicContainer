@@ -65,6 +65,12 @@
 
   const current = $derived(albums.find((a) => a.name === openAlbum) ?? null);
 
+  // Art for the immersive backdrop behind the open album's header (the cover of
+  // the first track with art). Null → no backdrop (plain header).
+  const heroArt = $derived(
+    current?.artId != null ? thumbUrl(current.artId, 512) : null
+  );
+
   function durationLabel(songs: Song[]): string {
     return `${songs.length} ${songs.length === 1 ? "track" : "tracks"}`;
   }
@@ -103,7 +109,12 @@
 {#if vm.songs.length === 0}
   <p class="muted">No songs yet. Upload some to see albums.</p>
 {:else if current}
-  <div class="detail">
+  <div class="detail" class:has-hero={heroArt}>
+  {#if heroArt}
+    <div class="album-backdrop" aria-hidden="true">
+      <img src={heroArt} alt="" />
+    </div>
+  {/if}
   <button class="back" onclick={closeAlbum}>
     <Icon name="arrow_back" size={20} /> All albums
   </button>
@@ -282,9 +293,11 @@
     align-items: flex-end;
     margin-bottom: 1.5rem;
   }
+  /* Match the Playlists header cover size (.cover-lg: 260px desktop / 280px
+     mobile) so the album hero reads at the same scale. */
   .big-art {
-    width: 140px;
-    height: 140px;
+    width: 260px;
+    height: 260px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
@@ -475,6 +488,80 @@
       min-height: 0;
       overflow-y: auto;
       overflow-x: hidden;
+    }
+    /* Match the Playlists mobile cover size (280px). */
+    .big-art {
+      width: 280px;
+      height: 280px;
+      max-width: 80vw;
+      max-height: 80vw;
+    }
+  }
+
+  /* Immersive blurred backdrop behind the open album's header — same treatment
+     as Artists / Playlists (full-bleed wash, theme-aware darkening scrim, slow
+     drift) so the sections feel consistent. */
+  .detail {
+    position: relative;
+  }
+  .detail.has-hero > :not(.album-backdrop) {
+    position: relative;
+    z-index: 1;
+  }
+  .album-backdrop {
+    position: absolute;
+    z-index: 0;
+    top: -1.5rem; /* .content top padding — reach the very top of the page */
+    left: -2rem; /* .content side padding — bleed to the content edges */
+    right: -2rem;
+    height: 620px; /* carry the wash down behind the whole track list */
+    overflow: hidden;
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 0%,
+      #000 52%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(to bottom, #000 0%, #000 52%, transparent 100%);
+  }
+  .album-backdrop img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: blur(44px) saturate(1.7);
+    transform: scale(1.3);
+    opacity: 0.78;
+    animation: album-drift 34s ease-in-out infinite alternate;
+  }
+  /* Theme-aware darkening scrim so the vivid cover sits back behind the header
+     and track list (matches the Artists treatment). */
+  .album-backdrop::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--bg) 30%, transparent),
+      color-mix(in srgb, var(--bg) 58%, transparent)
+    );
+  }
+  /* Soft halo keeps the header text legible over any cover. */
+  .detail.has-hero .album-head h3,
+  .detail.has-hero .album-head p.muted {
+    text-shadow: 0 1px 14px rgba(0, 0, 0, 0.55);
+  }
+  @keyframes album-drift {
+    from {
+      transform: scale(1.3) translate3d(-1.5%, -1%, 0);
+    }
+    to {
+      transform: scale(1.45) translate3d(1.5%, 1.5%, 0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .album-backdrop img {
+      animation: none;
     }
   }
 </style>
