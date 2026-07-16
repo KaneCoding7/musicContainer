@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
-  import { apiBase } from "$lib/services/apiBase";
+  import { fetchConfig } from "$lib/services/configService";
   import type { AuthViewModel } from "$lib/viewmodels/authViewModel.svelte";
 
   let { vm, onAuthed }: { vm: AuthViewModel; onAuthed: () => void } = $props();
@@ -23,12 +23,7 @@
       mode = "register";
     }
     // Reflect the server's invite-only setting in the form.
-    try {
-      const res = await fetch(`${apiBase()}/api/config`);
-      if (res.ok) inviteRequired = (await res.json()).inviteOnly === true;
-    } catch {
-      /* leave default; the server enforces it regardless */
-    }
+    inviteRequired = (await fetchConfig()).inviteOnly;
   });
 
   async function submit(e: Event) {
@@ -70,14 +65,16 @@
         Name
         <input bind:value={name} autocomplete="name" required />
       </label>
-      <label>
-        Invite code {#if !inviteRequired}<span class="opt">(optional)</span>{/if}
-        <input
-          bind:value={invite}
-          placeholder={inviteRequired ? "Enter your invite code" : "Optional"}
-          required={inviteRequired}
-        />
-      </label>
+      {#if inviteRequired}
+        <label>
+          Invite code
+          <input
+            bind:value={invite}
+            placeholder="Enter your invite code"
+            required
+          />
+        </label>
+      {/if}
     {/if}
     <label>
       Email
@@ -166,10 +163,6 @@
     gap: 0.3rem;
     font-size: 0.85rem;
     color: var(--muted);
-  }
-  .opt {
-    color: var(--dim);
-    font-weight: 400;
   }
   input {
     padding: 0.55rem 0.7rem;

@@ -21,6 +21,7 @@
   import SongList from "$lib/components/SongList.svelte";
   import UploadView from "$lib/components/UploadView.svelte";
   import type { SongMetadata } from "$lib/services/songService";
+  import { fetchConfig } from "$lib/services/configService";
   import DeviceBar from "$lib/components/DeviceBar.svelte";
   import { AuthViewModel } from "$lib/viewmodels/authViewModel.svelte";
   import { FriendsViewModel } from "$lib/viewmodels/friendsViewModel.svelte";
@@ -142,7 +143,12 @@
     localStorage.setItem("suggestRadio", String(vm.suggestRadio));
   }
 
-  const nav: { id: View; label: string; icon: string }[] = [
+  // Whether registration is invite-only. Read from the server so invite
+  // affordances (nav item + view) are hidden when invites are meaningless
+  // (open registration). Defaults to false until /config resolves.
+  let inviteOnly = $state(false);
+
+  const allNav: { id: View; label: string; icon: string }[] = [
     { id: "home", label: "Home", icon: "home" },
     { id: "songs", label: "All Songs", icon: "library_music" },
     { id: "liked", label: "Liked", icon: "favorite" },
@@ -156,6 +162,10 @@
     { id: "upload", label: "Upload", icon: "upload" },
     { id: "settings", label: "Settings", icon: "settings" },
   ];
+  // Hide the Invite nav entry unless the server is actually invite-only.
+  const nav = $derived(
+    allNav.filter((item) => item.id !== "invite" || inviteOnly),
+  );
 
   // Becomes true once we've attempted to restore the saved player state, so the
   // persistence effect below doesn't overwrite the snapshot before we read it.
@@ -171,6 +181,7 @@
     vm.normalize = localStorage.getItem("normalize") !== "false"; // default on
     vm.showClips = localStorage.getItem("showClips") !== "false"; // default on
     vm.suggestRadio = localStorage.getItem("suggestRadio") !== "false"; // default on
+    fetchConfig().then((cfg) => (inviteOnly = cfg.inviteOnly));
     await authVm.init();
     if (authVm.isAuthed) {
       loadLibrary();
@@ -431,7 +442,7 @@
       {:else if view === "friends"}
         <h2>Friends</h2>
         <FriendsView vm={friendsVm} />
-      {:else if view === "invite"}
+      {:else if view === "invite" && inviteOnly}
         <h2>Invite a friend</h2>
         <InviteView />
       {:else}

@@ -20,6 +20,10 @@ export interface SuggestionCandidate {
   // Present for YouTube-sourced picks: the video is already known, so the route
   // downloads it directly instead of searching by name first.
   watchUrl?: string | null;
+  // YouTube channel/uploader for youtube-sourced picks. Fed to the smart-lookup
+  // heuristic at ingest (like a manual import) so it can recover the real artist
+  // from raw video-title junk — see ingestSuggestion.
+  uploader?: string | null;
 }
 
 // Round-robin merge across any number of lists so a session interleaves the

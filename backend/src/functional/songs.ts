@@ -70,10 +70,12 @@ interface SongRow {
   clip_filename: string | null;
   clip_disabled: number;
   suggestion: number;
+  track_no: number | null;
+  disc_no: number | null;
 }
 
 const SONG_COLUMNS =
-  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness, sort_order, album_sort_order, source_url, clip_filename, clip_disabled, suggestion";
+  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness, sort_order, album_sort_order, source_url, clip_filename, clip_disabled, suggestion, track_no, disc_no";
 
 function rowToSong(row: SongRow): Song {
   return {
@@ -91,6 +93,8 @@ function rowToSong(row: SongRow): Song {
     loudness: row.loudness,
     sortOrder: row.sort_order,
     albumSortOrder: row.album_sort_order,
+    trackNo: row.track_no,
+    discNo: row.disc_no,
     hasSource: row.source_url !== null,
     hasClip: row.clip_filename !== null,
     clipDisabled: row.clip_disabled === 1,
@@ -196,6 +200,8 @@ export function recordSong(
     suggestion?: boolean;
     sourceUrl?: string | null;
     mbRecordingId?: string | null;
+    trackNo?: number | null;
+    discNo?: number | null;
   }
 ): Result<Song> {
   const filename = params.filename.trim();
@@ -207,7 +213,7 @@ export function recordSong(
   try {
     const info = db
       .prepare(
-        "INSERT INTO songs (filename, original_filename, artist, album, art_filename, duration, user_id, pending, suggestion, source_url, mb_recording_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO songs (filename, original_filename, artist, album, art_filename, duration, user_id, pending, suggestion, source_url, mb_recording_id, track_no, disc_no) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .run(
         filename,
@@ -220,7 +226,9 @@ export function recordSong(
         params.pending ? 1 : 0,
         params.suggestion ? 1 : 0,
         params.sourceUrl ?? null,
-        params.mbRecordingId ?? null
+        params.mbRecordingId ?? null,
+        params.trackNo ?? null,
+        params.discNo ?? null
       );
 
     const row = db
@@ -285,7 +293,7 @@ export function copySongToLibrary(
   const src = db
     .prepare(
       `SELECT user_id, filename, original_filename, artist, album, art_filename,
-              duration, loudness, source_url
+              duration, loudness, source_url, track_no, disc_no
        FROM songs WHERE id = ?`
     )
     .get(songId) as
@@ -299,6 +307,8 @@ export function copySongToLibrary(
         duration: number | null;
         loudness: number | null;
         source_url: string | null;
+        track_no: number | null;
+        disc_no: number | null;
       }
     | undefined;
   if (!src) return err("not_found", `Song ${songId} not found`);
@@ -332,6 +342,8 @@ export function copySongToLibrary(
       artFilename: newArt,
       duration: src.duration,
       sourceUrl: src.source_url,
+      trackNo: src.track_no,
+      discNo: src.disc_no,
     });
     if (result.ok && src.loudness != null) {
       setSongLoudness(db, result.value.id, src.loudness);

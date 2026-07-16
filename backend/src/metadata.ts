@@ -10,6 +10,8 @@ export interface ExtractedMetadata {
   artFilename: string | null;
   duration: number | null;
   sourceUrl: string | null;
+  trackNo: number | null; // embedded track number (ID3 TRCK), if present
+  discNo: number | null; // embedded disc number (ID3 TPOS), if present
 }
 
 // Reads ID3/Vorbis tags from an audio file. Any embedded cover art is written
@@ -78,6 +80,8 @@ export async function extractMetadata(
       artFilename,
       duration: format.duration ?? null,
       sourceUrl,
+      trackNo: common.track?.no ?? null,
+      discNo: common.disk?.no ?? null,
     };
   } catch {
     return {
@@ -87,6 +91,8 @@ export async function extractMetadata(
       artFilename: null,
       duration: null,
       sourceUrl: null,
+      trackNo: null,
+      discNo: null,
     };
   }
 }

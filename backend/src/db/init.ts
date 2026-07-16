@@ -312,6 +312,16 @@ export function migrate(database: Database.Database): void {
       "ALTER TABLE songs ADD COLUMN suggestion INTEGER NOT NULL DEFAULT 0"
     );
   }
+  // Recognized track / disc number within the album release, captured from a
+  // MusicBrainz match at ingest (or embedded file tags as a secondary source).
+  // Null until recognized; lets the Albums view fall back to real release order
+  // instead of upload order. disc_no is only meaningful for multi-disc releases.
+  if (!columns.includes("track_no")) {
+    database.exec("ALTER TABLE songs ADD COLUMN track_no INTEGER");
+  }
+  if (!columns.includes("disc_no")) {
+    database.exec("ALTER TABLE songs ADD COLUMN disc_no INTEGER");
+  }
   const plColumns = (
     database.prepare("PRAGMA table_info(playlists)").all() as { name: string }[]
   ).map((c) => c.name);

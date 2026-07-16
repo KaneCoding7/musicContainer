@@ -77,10 +77,35 @@
     !!(data?.artists?.length || data?.recordings?.length || data?.releases?.length)
   );
 
-  // Activity bar chart: scale each bucket against the busiest one.
-  const activityMax = $derived(
-    Math.max(1, ...(data?.activity ?? []).map((b) => b.count))
+  // Activity bar chart. The busiest bucket sets the scale, but we round it up to
+  // a "nice" round number so the gridlines/axis ticks read cleanly (e.g. a peak
+  // of 37 scales to 40, ticked 0/10/20/30/40) instead of against a raw max.
+  const activityPeak = $derived(
+    Math.max(0, ...(data?.activity ?? []).map((b) => b.count))
   );
+  function niceCeil(n: number): number {
+    if (n <= 5) return 5;
+    const pow = Math.pow(10, Math.floor(Math.log10(n)));
+    const frac = n / pow;
+    const step = frac <= 1 ? 1 : frac <= 2 ? 2 : frac <= 5 ? 5 : 10;
+    return step * pow;
+  }
+  const activityScale = $derived(niceCeil(activityPeak));
+  // Axis ticks top → bottom (four gridlines + baseline), rendered as evenly
+  // spaced horizontal rules with a value label on the left.
+  const activityTicks = $derived(
+    [1, 0.75, 0.5, 0.25, 0].map((f) => Math.round(activityScale * f))
+  );
+  const activityTotal = $derived(
+    (data?.activity ?? []).reduce((n, b) => n + b.count, 0)
+  );
+  // Height of a bucket's fill as a % of the plot, with a small floor so a
+  // non-zero-but-tiny bucket is still visible (zero stays flat/empty).
+  const barHeight = (count: number) =>
+    count <= 0 ? 0 : Math.max(2.5, (count / activityScale) * 100);
+  // Bar the user has tapped/clicked to pin its value open (touch-friendly: no
+  // hover needed). Toggled per bucket label; null when none is pinned.
+  let selectedBar = $state<string | null>(null);
 
   // Recommendations + fresh releases are range-independent, so load them once.
   let recs = $state<Recommendation[]>([]);
@@ -214,19 +239,48 @@
 
     {#if data?.activity?.length}
       <section class="activity">
-        <h3>Listening activity</h3>
-        <div class="bars">
-          {#each data.activity as b (b.label)}
-            <div class="bar-col" title={`${b.label}: ${plays(b.count)}`}>
-              <div class="bar-track">
-                <div
-                  class="bar-fill"
-                  style="height:{Math.round((b.count / activityMax) * 100)}%"
-                ></div>
-              </div>
-              <span class="bar-label">{b.label}</span>
+        <div class="activity-head">
+          <h3>Listening activity</h3>
+          <span class="activity-sum"
+            >{plays(activityTotal)} · peak {plays(activityPeak)}</span
+          >
+        </div>
+        <!-- Single-series magnitude-over-time: one hue (theme accent), gridlines
+             for scale, values on hover/focus (+ always on the peak) so they're
+             reachable by touch and keyboard, not hover-only. -->
+        <div class="chart">
+          <div class="plot">
+            <div class="grid" aria-hidden="true">
+              {#each activityTicks as t (t)}
+                <div class="grid-line"><span class="grid-val">{fmt(t)}</span></div>
+              {/each}
             </div>
-          {/each}
+            <div class="bars">
+              {#each data.activity as b (b.label)}
+                <button
+                  type="button"
+                  class="bar-col"
+                  class:selected={selectedBar === b.label}
+                  aria-label={`${b.label}: ${plays(b.count)}`}
+                  onclick={() =>
+                    (selectedBar = selectedBar === b.label ? null : b.label)}
+                >
+                  <span class="bar-value">{fmt(b.count)}</span>
+                  <div
+                    class="bar-fill"
+                    class:peak={b.count === activityPeak && b.count > 0}
+                    class:empty={b.count === 0}
+                    style="height:{barHeight(b.count)}%"
+                  ></div>
+                </button>
+              {/each}
+            </div>
+          </div>
+          <div class="xaxis" aria-hidden="true">
+            {#each data.activity as b (b.label)}
+              <span class="xlabel">{b.label}</span>
+            {/each}
+          </div>
         </div>
       </section>
     {/if}
@@ -608,48 +662,151 @@
   .activity {
     margin-bottom: 1.75rem;
   }
-  .activity h3 {
-    margin: 0 0 0.6rem;
+  .activity-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 0 0 0.8rem;
+  }
+  .activity-head h3 {
+    margin: 0;
     font-size: 0.95rem;
   }
-  .bars {
-    display: flex;
-    align-items: flex-end;
-    gap: 3px;
-    height: 120px;
-    padding-top: 0.5rem;
+  .activity-sum {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
   }
-  .bar-col {
-    flex: 1;
-    min-width: 0;
+  /* Leave room on the left for the y-axis value labels. */
+  .chart {
+    padding-left: 2.4rem;
+  }
+  .plot {
+    position: relative;
+    height: 200px;
+  }
+  /* Gridlines: evenly spaced horizontal rules spanning the plot, each carrying
+     its value on the left so magnitudes are readable at a glance. */
+  .grid {
+    position: absolute;
+    inset: 0;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 0.35rem;
-    height: 100%;
+    justify-content: space-between;
+    pointer-events: none;
   }
-  .bar-track {
-    flex: 1;
-    width: 100%;
+  .grid-line {
+    position: relative;
+    border-top: 1px solid var(--surface-2);
+  }
+  /* The baseline (last line) reads a touch stronger than the interior grid. */
+  .grid-line:last-child {
+    border-top-color: var(--border-strong);
+  }
+  .grid-val {
+    position: absolute;
+    left: -2.4rem;
+    top: -0.6em;
+    width: 2rem;
+    text-align: right;
+    color: var(--dim);
+    font-size: 0.66rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .bars {
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: flex-end;
-    justify-content: center;
+    gap: 4px;
+  }
+  .bar-col {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    /* Reset button chrome — the column is just a focusable/tappable hit target
+       for its bar, revealing the value on hover/focus/tap. */
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px 4px 0 0;
+    font: inherit;
+    cursor: pointer;
+    outline: none;
   }
   .bar-fill {
     width: 100%;
-    max-width: 28px;
-    min-height: 2px;
-    background: var(--accent);
-    border-radius: 3px 3px 0 0;
-    transition: height 0.25s ease;
+    max-width: 34px;
+    /* Sequential single hue (theme accent); slightly recessed by default so the
+       peak and any hovered/focused bar can read stronger without adding hues. */
+    background: color-mix(in srgb, var(--accent) 78%, var(--surface));
+    border-radius: 4px 4px 0 0;
+    transition:
+      height 0.25s ease,
+      background 0.12s ease;
   }
-  .bar-label {
-    font-size: 0.62rem;
+  .bar-fill.peak {
+    background: var(--accent);
+  }
+  .bar-fill.empty {
+    background: var(--surface-2);
+  }
+  .bar-col:hover .bar-fill,
+  .bar-col:focus-visible .bar-fill,
+  .bar-col.selected .bar-fill {
+    background: var(--accent);
+  }
+  .bar-col:focus-visible {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 2px;
+  }
+  /* Value label: hidden by default, revealed on hover/focus and always shown on
+     the peak bar — so a number is reachable by touch + keyboard, not hover-only,
+     without printing a label on every bar. */
+  .bar-value {
+    position: absolute;
+    bottom: 100%;
+    margin-bottom: 3px;
+    padding: 0.05rem 0.3rem;
+    background: var(--surface);
+    border: 1px solid var(--surface-2);
+    border-radius: 0.3rem;
+    color: var(--text);
+    font-size: 0.66rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+    pointer-events: none;
+  }
+  .bar-col:hover .bar-value,
+  .bar-col:focus-visible .bar-value,
+  .bar-col.selected .bar-value,
+  .bar-col:has(.peak) .bar-value {
+    opacity: 1;
+  }
+  .xaxis {
+    display: flex;
+    gap: 4px;
+    margin-top: 0.4rem;
+  }
+  .xlabel {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    font-size: 0.66rem;
     color: var(--dim);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100%;
   }
 
   /* Discover: recommendations + fresh releases */

@@ -599,6 +599,17 @@
     vm.togglePlay();
   }
 
+  // Desktop: left-clicking the big now-playing artwork toggles play/pause.
+  // Mouse-only (pointerType check) so touch keeps its swipe-to-change-track and
+  // long-press gestures untouched; right-click opens the track menu via the
+  // SongMenu contextmenu handler attached to the same [data-song-menu-row]
+  // region. Ignored mid-gesture/animation so a stray release can't fire it.
+  function npArtPointerUp(e: PointerEvent) {
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    if (committing || npDragging) return;
+    togglePlay();
+  }
+
   // Full-screen now-playing overlay (Cycle 36).
   let expanded = $state(false);
   // Queue sheet that slides up over the now-playing screen.
@@ -1075,7 +1086,12 @@
     >
       <Icon name="queue_music" size={26} />
     </button>
-    <div class="npf-art">
+    <!-- Desktop: left-click toggles play/pause (npArtPointerUp, mouse-only);
+         right-click / long-press opens the track menu via the SongMenu below,
+         which binds its contextmenu handler to this [data-song-menu-row].
+         Mouse-only convenience — keyboard users use the dedicated ⏯ button. -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="npf-art" data-song-menu-row onpointerup={npArtPointerUp}>
       <div class="npf-stack" class:np-dragging={npDragging}>
         <!-- The live current record — the source of truth for what's playing.
              It's hidden while a gesture's snapshot cards animate on top, then
@@ -1118,6 +1134,7 @@
           </div>
         {/if}
       </div>
+      <SongMenu {vm} {song} showTrigger={false} />
     </div>
     <div class="npf-meta">
       <h2>{song.originalFilename}</h2>

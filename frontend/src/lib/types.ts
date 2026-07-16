@@ -15,6 +15,8 @@ export interface Song {
   loudness: number | null; // integrated loudness (LUFS) for normalization
   sortOrder: number | null; // manual order within a grouping (e.g. artist)
   albumSortOrder: number | null; // manual order within an album grouping
+  trackNo?: number | null; // recognized track number on the album release
+  discNo?: number | null; // recognized disc number (multi-disc releases)
   hasSource: boolean; // imported from a video link (can offer frame artwork)
   hasClip: boolean; // has a cached looping canvas clip (shown in expanded player)
   clipDisabled: boolean; // per-song opt-out: don't show this song's clip

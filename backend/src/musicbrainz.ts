@@ -16,6 +16,10 @@ export interface TrackInfo {
   // MusicBrainz recording MBID, when matched — used for precise ListenBrainz
   // scrobbling. Null for heuristic-only / unmatched tracks.
   recordingMbid?: string | null;
+  // Position on the matched album release, when MusicBrainz exposes it. Lets the
+  // Albums view fall back to real release order. Null when unknown.
+  trackNo?: number | null;
+  discNo?: number | null;
 }
 
 // Parenth/bracket segments that are noise, not part of the song name.
@@ -106,10 +110,19 @@ interface MbReleaseGroup {
   "primary-type"?: string;
   "secondary-types"?: string[];
 }
+// The recording search embeds, per release, the medium the matched recording
+// sits on — including its 0-based offset and the medium (disc) position — so we
+// can recover the track/disc number without a second lookup.
+interface MbMedium {
+  position?: number; // 1-based disc number
+  "track-offset"?: number; // 0-based index of the recording on this medium
+  track?: { number?: string; title?: string }[];
+}
 interface MbRelease {
   title?: string;
   date?: string;
   "release-group"?: MbReleaseGroup;
+  media?: MbMedium[];
 }
 interface MbRecording {
   id?: string;
@@ -222,7 +235,34 @@ export async function lookupMusicBrainz(
       album = top?.title ?? null;
     }
 
-    return { title, artist: artist || null, album, recordingMbid: best.id ?? null };
+    // Track/disc position of the matched recording on the chosen album. Only
+    // trust the offset from a release owned by `best` (the recording we matched)
+    // whose title is the album we picked — so the number really is this song's
+    // place on that release, not a sibling recording's.
+    let trackNo: number | null = null;
+    let discNo: number | null = null;
+    if (album) {
+      const rel = (best.releases ?? []).find((r) => r.title === album);
+      const medium = rel?.media?.[0];
+      if (medium) {
+        if (typeof medium["track-offset"] === "number") {
+          trackNo = medium["track-offset"] + 1;
+        } else {
+          const n = parseInt(medium.track?.[0]?.number ?? "", 10);
+          if (!Number.isNaN(n)) trackNo = n;
+        }
+        if (typeof medium.position === "number") discNo = medium.position;
+      }
+    }
+
+    return {
+      title,
+      artist: artist || null,
+      album,
+      recordingMbid: best.id ?? null,
+      trackNo,
+      discNo,
+    };
   } catch {
     return null; // network/abort/parse — fall back to the heuristic guess
   }
@@ -265,6 +305,8 @@ export async function enrichTrackInfo(input: {
     artist: mb.artist || base.artist,
     album: mb.album || base.album,
     recordingMbid: mb.recordingMbid ?? null,
+    trackNo: mb.trackNo ?? null,
+    discNo: mb.discNo ?? null,
   };
 }
 

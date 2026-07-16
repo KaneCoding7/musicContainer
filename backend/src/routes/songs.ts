@@ -376,6 +376,8 @@ songsRouter.post("/upload", uploadLimiter, (req, res) => {
       duration: meta.duration,
       pending: true, // awaits review before joining the library
       sourceUrl: meta.sourceUrl, // recovered from the comment tag, if present
+      trackNo: meta.trackNo, // from embedded ID3 tags (e.g. a round-tripped download)
+      discNo: meta.discNo,
     });
 
     if (!result.ok) {
@@ -829,6 +831,9 @@ songsRouter.post("/import-link", importLimiter, async (req, res) => {
         // Only video links support the "pick frame as art" feature.
         sourceUrl: isSpotify ? null : trackUrl,
         mbRecordingId: info.recordingMbid ?? null,
+        // Prefer the recognized release position; fall back to embedded tags.
+        trackNo: info.trackNo ?? meta.trackNo,
+        discNo: info.discNo ?? meta.discNo,
       });
       if (!result.ok) {
         if (existsSync(dest)) {
@@ -869,7 +874,13 @@ songsRouter.post("/import-link", importLimiter, async (req, res) => {
 async function ingestSuggestion(
   watchUrl: string,
   userId: string,
-  hint: { artist: string | null; title: string; recordingMbid: string | null }
+  hint: {
+    artist: string | null;
+    title: string;
+    recordingMbid: string | null;
+    source: SuggestionCandidate["source"];
+    uploader: string | null;
+  }
 ): Promise<import("../types.js").Song | null> {
   const work = mkdtempSync(join(dirname(MUSIC_DIR), "suggest-"));
   try {
@@ -897,14 +908,19 @@ async function ingestSuggestion(
       }
     }
 
-    // Trust the recommendation's artist/title as tag hints so the stored track
-    // reads cleanly, then let enrichTrackInfo + MusicBrainz refine it.
+    // Feed enrichTrackInfo per source. ListenBrainz recs / Last.fm similar carry
+    // a clean artist+title, so trust those as tags. YouTube picks (Mix) only have
+    // the raw video title ("… (Official Music Video) [HD]" + channel cruft), so
+    // treat it exactly like a manual YouTube import: pass it as rawTitle for the
+    // heuristic to clean and hand over the channel as `uploader` so it can
+    // recover the artist — never trust the raw title as a tag. (Issue #91.)
+    const isYouTube = hint.source === "youtube";
     const info = await enrichTrackInfo({
-      rawTitle: name.replace(/\.mp3$/i, ""),
-      uploader: null,
+      rawTitle: isYouTube ? hint.title : name.replace(/\.mp3$/i, ""),
+      uploader: isYouTube ? hint.uploader : null,
       durationSec: meta.duration,
-      tagTitle: hint.title,
-      tagArtist: hint.artist,
+      tagTitle: isYouTube ? null : hint.title,
+      tagArtist: isYouTube ? null : hint.artist,
       tagAlbum: null,
       useMusicBrainz: true,
     });
@@ -943,6 +959,8 @@ async function ingestSuggestion(
       suggestion: true,
       sourceUrl: trackUrl,
       mbRecordingId: info.recordingMbid ?? hint.recordingMbid,
+      trackNo: info.trackNo ?? meta.trackNo,
+      discNo: info.discNo ?? meta.discNo,
     });
     if (!result.ok) {
       if (existsSync(dest)) {
@@ -1047,6 +1065,7 @@ songsRouter.get("/suggestions/next", importLimiter, async (req, res) => {
           recordingMbid: null,
           source: "youtube" as const,
           watchUrl: e.url,
+          uploader: e.uploader,
         }))
       : [];
 
@@ -1080,6 +1099,8 @@ songsRouter.get("/suggestions/next", importLimiter, async (req, res) => {
         artist: c.artist,
         title: c.title,
         recordingMbid: c.recordingMbid,
+        source: c.source,
+        uploader: c.uploader ?? null,
       });
       if (song) {
         // Record BOTH the intended pick and the actually-downloaded video so

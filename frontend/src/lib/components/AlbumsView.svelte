@@ -41,12 +41,22 @@
     return [...map.entries()]
       .map(([name, songs]) => ({
         name,
-        // Honour a manual album order (albumSortOrder) when the user has
-        // reordered; otherwise fall back to library order (newest first).
+        // Ordering priority: a manual album order (albumSortOrder) always wins
+        // when the user has reordered; otherwise the recognized release order
+        // (disc then track number, from a MusicBrainz match); otherwise fall
+        // back to library order (newest first). Tracks without a recognized
+        // number sort after those that have one.
         songs: [...songs].sort((a, b) => {
           const ao = a.albumSortOrder ?? Infinity;
           const bo = b.albumSortOrder ?? Infinity;
-          return ao !== bo ? ao - bo : 0;
+          if (ao !== bo) return ao - bo;
+          const ad = a.discNo ?? Infinity;
+          const bd = b.discNo ?? Infinity;
+          if (ad !== bd) return ad - bd;
+          const at = a.trackNo ?? Infinity;
+          const bt = b.trackNo ?? Infinity;
+          if (at !== bt) return at - bt;
+          return 0;
         }),
         artId: songs.find((s) => s.hasArt)?.id ?? null,
       }))

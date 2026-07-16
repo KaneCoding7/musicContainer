@@ -40,6 +40,28 @@
     name: string;
     songs: Song[];
     artId: number | null; // id of a track with embedded art, for the avatar
+    totalPlays: number; // summed playCount across the artist's tracks
+    lastAdded: number; // highest song id ≈ most recently added track
+  }
+
+  // Sort modes for the artist grid. Persisted so the choice sticks across
+  // sessions, like other view preferences.
+  type ArtistSort = "name" | "tracks" | "played" | "added";
+  const SORT_OPTIONS: { id: ArtistSort; label: string }[] = [
+    { id: "name", label: "A–Z" },
+    { id: "tracks", label: "Most tracks" },
+    { id: "played", label: "Most played" },
+    { id: "added", label: "Recently added" },
+  ];
+  const SORT_KEY = "artistSortMode";
+  let sortMode = $state<ArtistSort>("name");
+  function setSort(mode: ArtistSort) {
+    sortMode = mode;
+    try {
+      localStorage.setItem(SORT_KEY, mode);
+    } catch {
+      /* ignore storage-unavailable (private mode) */
+    }
   }
 
   // Untagged tracks are grouped under this label so they're easy to find. The
@@ -70,13 +92,24 @@
           songs: sorted,
           // The artist picture follows the top track in order (first with art).
           artId: sorted.find((s) => s.hasArt)?.id ?? null,
+          totalPlays: sorted.reduce((n, s) => n + (s.playCount ?? 0), 0),
+          lastAdded: sorted.reduce((m, s) => (s.id > m ? s.id : m), 0),
         };
       })
       .sort((a, b) => {
-        // Pin the "No artist" group last; everything else alphabetical.
+        // Pin the "No artist" group last regardless of the chosen sort.
         if (a.name === NO_ARTIST) return 1;
         if (b.name === NO_ARTIST) return -1;
-        return a.name.localeCompare(b.name);
+        switch (sortMode) {
+          case "tracks":
+            return b.songs.length - a.songs.length || a.name.localeCompare(b.name);
+          case "played":
+            return b.totalPlays - a.totalPlays || a.name.localeCompare(b.name);
+          case "added":
+            return b.lastAdded - a.lastAdded || a.name.localeCompare(b.name);
+          default:
+            return a.name.localeCompare(b.name);
+        }
       });
   });
 
@@ -88,8 +121,14 @@
   let shareCopied = $state(false);
 
   // Load the artist's public token when a (real) artist is opened.
+  //
+  // This keys off the stable `openArtist` URL param, NOT the derived `current`
+  // object. `current` gets a fresh reference on every library change (e.g. each
+  // drag during reorder recomputes `artists`), which would otherwise re-run this
+  // effect and reset `reordering` after a single move. `openArtist` only changes
+  // when you actually switch artists, which is the real intent here.
   $effect(() => {
-    const name = current?.name;
+    const name = openArtist;
     shareToken = null;
     shareCopied = false;
     reordering = false; // leave reorder mode when switching artists
@@ -147,7 +186,22 @@
   let customImages = $state<Set<string>>(new Set());
   let imgVersion = $state(0); // bumped after upload/remove to bust the cache
   let imageInput = $state<HTMLInputElement | null>(null);
+
+  // Art for the immersive backdrop behind the open artist's header: the custom
+  // uploaded picture if set, else the top track's embedded cover. Null → no
+  // backdrop (plain header). Mirrors the avatar's cover logic.
+  const heroArt = $derived.by(() => {
+    if (!current) return null;
+    if (customImages.has(current.name)) return artistImageUrl(current.name, imgVersion);
+    if (current.artId !== null) return thumbUrl(current.artId, 512);
+    return null;
+  });
+
   onMount(async () => {
+    const saved = localStorage.getItem(SORT_KEY);
+    if (saved === "name" || saved === "tracks" || saved === "played" || saved === "added") {
+      sortMode = saved;
+    }
     customImages = new Set(await fetchArtistImages());
   });
 
@@ -193,7 +247,12 @@
 {#if vm.songs.length === 0}
   <p class="muted">No songs yet. Upload some to see artists.</p>
 {:else if current}
-  <div class="detail">
+  <div class="detail" class:has-hero={heroArt}>
+  {#if heroArt}
+    <div class="artist-backdrop" aria-hidden="true">
+      <img src={heroArt} alt="" />
+    </div>
+  {/if}
   <button class="back" onclick={closeArtist}>
     <Icon name="arrow_back" size={20} /> All artists
   </button>
@@ -337,6 +396,19 @@
   </ol>
   </div>
 {:else}
+  <div class="sort-chips" role="tablist" aria-label="Sort artists">
+    {#each SORT_OPTIONS as opt (opt.id)}
+      <button
+        class="chip"
+        class:on={sortMode === opt.id}
+        role="tab"
+        aria-selected={sortMode === opt.id}
+        onclick={() => setSort(opt.id)}
+      >
+        {opt.label}
+      </button>
+    {/each}
+  </div>
   <div class="grid">
     {#each artists as artist (artist.name)}
       <button class="card" onclick={() => openArtistView(artist.name)}>
@@ -728,5 +800,101 @@
   }
   .muted {
     color: var(--muted);
+  }
+
+  /* Sort chips above the artist grid. Pill style consistent with the
+     .edit-order / .share-artist controls used in the artist detail header. */
+  .sort-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  .chip {
+    padding: 0.4rem 0.85rem;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 2rem;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.82rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .chip.on {
+    background: var(--active-bg);
+    color: var(--accent-text);
+    border-color: var(--accent);
+  }
+  @media (hover: hover) {
+    .chip:hover:not(.on) {
+      background: var(--hover);
+    }
+  }
+
+  /* Immersive blurred backdrop behind the open artist's header — mirrors the
+     Playlists treatment (blur/saturate wash, theme-aware scrim, slow parallax
+     drift) so both sections feel consistent. */
+  .detail {
+    position: relative;
+  }
+  .detail.has-hero > :not(.artist-backdrop) {
+    position: relative;
+    z-index: 1;
+  }
+  .artist-backdrop {
+    position: absolute;
+    z-index: 0;
+    top: -1.5rem; /* .content top padding — reach the very top of the page */
+    left: -2rem; /* .content side padding — bleed to the window edges */
+    right: -2rem;
+    height: 620px;
+    overflow: hidden;
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 0%,
+      #000 52%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(to bottom, #000 0%, #000 52%, transparent 100%);
+  }
+  .artist-backdrop img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: blur(44px) saturate(1.7);
+    transform: scale(1.3);
+    opacity: 0.85;
+    animation: hero-drift 34s ease-in-out infinite alternate;
+  }
+  .artist-backdrop::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--bg) 8%, transparent),
+      color-mix(in srgb, var(--bg) 34%, transparent)
+    );
+  }
+  /* Soft halo keeps the header text legible over any cover. */
+  .detail.has-hero .head h3,
+  .detail.has-hero .head p.muted {
+    text-shadow: 0 1px 14px rgba(0, 0, 0, 0.55);
+  }
+  @keyframes hero-drift {
+    from {
+      transform: scale(1.3) translate3d(-1.5%, -1%, 0);
+    }
+    to {
+      transform: scale(1.45) translate3d(1.5%, 1.5%, 0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .artist-backdrop img {
+      animation: none;
+    }
   }
 </style>
