@@ -868,17 +868,20 @@
     object-fit: cover;
     filter: blur(44px) saturate(1.7);
     transform: scale(1.3);
-    opacity: 0.85;
+    opacity: 0.78;
     animation: artist-drift 34s ease-in-out infinite alternate;
   }
+  /* Theme-aware darkening scrim — same idea as Playlists but a touch stronger,
+     since artist cover art tends to be more vivid, so the wash sits back behind
+     the header/list instead of dominating. */
   .artist-backdrop::after {
     content: "";
     position: absolute;
     inset: 0;
     background: linear-gradient(
       to bottom,
-      color-mix(in srgb, var(--bg) 8%, transparent),
-      color-mix(in srgb, var(--bg) 34%, transparent)
+      color-mix(in srgb, var(--bg) 30%, transparent),
+      color-mix(in srgb, var(--bg) 58%, transparent)
     );
   }
   /* Soft halo keeps the header text legible over any cover. */
