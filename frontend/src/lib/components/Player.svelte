@@ -1170,10 +1170,9 @@
     </div>
     <div class="npf-meta">
       <h2>{song.originalFilename}</h2>
-      {#if song.artist}<p class="npf-artist">{song.artist}</p>{/if}
     </div>
-    <!-- Secondary actions above the progress bar, aligned to its edges: library
-         status (✓ in library / + to add) on the left, queue on the right. -->
+    <!-- Row above the progress bar: library status (✓ in library / + to add) on
+         the left, the artist centered in the middle, queue on the right. -->
     <div class="npf-actions">
       <button
         class="npf-keep"
@@ -1184,6 +1183,7 @@
         aria-label={inLibrary ? "In your library" : "Add to your library"}
         ><Icon name={inLibrary ? "check" : "add"} size={24} /></button
       >
+      <span class="npf-actions-artist">{song.artist ?? ""}</span>
       <button
         class="npf-ctl-queue"
         onclick={() => (queueSheet = true)}
@@ -1550,9 +1550,12 @@
     color: #fff;
     text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
   }
-  .np-full.np-canvas :global(.npf-meta h2),
-  .np-full.np-canvas :global(.npf-artist) {
+  .np-full.np-canvas :global(.npf-meta h2) {
     color: #fff;
+  }
+  /* Keep the artist readable over the video clip. */
+  .np-full.np-canvas :global(.npf-actions-artist) {
+    color: rgba(255, 255, 255, 0.9);
   }
   /* With a clip playing the album-art card is hidden so it isn't sitting on top
      of the video; the title + controls cluster is pinned to the bottom. */
@@ -1565,7 +1568,7 @@
   /* Album-art mode: equal auto-margins above the art and above the seek bar
      center the art+meta group while leaving seek+controls pinned to the bottom. */
   .np-full:not(.np-canvas) :global(.npf-art),
-  .np-full:not(.np-canvas) :global(.npf-actions) {
+  .np-full:not(.np-canvas) :global(.npf-meta) {
     margin-top: auto;
   }
   /* Top-right track (⋮) menu, in the corner the queue button used to occupy. */
@@ -1701,20 +1704,25 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .npf-artist {
-    margin: 0.35rem 0 0;
-    color: var(--muted);
-  }
-  /* Keep-suggestion button in the transport row + its balancing spacer, sized
-     equally (border-box) so the main shuffle…repeat cluster stays centered.
-     Accent-tinted so it reads as an action among the muted toggles. */
-  /* Secondary actions above the progress bar, matched to the seek width so the
-     buttons sit at the same left/right edges as the scrubber. */
+  /* Row above the progress bar (matched to the seek width): keep/status on the
+     left, artist centered in the middle, queue on the right. A slight negative
+     top margin hugs it up under the title. */
   .npf-actions {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 0.5rem;
     width: min(520px, 90vw);
+    margin-top: -0.35rem;
+  }
+  .npf-actions-artist {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.95rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .npf-actions button {
     display: inline-flex;
