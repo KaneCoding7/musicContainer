@@ -35,6 +35,7 @@
     inLibrary = false,
     canModify = true,
     showTrigger = true,
+    triggerSize = 20,
   }: {
     vm: SongViewModel;
     song: Song;
@@ -53,6 +54,8 @@
     // When false, the "⋮" trigger button is hidden and the menu opens only via
     // right-click / long-press on the row (used in the player's now-playing bar).
     showTrigger?: boolean;
+    // Icon size for the ⋮ trigger, so callers can match surrounding controls.
+    triggerSize?: number;
   } = $props();
 
   let open = $state(false);
@@ -248,7 +251,7 @@
         open = !open;
       }}
     >
-      <Icon name="more_vert" size={20} />
+      <Icon name="more_vert" size={triggerSize} />
     </button>
   {/if}
 

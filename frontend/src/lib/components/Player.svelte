@@ -1118,14 +1118,12 @@
     <button class="np-collapse" onclick={() => (expanded = false)} aria-label="Close">
       <Icon name="keyboard_arrow_down" size={28} />
     </button>
-    <button
-      class="np-queue"
-      onclick={() => (queueSheet = true)}
-      aria-label="Queue"
-      title="Queue"
-    >
-      <Icon name="queue_music" size={26} />
-    </button>
+    <!-- Top-right: the track (⋮) menu. Its trigger opens the menu; it also stays
+         bound to .np-full via [data-song-menu-row] so right-click anywhere in the
+         view opens the same menu. -->
+    <div class="np-menu-corner">
+      <SongMenu {vm} {song} triggerSize={26} />
+    </div>
     <div class="npf-art">
       <div class="npf-stack" class:np-dragging={npDragging}>
         <!-- The live current record — the source of truth for what's playing.
@@ -1170,13 +1168,6 @@
         {/if}
       </div>
     </div>
-    <!-- Bound to .np-full via [data-song-menu-row]; opens on right-click /
-         long-press anywhere in the view (incl. over the video clip). Wrapped in
-         an out-of-flow anchor so its (empty) placeholder doesn't add a flex gap
-         to the .np-full column. -->
-    <div class="npf-menu-anchor">
-      <SongMenu {vm} {song} showTrigger={false} />
-    </div>
     <div class="npf-meta">
       <h2>{song.originalFilename}</h2>
       {#if song.artist}<p class="npf-artist">{song.artist}</p>{/if}
@@ -1207,9 +1198,17 @@
       <span class="time">{formatTime(duration)}</span>
     </div>
     <div class="npf-controls">
-      <!-- Balancing spacer so the transport (shuffle…repeat) stays centered
-           against the library-status button on the right. -->
-      <span class="npf-ctl-spacer" aria-hidden="true"></span>
+      <!-- Library status on the left: ✓ when the track is in your library, or +
+           to add it when it's a suggestion. -->
+      <button
+        class="npf-keep"
+        class:kept={inLibrary}
+        onclick={keepCurrent}
+        disabled={inLibrary}
+        title={inLibrary ? "In your library" : "Add to your library"}
+        aria-label={inLibrary ? "In your library" : "Add to your library"}
+        ><Icon name={inLibrary ? "check" : "add"} size={26} /></button
+      >
       <button
         class="toggle"
         class:active={vm.shuffle}
@@ -1235,16 +1234,12 @@
           size={26}
         /></button
       >
-      <!-- Library status by the repeat button: ✓ when the track is in your
-           library, or + to add it when it's a suggestion. -->
+      <!-- Queue on the right (moved out of the top corner). -->
       <button
-        class="npf-keep"
-        class:kept={inLibrary}
-        onclick={keepCurrent}
-        disabled={inLibrary}
-        title={inLibrary ? "In your library" : "Add to your library"}
-        aria-label={inLibrary ? "In your library" : "Add to your library"}
-        ><Icon name={inLibrary ? "check" : "add"} size={26} /></button
+        class="npf-ctl-queue"
+        onclick={() => (queueSheet = true)}
+        aria-label="Queue"
+        title="Queue"><Icon name="queue_music" size={26} /></button
       >
     </div>
 
@@ -1572,13 +1567,16 @@
   .np-full:not(.np-canvas) :global(.npf-seek) {
     margin-top: auto;
   }
-  /* Out-of-flow holder for the now-playing SongMenu: keeps its empty placeholder
-     from adding a gap to the .np-full flex column. The menu itself portals out. */
-  .npf-menu-anchor {
+  /* Top-right track (⋮) menu, in the corner the queue button used to occupy. */
+  .np-menu-corner {
     position: absolute;
-    width: 0;
-    height: 0;
-    overflow: hidden;
+    top: 1rem;
+    right: 1rem;
+  }
+  .np-menu-corner :global(.dots) {
+    color: var(--muted);
+    padding: 0.4rem;
+    border-radius: 0.5rem;
   }
   .np-collapse {
     position: absolute;
@@ -1594,24 +1592,6 @@
   }
   @media (hover: hover) {
     .np-collapse:hover {
-      background: var(--surface-2);
-      color: var(--text);
-    }
-  }
-  .np-queue {
-    position: absolute;
-    top: 1rem;
-    right: 1rem;
-    display: inline-flex;
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    padding: 0.4rem;
-    border-radius: 0.5rem;
-  }
-  @media (hover: hover) {
-    .np-queue:hover {
       background: var(--surface-2);
       color: var(--text);
     }
@@ -1727,23 +1707,21 @@
   /* Keep-suggestion button in the transport row + its balancing spacer, sized
      equally (border-box) so the main shuffle…repeat cluster stays centered.
      Accent-tinted so it reads as an action among the muted toggles. */
+  /* Library status on the left of the transport, accent-tinted as an action. */
   .npf-controls .npf-keep {
-    box-sizing: border-box;
-    width: 2.5rem;
     color: var(--accent-text);
     transition: color 0.15s ease;
   }
-  /* Confirmed state: a green ✓ (reads on both the dark clip scrim and light
-     theme) so it's clear the add worked. */
+  /* In-library ✓ — green so it reads on both the dark clip scrim and light. */
   .npf-controls .npf-keep.kept {
     color: #22c55e;
   }
   .npf-controls .npf-keep:disabled {
     cursor: default;
   }
-  .npf-ctl-spacer {
-    width: 2.5rem;
-    flex-shrink: 0;
+  /* Queue on the right of the transport — de-emphasized like the toggles. */
+  .npf-controls .npf-ctl-queue {
+    color: var(--muted);
   }
   .npf-seek {
     display: flex;
