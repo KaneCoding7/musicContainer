@@ -332,7 +332,9 @@
         <a class="item" href={downloadUrl(song.id)} onclick={close}>
           <Icon name="download" size={18} /> Download
         </a>
-        {#if canModify}
+        {#if canModify && !song.isSuggestion}
+          <!-- Not in your library yet — discard a suggestion by not keeping it,
+               not via Delete. Reappears once it's added. -->
           <button class="danger" onclick={confirmDelete}>
             <Icon name="delete" size={18} /> Delete
           </button>
