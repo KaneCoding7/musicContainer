@@ -318,11 +318,13 @@
             {song.clipDisabled ? "Show clip" : "Hide clip"}
           </button>
         {/if}
-        {#if canModify}
+        {#if canModify && !song.isSuggestion}
+          <!-- Suggestions aren't in your library yet, so they can't be edited
+               until you add them (isSuggestion flips false on keep). -->
           <button onclick={() => { editing = true; close(); }}>
             <Icon name="edit" size={18} /> Edit
           </button>
-        {:else}
+        {:else if !canModify}
           <button onclick={() => { viewing = true; close(); }}>
             <Icon name="info" size={18} /> View details
           </button>
