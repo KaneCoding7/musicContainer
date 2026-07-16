@@ -113,6 +113,25 @@
   const activityCount = $derived(data?.activity?.length ?? 0);
   const activityLabelStep = $derived(Math.max(1, Math.ceil(activityCount / 8)));
   const activityGap = $derived(activityCount > 30 ? "2px" : "4px");
+  // Index of the last labelled bucket, so it can be right-aligned instead of
+  // overflowing off the right edge of the chart.
+  const activityLastLabelIdx = $derived(
+    Math.floor(Math.max(0, activityCount - 1) / activityLabelStep) *
+      activityLabelStep
+  );
+  // ListenBrainz hands back long, range-specific labels ("Monday 29 June 2026",
+  // "01 May 2026", "January 2024", "2002"). Compress each to something that fits
+  // under a bar: "29 Jun" / "1 May" (daily), "Jan ’24" (monthly), "2002" (yearly).
+  function shortLabel(raw: string, r: StatsRange): string {
+    if (r === "all_time") return raw.trim(); // already a bare year
+    if (r === "year") {
+      const m = raw.match(/^(\w+)\s+(\d{4})$/); // "January 2024"
+      return m ? `${m[1].slice(0, 3)} ’${m[2].slice(2)}` : raw;
+    }
+    // week / month are daily; week labels also carry a weekday prefix.
+    const m = raw.match(/(\d{1,2})\s+(\w+)\s+\d{4}$/);
+    return m ? `${Number(m[1])} ${m[2].slice(0, 3)}` : raw;
+  }
 
   // Recommendations + fresh releases are range-independent, so load them once.
   let recs = $state<Recommendation[]>([]);
@@ -303,8 +322,12 @@
           </div>
           <div class="xaxis" aria-hidden="true">
             {#each data.activity as b, i (b.label)}
-              <span class="xlabel"
-                >{i % activityLabelStep === 0 ? b.label : ""}</span
+              {@const show = i % activityLabelStep === 0}
+              <span
+                class="xlabel"
+                class:edge-l={i === 0}
+                class:edge-r={show && i === activityLastLabelIdx && i !== 0}
+                >{show ? shortLabel(b.label, range) : ""}</span
               >
             {/each}
           </div>
@@ -818,6 +841,11 @@
     gap: var(--bar-gap, 4px);
     margin-top: 0.4rem;
   }
+  /* Each label keeps a bar-width slot (min-width:0 so it never widens the slot
+     and misaligns the bars) but is allowed to overflow visibly into the empty
+     neighbouring slots — labels are thinned to ~8, so there's ample room and no
+     collisions. The first/last labels align to their edge so they don't spill
+     off the chart. */
   .xlabel {
     flex: 1;
     min-width: 0;
@@ -825,8 +853,13 @@
     font-size: 0.66rem;
     color: var(--dim);
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow: visible;
+  }
+  .xlabel.edge-l {
+    text-align: left;
+  }
+  .xlabel.edge-r {
+    text-align: right;
   }
 
   /* Discover: recommendations + fresh releases */
