@@ -54,15 +54,24 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Compute tags in shell rather than docker/metadata-action so the build
+      # doesn't depend on the GitHub metadata API (which can 503 during GitHub
+      # incidents and fail the whole publish). main -> :latest + :sha-<short>;
+      # pull request -> :dev.
       - name: Compute tags
         id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ matrix.image }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,enable={{is_default_branch}}
-            type=raw,value=dev,enable=${{ github.event_name == 'pull_request' }}
+        run: |
+          short="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          {
+            echo 'tags<<EOF'
+            if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+              echo "${{ matrix.image }}:dev"
+            else
+              echo "${{ matrix.image }}:latest"
+              echo "${{ matrix.image }}:sha-${short}"
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build and push ${{ matrix.service }}
         uses: docker/build-push-action@v6
@@ -71,6 +80,3 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
