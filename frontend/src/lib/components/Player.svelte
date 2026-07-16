@@ -1172,6 +1172,25 @@
       <h2>{song.originalFilename}</h2>
       {#if song.artist}<p class="npf-artist">{song.artist}</p>{/if}
     </div>
+    <!-- Secondary actions above the progress bar, aligned to its edges: library
+         status (✓ in library / + to add) on the left, queue on the right. -->
+    <div class="npf-actions">
+      <button
+        class="npf-keep"
+        class:kept={inLibrary}
+        onclick={keepCurrent}
+        disabled={inLibrary}
+        title={inLibrary ? "In your library" : "Add to your library"}
+        aria-label={inLibrary ? "In your library" : "Add to your library"}
+        ><Icon name={inLibrary ? "check" : "add"} size={24} /></button
+      >
+      <button
+        class="npf-ctl-queue"
+        onclick={() => (queueSheet = true)}
+        aria-label="Queue"
+        title="Queue"><Icon name="queue_music" size={24} /></button
+      >
+    </div>
     <div
       class="npf-seek"
       ontouchstart={seekTouchStart}
@@ -1198,17 +1217,6 @@
       <span class="time">{formatTime(duration)}</span>
     </div>
     <div class="npf-controls">
-      <!-- Library status on the left: ✓ when the track is in your library, or +
-           to add it when it's a suggestion. -->
-      <button
-        class="npf-keep"
-        class:kept={inLibrary}
-        onclick={keepCurrent}
-        disabled={inLibrary}
-        title={inLibrary ? "In your library" : "Add to your library"}
-        aria-label={inLibrary ? "In your library" : "Add to your library"}
-        ><Icon name={inLibrary ? "check" : "add"} size={26} /></button
-      >
       <button
         class="toggle"
         class:active={vm.shuffle}
@@ -1233,13 +1241,6 @@
           name={vm.repeat === "one" ? "repeat_one" : "repeat"}
           size={26}
         /></button
-      >
-      <!-- Queue on the right (moved out of the top corner). -->
-      <button
-        class="npf-ctl-queue"
-        onclick={() => (queueSheet = true)}
-        aria-label="Queue"
-        title="Queue"><Icon name="queue_music" size={26} /></button
       >
     </div>
 
@@ -1564,7 +1565,7 @@
   /* Album-art mode: equal auto-margins above the art and above the seek bar
      center the art+meta group while leaving seek+controls pinned to the bottom. */
   .np-full:not(.np-canvas) :global(.npf-art),
-  .np-full:not(.np-canvas) :global(.npf-seek) {
+  .np-full:not(.np-canvas) :global(.npf-actions) {
     margin-top: auto;
   }
   /* Top-right track (⋮) menu, in the corner the queue button used to occupy. */
@@ -1707,21 +1708,41 @@
   /* Keep-suggestion button in the transport row + its balancing spacer, sized
      equally (border-box) so the main shuffle…repeat cluster stays centered.
      Accent-tinted so it reads as an action among the muted toggles. */
-  /* Library status on the left of the transport, accent-tinted as an action. */
-  .npf-controls .npf-keep {
+  /* Secondary actions above the progress bar, matched to the seek width so the
+     buttons sit at the same left/right edges as the scrubber. */
+  .npf-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: min(520px, 90vw);
+  }
+  .npf-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 50%;
+  }
+  @media (hover: hover) {
+    .npf-actions button:hover:not(:disabled) {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+  }
+  /* Library status (left): accent + to add, green ✓ once in your library. */
+  .npf-actions .npf-keep {
     color: var(--accent-text);
     transition: color 0.15s ease;
   }
-  /* In-library ✓ — green so it reads on both the dark clip scrim and light. */
-  .npf-controls .npf-keep.kept {
+  .npf-actions .npf-keep.kept {
     color: #22c55e;
   }
-  .npf-controls .npf-keep:disabled {
+  .npf-actions .npf-keep:disabled {
     cursor: default;
-  }
-  /* Queue on the right of the transport — de-emphasized like the toggles. */
-  .npf-controls .npf-ctl-queue {
-    color: var(--muted);
   }
   .npf-seek {
     display: flex;
