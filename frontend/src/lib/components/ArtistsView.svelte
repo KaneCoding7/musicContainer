@@ -552,6 +552,13 @@
       text-align: center;
       gap: 0.85rem;
     }
+    /* Match the Playlists mobile cover size (280px). */
+    .head .avatar {
+      width: 280px;
+      height: 280px;
+      max-width: 80vw;
+      max-height: 80vw;
+    }
     .head-actions {
       justify-content: center;
     }
@@ -634,9 +641,11 @@
     font-size: 0.82rem;
     margin-top: 0;
   }
+  /* Match the Playlists header cover size (.cover-lg: 260px desktop / 280px
+     mobile) so the artist hero reads at the same scale. */
   .head .avatar {
-    width: 120px;
-    height: 120px;
+    width: 260px;
+    height: 260px;
     flex-shrink: 0;
   }
   .head h3 {
