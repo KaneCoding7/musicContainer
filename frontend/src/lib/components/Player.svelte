@@ -601,12 +601,22 @@
 
   // Desktop: left-clicking the now-playing artwork/video area toggles play/pause.
   // Bound to the whole full-screen view (so it also works in clip/video mode,
-  // where the album-art card is display:none) but ignores clicks that land on an
-  // actual control — buttons, the seek slider, or the queue sheet — so those keep
-  // their own behavior. Mouse-only (pointerType) so touch keeps its swipe/long-
-  // press gestures; right-click opens the track menu via SongMenu instead.
-  function npArtPointerUp(e: PointerEvent) {
-    if (e.pointerType !== "mouse" || e.button !== 0) return;
+  // where the album-art card is display:none) but ignores clicks on an actual
+  // control — buttons, the seek slider, the queue sheet — so those keep their
+  // own behavior.
+  //
+  // Uses a real `click` (not pointerup) on purpose: when the track menu is open,
+  // the click that dismisses it lands on the menu's portaled backdrop, so the
+  // browser fires NO click on this element — dismissing the menu therefore never
+  // also toggles playback. With the menu closed, a normal left-click toggles.
+  // pointerType is captured on pointerdown so this stays mouse-only (touch keeps
+  // its own swipe / long-press gestures).
+  let npPointerType = "";
+  function npArtPointerDown(e: PointerEvent) {
+    npPointerType = e.pointerType;
+  }
+  function npArtClick(e: MouseEvent) {
+    if (npPointerType !== "mouse") return; // desktop mouse only
     if (committing || npDragging) return;
     if (
       (e.target as HTMLElement).closest(
@@ -1054,17 +1064,20 @@
 {/snippet}
 
 {#if song && expanded}
-  <!-- Desktop: left-click the artwork/video area toggles play/pause
-       (npArtPointerUp, mouse-only, ignoring real controls); right-click /
-       long-press opens the track menu via the SongMenu bound to this
-       [data-song-menu-row]. Bound to the whole view so it also works in
-       clip/video mode where the album-art card is hidden. -->
+  <!-- Desktop: left-click the artwork/video area toggles play/pause (npArtClick,
+       mouse-only, ignoring real controls); right-click / long-press opens the
+       track menu via the SongMenu bound to this [data-song-menu-row]. Bound to
+       the whole view so it also works in clip/video mode where the album-art
+       card is hidden. -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="np-full"
     class:np-canvas={showClip}
     class:np-dragging={npDragging}
     data-song-menu-row
-    onpointerup={npArtPointerUp}
+    onpointerdown={npArtPointerDown}
+    onclick={npArtClick}
     ontouchstart={npTouchStart}
     ontouchmove={npTouchMove}
     ontouchend={npTouchEnd}
@@ -1154,17 +1167,6 @@
     <div class="npf-meta">
       <h2>{song.originalFilename}</h2>
       {#if song.artist}<p class="npf-artist">{song.artist}</p>{/if}
-      {#if song.isSuggestion}
-        <!-- Suggestion-radio track: offer to keep it (same action as the + in
-             the queue view / SongMenu's "Add to my library"). -->
-        <button
-          class="npf-keep"
-          onclick={() => vm.keepSuggestion(song.id)}
-          title="Add to your library"
-        >
-          <Icon name="add" size={18} /> Add to library
-        </button>
-      {/if}
     </div>
     <div
       class="npf-seek"
@@ -1192,6 +1194,11 @@
       <span class="time">{formatTime(duration)}</span>
     </div>
     <div class="npf-controls">
+      <!-- Balancing spacer so the transport (shuffle…repeat) stays centered when
+           the keep-suggestion button is present on the right. -->
+      {#if song.isSuggestion}
+        <span class="npf-ctl-spacer" aria-hidden="true"></span>
+      {/if}
       <button
         class="toggle"
         class:active={vm.shuffle}
@@ -1217,6 +1224,16 @@
           size={26}
         /></button
       >
+      {#if song.isSuggestion}
+        <!-- Suggestion-radio track: keep it in the library (same action as the +
+             in the queue view). Sits by the repeat button. -->
+        <button
+          class="npf-keep"
+          onclick={() => vm.keepSuggestion(song.id)}
+          title="Add to your library"
+          aria-label="Add to your library"><Icon name="add" size={26} /></button
+        >
+      {/if}
     </div>
 
     <!-- Queue sheet that slides up over the now-playing screen. -->
@@ -1695,30 +1712,17 @@
     margin: 0.35rem 0 0;
     color: var(--muted);
   }
-  /* "Keep this suggestion" pill — shown only for suggestion-radio tracks. */
-  .npf-keep {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    margin-top: 0.8rem;
-    padding: 0.45rem 1rem;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 2rem;
-    font: inherit;
-    font-weight: 600;
-    font-size: 0.85rem;
-    cursor: pointer;
+  /* Keep-suggestion button in the transport row + its balancing spacer, sized
+     equally (border-box) so the main shuffle…repeat cluster stays centered.
+     Accent-tinted so it reads as an action among the muted toggles. */
+  .npf-controls .npf-keep {
+    box-sizing: border-box;
+    width: 2.5rem;
+    color: var(--accent-text);
   }
-  .npf-keep :global(.material-symbols-rounded) {
-    color: #fff;
-  }
-  @media (hover: hover) {
-    .npf-keep:hover {
-      background: var(--accent-hover, var(--accent));
-      filter: brightness(1.08);
-    }
+  .npf-ctl-spacer {
+    width: 2.5rem;
+    flex-shrink: 0;
   }
   .npf-seek {
     display: flex;
