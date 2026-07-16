@@ -431,7 +431,10 @@
         <h2 class:detail-hidden={albumOpen}>Albums</h2>
         <AlbumsView {vm} />
       {:else if view === "artists"}
-        <h2 class:detail-hidden={artistOpen}>Artists</h2>
+        <!-- Drop the section heading when an artist is open (like Playlists) so
+             the immersive backdrop reaches the very top of the page instead of
+             starting below a redundant "Artists" title. -->
+        {#if !artistOpen}<h2>Artists</h2>{/if}
         <ArtistsView {vm} />
       {:else if view === "recent"}
         <h2>Recently Played</h2>
