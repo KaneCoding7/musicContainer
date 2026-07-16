@@ -638,7 +638,28 @@
     keptId = id; // optimistic: flip to ✓ immediately
     vm.keepSuggestion(id).catch(() => {});
   }
-  const inLibrary = $derived(!!song && (!song.isSuggestion || keptId === song.id));
+  // Whether the current track is in your library. A confirmed (non-suggestion)
+  // track is; a suggestion counts as owned once you actually have the same song
+  // — either you just added this one (keptId) or a matching track is already in
+  // your library. Keyed on artist + title so a suggestion that duplicates a song
+  // you already own reads as owned (✓), not addable (+) — so the check is always
+  // correct when a song you have comes up again.
+  function libKey(s: Song): string {
+    return `${(s.artist ?? "").trim().toLowerCase()} ${(
+      s.originalFilename ?? ""
+    )
+      .trim()
+      .toLowerCase()}`;
+  }
+  const libraryKeys = $derived(
+    new Set(vm.songs.filter((s) => !s.isSuggestion).map(libKey))
+  );
+  const inLibrary = $derived(
+    !!song &&
+      (!song.isSuggestion ||
+        keptId === song.id ||
+        libraryKeys.has(libKey(song)))
+  );
 
   // Full-screen now-playing overlay (Cycle 36).
   let expanded = $state(false);
