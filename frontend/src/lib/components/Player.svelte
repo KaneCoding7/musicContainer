@@ -627,25 +627,18 @@
     togglePlay();
   }
 
-  // Keeping a suggestion finalizes the song, so it immediately stops being a
-  // suggestion and the + would just vanish. Flash a ✓ in its place for a beat
-  // first so it's clear the add worked, then let the button clear itself.
+  // Library-status control by the transport: a ✓ when the track is already in
+  // your library, or a + to add it when it's a (not-yet-kept) suggestion.
+  // keptId bridges the moment between clicking + and the finalize resolving so
+  // the ✓ appears instantly.
   let keptId = $state<number | null>(null);
-  let keptTimer: ReturnType<typeof setTimeout> | null = null;
   function keepCurrent() {
-    if (!song) return;
+    if (!song || inLibrary) return; // already in the library — nothing to do
     const id = song.id;
-    keptId = id;
-    if (keptTimer) clearTimeout(keptTimer);
-    keptTimer = setTimeout(() => {
-      if (keptId === id) keptId = null;
-    }, 1800);
+    keptId = id; // optimistic: flip to ✓ immediately
     vm.keepSuggestion(id).catch(() => {});
   }
-  // Show the keep control for a suggestion, and keep showing it (as a ✓) briefly
-  // after it's kept so the confirmation is visible before it disappears.
-  const keptNow = $derived(!!song && keptId === song.id);
-  const showKeep = $derived(!!song && (song.isSuggestion || keptNow));
+  const inLibrary = $derived(!!song && (!song.isSuggestion || keptId === song.id));
 
   // Full-screen now-playing overlay (Cycle 36).
   let expanded = $state(false);
@@ -1214,11 +1207,9 @@
       <span class="time">{formatTime(duration)}</span>
     </div>
     <div class="npf-controls">
-      <!-- Balancing spacer so the transport (shuffle…repeat) stays centered when
-           the keep-suggestion button is present on the right. -->
-      {#if showKeep}
-        <span class="npf-ctl-spacer" aria-hidden="true"></span>
-      {/if}
+      <!-- Balancing spacer so the transport (shuffle…repeat) stays centered
+           against the library-status button on the right. -->
+      <span class="npf-ctl-spacer" aria-hidden="true"></span>
       <button
         class="toggle"
         class:active={vm.shuffle}
@@ -1244,20 +1235,17 @@
           size={26}
         /></button
       >
-      {#if showKeep}
-        <!-- Suggestion-radio track: keep it in the library (same action as the +
-             in the queue view). Sits by the repeat button; flips to a ✓ once
-             kept, then clears itself. -->
-        <button
-          class="npf-keep"
-          class:kept={keptNow}
-          onclick={keepCurrent}
-          disabled={keptNow}
-          title={keptNow ? "Added to your library" : "Add to your library"}
-          aria-label={keptNow ? "Added to your library" : "Add to your library"}
-          ><Icon name={keptNow ? "check" : "add"} size={26} /></button
-        >
-      {/if}
+      <!-- Library status by the repeat button: ✓ when the track is in your
+           library, or + to add it when it's a suggestion. -->
+      <button
+        class="npf-keep"
+        class:kept={inLibrary}
+        onclick={keepCurrent}
+        disabled={inLibrary}
+        title={inLibrary ? "In your library" : "Add to your library"}
+        aria-label={inLibrary ? "In your library" : "Add to your library"}
+        ><Icon name={inLibrary ? "check" : "add"} size={26} /></button
+      >
     </div>
 
     <!-- Queue sheet that slides up over the now-playing screen. -->
