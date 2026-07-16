@@ -9,6 +9,7 @@
     type Recommendation,
     type FreshRelease,
     type StatsRange,
+    type StatEntry,
   } from "$lib/services/listenBrainzService";
   import { getLastfmStats, getLastfmStatus } from "$lib/services/lastfmService";
   import { searchYouTube, importLink } from "$lib/services/songService";
@@ -106,6 +107,12 @@
   // Bar the user has tapped/clicked to pin its value open (touch-friendly: no
   // hover needed). Toggled per bucket label; null when none is pinned.
   let selectedBar = $state<string | null>(null);
+  // Dense ranges (a month = ~30–60 daily buckets) can't show a label per bar
+  // without them colliding, so show ~8 evenly spaced. Also tighten the bar gap
+  // when there are many buckets.
+  const activityCount = $derived(data?.activity?.length ?? 0);
+  const activityLabelStep = $derived(Math.max(1, Math.ceil(activityCount / 8)));
+  const activityGap = $derived(activityCount > 30 ? "2px" : "4px");
 
   // Recommendations + fresh releases are range-independent, so load them once.
   let recs = $state<Recommendation[]>([]);
@@ -167,6 +174,24 @@
     });
   };
 </script>
+
+<!-- Ranked top list with a relative-magnitude bar behind each row (scaled to
+     the list's #1), so the leaderboard reads as a mini bar chart. -->
+{#snippet topList(items: StatEntry[])}
+  {@const max = Math.max(1, ...items.map((x) => x.count))}
+  <ol class="list">
+    {#each items as it, i (it.name + i)}
+      <li style="--pct:{Math.round((it.count / max) * 100)}%">
+        <span class="rank" class:top={i < 3}>{i + 1}</span>
+        <span class="name">
+          {it.name}
+          {#if it.subtitle}<span class="by">{it.subtitle}</span>{/if}
+        </span>
+        <span class="count">{plays(it.count)}</span>
+      </li>
+    {/each}
+  </ol>
+{/snippet}
 
 <div class="stats">
   {#if lastfmAvailable}
@@ -248,7 +273,7 @@
         <!-- Single-series magnitude-over-time: one hue (theme accent), gridlines
              for scale, values on hover/focus (+ always on the peak) so they're
              reachable by touch and keyboard, not hover-only. -->
-        <div class="chart">
+        <div class="chart" style="--bar-gap:{activityGap}">
           <div class="plot">
             <div class="grid" aria-hidden="true">
               {#each activityTicks as t (t)}
@@ -277,8 +302,10 @@
             </div>
           </div>
           <div class="xaxis" aria-hidden="true">
-            {#each data.activity as b (b.label)}
-              <span class="xlabel">{b.label}</span>
+            {#each data.activity as b, i (b.label)}
+              <span class="xlabel"
+                >{i % activityLabelStep === 0 ? b.label : ""}</span
+              >
             {/each}
           </div>
         </div>
@@ -289,15 +316,7 @@
       <section class="col">
         <h3>Top artists</h3>
         {#if data?.artists?.length}
-          <ol class="list">
-            {#each data.artists as a, i (a.name + i)}
-              <li>
-                <span class="rank">{i + 1}</span>
-                <span class="name">{a.name}</span>
-                <span class="count">{plays(a.count)}</span>
-              </li>
-            {/each}
-          </ol>
+          {@render topList(data.artists)}
         {:else}
           <p class="empty">—</p>
         {/if}
@@ -306,18 +325,7 @@
       <section class="col">
         <h3>Top tracks</h3>
         {#if data?.recordings?.length}
-          <ol class="list">
-            {#each data.recordings as t, i (t.name + i)}
-              <li>
-                <span class="rank">{i + 1}</span>
-                <span class="name">
-                  {t.name}
-                  {#if t.subtitle}<span class="by">{t.subtitle}</span>{/if}
-                </span>
-                <span class="count">{plays(t.count)}</span>
-              </li>
-            {/each}
-          </ol>
+          {@render topList(data.recordings)}
         {:else}
           <p class="empty">—</p>
         {/if}
@@ -326,18 +334,7 @@
       <section class="col">
         <h3>Top albums</h3>
         {#if data?.releases?.length}
-          <ol class="list">
-            {#each data.releases as al, i (al.name + i)}
-              <li>
-                <span class="rank">{i + 1}</span>
-                <span class="name">
-                  {al.name}
-                  {#if al.subtitle}<span class="by">{al.subtitle}</span>{/if}
-                </span>
-                <span class="count">{plays(al.count)}</span>
-              </li>
-            {/each}
-          </ol>
+          {@render topList(data.releases)}
         {:else}
           <p class="empty">—</p>
         {/if}
@@ -612,14 +609,33 @@
     padding: 0;
   }
   .list li {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.7rem;
-    padding: 0.5rem 0;
+    padding: 0.5rem 0.5rem;
     border-top: 1px solid var(--surface-2);
   }
   .list li:first-child {
     border-top: none;
+  }
+  /* Relative-magnitude bar behind each row (scaled to the list's #1), so the
+     leaderboard reads as a mini bar chart. Sits under the text. */
+  .list li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 2px;
+    bottom: 2px;
+    width: var(--pct, 0%);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    border-radius: 0.25rem;
+    z-index: 0;
+  }
+  .list li > * {
+    position: relative;
+    z-index: 1;
   }
   .rank {
     flex-shrink: 0;
@@ -628,6 +644,10 @@
     font-variant-numeric: tabular-nums;
     font-weight: 600;
     text-align: right;
+  }
+  /* Emphasize the top three. */
+  .rank.top {
+    color: var(--accent-text);
   }
   .name {
     flex: 1;
@@ -720,7 +740,7 @@
     inset: 0;
     display: flex;
     align-items: flex-end;
-    gap: 4px;
+    gap: var(--bar-gap, 4px);
   }
   .bar-col {
     position: relative;
@@ -795,7 +815,7 @@
   }
   .xaxis {
     display: flex;
-    gap: 4px;
+    gap: var(--bar-gap, 4px);
     margin-top: 0.4rem;
   }
   .xlabel {
