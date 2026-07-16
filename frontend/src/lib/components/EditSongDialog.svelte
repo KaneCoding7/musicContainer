@@ -341,7 +341,10 @@
     justify-content: center;
     padding: 1rem;
     box-sizing: border-box;
-    z-index: 50;
+    /* Above the expanded now-playing view (.np-full z60) and the track menu
+       (z70) so the dialog is reachable when opened from the full-screen player,
+       not hidden behind it. It's a focused modal, so topmost is correct. */
+    z-index: 80;
   }
   .dialog {
     width: min(420px, 100%);

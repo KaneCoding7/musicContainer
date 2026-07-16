@@ -98,7 +98,9 @@
     justify-content: center;
     padding: 1rem;
     box-sizing: border-box;
-    z-index: 60;
+    /* Above the Edit dialog (z80) it opens from — and thus above the expanded
+       player too — so the frame picker is never hidden behind them. */
+    z-index: 90;
   }
   .dialog {
     width: min(560px, 100%);
