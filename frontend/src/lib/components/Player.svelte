@@ -599,14 +599,21 @@
     vm.togglePlay();
   }
 
-  // Desktop: left-clicking the big now-playing artwork toggles play/pause.
-  // Mouse-only (pointerType check) so touch keeps its swipe-to-change-track and
-  // long-press gestures untouched; right-click opens the track menu via the
-  // SongMenu contextmenu handler attached to the same [data-song-menu-row]
-  // region. Ignored mid-gesture/animation so a stray release can't fire it.
+  // Desktop: left-clicking the now-playing artwork/video area toggles play/pause.
+  // Bound to the whole full-screen view (so it also works in clip/video mode,
+  // where the album-art card is display:none) but ignores clicks that land on an
+  // actual control — buttons, the seek slider, or the queue sheet — so those keep
+  // their own behavior. Mouse-only (pointerType) so touch keeps its swipe/long-
+  // press gestures; right-click opens the track menu via SongMenu instead.
   function npArtPointerUp(e: PointerEvent) {
     if (e.pointerType !== "mouse" || e.button !== 0) return;
     if (committing || npDragging) return;
+    if (
+      (e.target as HTMLElement).closest(
+        "button, input, a, .npf-seek, .npf-queue"
+      )
+    )
+      return;
     togglePlay();
   }
 
@@ -1047,10 +1054,17 @@
 {/snippet}
 
 {#if song && expanded}
+  <!-- Desktop: left-click the artwork/video area toggles play/pause
+       (npArtPointerUp, mouse-only, ignoring real controls); right-click /
+       long-press opens the track menu via the SongMenu bound to this
+       [data-song-menu-row]. Bound to the whole view so it also works in
+       clip/video mode where the album-art card is hidden. -->
   <div
     class="np-full"
     class:np-canvas={showClip}
     class:np-dragging={npDragging}
+    data-song-menu-row
+    onpointerup={npArtPointerUp}
     ontouchstart={npTouchStart}
     ontouchmove={npTouchMove}
     ontouchend={npTouchEnd}
@@ -1086,12 +1100,7 @@
     >
       <Icon name="queue_music" size={26} />
     </button>
-    <!-- Desktop: left-click toggles play/pause (npArtPointerUp, mouse-only);
-         right-click / long-press opens the track menu via the SongMenu below,
-         which binds its contextmenu handler to this [data-song-menu-row].
-         Mouse-only convenience — keyboard users use the dedicated ⏯ button. -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="npf-art" data-song-menu-row onpointerup={npArtPointerUp}>
+    <div class="npf-art">
       <div class="npf-stack" class:np-dragging={npDragging}>
         <!-- The live current record — the source of truth for what's playing.
              It's hidden while a gesture's snapshot cards animate on top, then
@@ -1134,11 +1143,28 @@
           </div>
         {/if}
       </div>
+    </div>
+    <!-- Bound to .np-full via [data-song-menu-row]; opens on right-click /
+         long-press anywhere in the view (incl. over the video clip). Wrapped in
+         an out-of-flow anchor so its (empty) placeholder doesn't add a flex gap
+         to the .np-full column. -->
+    <div class="npf-menu-anchor">
       <SongMenu {vm} {song} showTrigger={false} />
     </div>
     <div class="npf-meta">
       <h2>{song.originalFilename}</h2>
       {#if song.artist}<p class="npf-artist">{song.artist}</p>{/if}
+      {#if song.isSuggestion}
+        <!-- Suggestion-radio track: offer to keep it (same action as the + in
+             the queue view / SongMenu's "Add to my library"). -->
+        <button
+          class="npf-keep"
+          onclick={() => vm.keepSuggestion(song.id)}
+          title="Add to your library"
+        >
+          <Icon name="add" size={18} /> Add to library
+        </button>
+      {/if}
     </div>
     <div
       class="npf-seek"
@@ -1517,6 +1543,14 @@
   .np-full:not(.np-canvas) :global(.npf-seek) {
     margin-top: auto;
   }
+  /* Out-of-flow holder for the now-playing SongMenu: keeps its empty placeholder
+     from adding a gap to the .np-full flex column. The menu itself portals out. */
+  .npf-menu-anchor {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+  }
   .np-collapse {
     position: absolute;
     top: 1rem;
@@ -1660,6 +1694,31 @@
   .npf-artist {
     margin: 0.35rem 0 0;
     color: var(--muted);
+  }
+  /* "Keep this suggestion" pill — shown only for suggestion-radio tracks. */
+  .npf-keep {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.8rem;
+    padding: 0.45rem 1rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 2rem;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .npf-keep :global(.material-symbols-rounded) {
+    color: #fff;
+  }
+  @media (hover: hover) {
+    .npf-keep:hover {
+      background: var(--accent-hover, var(--accent));
+      filter: brightness(1.08);
+    }
   }
   .npf-seek {
     display: flex;
