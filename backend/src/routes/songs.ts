@@ -1337,12 +1337,27 @@ songsRouter.get("/songs/:id/frames", heavyLimiter, async (req, res) => {
   }
 });
 
-// POST /api/songs/:id/clip — generate (and cache) a short looping "canvas" clip
-// from the track's source video, shown in the expanded player. Downloads only a
-// ~7s window of low-res video (yt-dlp --download-sections) starting ~25% in,
-// then re-encodes it to a small, muted, web-friendly mp4. Idempotent: if a clip
-// already exists it's returned as-is.
-const CLIP_LEN = 7; // seconds
+// POST /api/songs/:id/clip — generate (and cache) a looping "canvas" clip from
+// the track's source video, shown in the expanded player. Downloads only a
+// CLIP_LEN window of low-res video (yt-dlp --download-sections) starting ~25%
+// in, then re-encodes it to a small, muted, web-friendly mp4. Idempotent: if a
+// clip already exists it's returned as-is.
+//
+// The player loops this clip for the whole track, so a short window repeats
+// dozens of times over a typical song and reads as repetitive. Override with
+// CLIP_SECONDS (clamped to 3..60); longer clips cost proportionally more
+// download time, encode time, and disk (~35 KB/s at these settings).
+const CLIP_LEN = (() => {
+  // Treat empty/whitespace as unset: compose commonly passes optional vars as
+  // `${CLIP_SECONDS:-}`, and Number("") is 0, which would clamp to the 3s floor
+  // and make clips SHORTER than the default. Non-numeric must not yield NaN
+  // either -- NaN survives both clamps and reaches fmt() as an Invalid Date,
+  // breaking every clip generation.
+  const env = process.env.CLIP_SECONDS?.trim();
+  const raw = Number(env ? env : 15);
+  const secs = Number.isFinite(raw) ? Math.round(raw) : 15;
+  return Math.min(60, Math.max(3, secs));
+})(); // seconds
 songsRouter.post("/songs/:id/clip", heavyLimiter, async (req, res) => {
   const id = Number(req.params.id);
   const db = getDb();
