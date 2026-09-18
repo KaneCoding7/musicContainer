@@ -645,7 +645,7 @@
   // you already own reads as owned (✓), not addable (+) — so the check is always
   // correct when a song you have comes up again.
   function libKey(s: Song): string {
-    return `${(s.artist ?? "").trim().toLowerCase()} ${(
+    return `${(s.artist ?? "").trim().toLowerCase()}\0${(
       s.originalFilename ?? ""
     )
       .trim()
