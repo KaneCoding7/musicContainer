@@ -19,6 +19,10 @@ services:
       - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-http://localhost:3000}
       # Set to "true" to require an invite code to register (owner exempt).
       - INVITE_ONLY=${INVITE_ONLY:-false}
+      # yt-dlp is refreshed on container start so "import from link" keeps
+      # working as YouTube changes (a stale yt-dlp 403s on every import). Set to
+      # "false" to keep exactly the version baked into the image.
+      - YTDLP_AUTO_UPDATE=${YTDLP_AUTO_UPDATE:-true}
       # Last.fm scrobbling (optional). Register an API account at
       # https://www.last.fm/api/account/create and set its Callback URL to
       # <FRONTEND_ORIGIN>/lastfm/callback. Leave empty to disable Last.fm.

@@ -3,6 +3,12 @@ name: Publish images
 # Builds the backend + frontend images and pushes them to Docker Hub.
 #   - push to main  -> tag :latest  (the images others pull to run the app)
 #   - pull request  -> tag :dev     (a rolling preview build to test before merge)
+#   - weekly cron   -> tag :latest  (rebuild so a published image never rots)
+#
+# The weekly rebuild exists for yt-dlp: it goes stale within weeks and a stale
+# yt-dlp 403s on every "import from link", so :latest has to be rebuilt even
+# when no commit lands. Containers also self-refresh yt-dlp on start, which
+# covers the gap between rebuilds -- see backend/docker-entrypoint.sh.
 #
 # Requires two repo secrets (Settings -> Secrets and variables -> Actions):
 #   DOCKERHUB_USERNAME  = mrkane7
@@ -13,6 +19,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Sundays 05:00 UTC. Rebuilds :latest from main so the published image picks
+  # up the current yt-dlp (and any other upstream/base-image fixes).
+  schedule:
+    - cron: "0 5 * * 0"
+  workflow_dispatch:
 
 # A newer push/PR update cancels an in-flight build for the same ref.
 concurrency:
@@ -25,7 +36,7 @@ jobs:
     # Skip publishing for PRs opened from forks: they don't have access to the
     # Docker Hub secrets, so the push would fail. Same-repo PRs still publish :dev.
     if: >-
-      github.event_name == 'push' ||
+      github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
@@ -73,6 +84,24 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
+      # Resolve the newest yt-dlp and bake that exact version into the backend
+      # image. Pinning the resolved version (rather than letting the Dockerfile
+      # resolve "latest" itself) keeps the build reproducible and guarantees a
+      # new yt-dlp release invalidates that layer's cache. Falls back to
+      # "latest" if PyPI is unreachable, so a PyPI blip can't fail the publish.
+      - name: Resolve latest yt-dlp
+        id: ytdlp
+        if: matrix.service == 'backend'
+        run: |
+          version="$(curl -fsSL --max-time 30 https://pypi.org/pypi/yt-dlp/json \
+            | jq -re '.info.version' 2>/dev/null || true)"
+          if [ -z "$version" ]; then
+            echo "PyPI lookup failed; falling back to YTDLP_VERSION=latest"
+            version=latest
+          fi
+          echo "yt-dlp version: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Build and push ${{ matrix.service }}
         uses: docker/build-push-action@v6
         with:
@@ -80,3 +109,4 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          build-args: ${{ matrix.service == 'backend' && format('YTDLP_VERSION={0}', steps.ytdlp.outputs.version) || '' }}
