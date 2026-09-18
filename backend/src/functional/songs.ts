@@ -398,8 +398,13 @@ export function finalizeSongs(
     return err("validation", "No songs to confirm");
   }
   try {
+    // Clear BOTH pending and suggestion: a confirmed track must be
+    // indistinguishable from a self-imported one, so Edit/Delete and the
+    // library badge (which key off isSuggestion = suggestion === 1) work and
+    // persist across reloads. Leaving suggestion = 1 made kept songs revert to
+    // suggestion behavior on refetch.
     const stmt = db.prepare(
-      "UPDATE songs SET pending = 0 WHERE id = ? AND user_id = ?"
+      "UPDATE songs SET pending = 0, suggestion = 0 WHERE id = ? AND user_id = ?"
     );
     db.transaction((list: number[]) => {
       for (const id of list) stmt.run(id, userId);
