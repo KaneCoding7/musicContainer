@@ -20,10 +20,15 @@
   let isPlaying = $state(false);
   let currentTime = $state(0);
   let duration = $state(0);
+  // Full-screen now-playing view, opened by tapping the bar — mirrors the
+  // expandable player in the main app.
+  let expanded = $state(false);
 
   const current = $derived(
     data && currentIndex !== null ? data.songs[currentIndex] : null
   );
+  // The first track with artwork stands in as the playlist cover.
+  const coverId = $derived(data?.songs.find((s) => s.hasArt)?.id ?? null);
 
   onMount(async () => {
     try {
@@ -47,6 +52,12 @@
   });
 
   function play(i: number) {
+    // Tapping the row that's already playing toggles it, so the pause icon the
+    // thumbnail shows is actually actionable (matches the in-app song list).
+    if (i === currentIndex) {
+      toggle();
+      return;
+    }
     currentIndex = i;
     isPlaying = true;
   }
@@ -72,15 +83,15 @@
     const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, "0")}`;
   }
-  function fmtDur(d: number | null): string {
-    return d ? fmt(d) : "";
-  }
 </script>
 
-<svelte:head><title>{data ? data.name : "Shared playlist"} · Music Server</title></svelte:head>
+<svelte:head
+  ><title>{data ? data.name : "Shared playlist"} · Music Server</title
+  ></svelte:head
+>
 
 <div class="page">
-  <header>
+  <header class="topbar">
     <div class="brand"><Icon name="library_music" fill size={22} /> Music Server</div>
   </header>
 
@@ -92,43 +103,63 @@
   {:else if !data}
     <div class="state"><p>Loading…</p></div>
   {:else}
-    <div class="hero">
-      <span class="art">
-        {#if data.songs.find((s) => s.hasArt)}
-          <img src={publicArtUrl(token, data.songs.find((s) => s.hasArt)!.id)} alt="" />
-        {:else}
-          <Icon name="queue_music" size={56} />
-        {/if}
-      </span>
-      <div>
-        <p class="kicker">Shared playlist</p>
-        <h1>{data.name}</h1>
-        <p class="muted">by {data.ownerName} · {data.songs.length} tracks</p>
-        {#if data.songs.length > 0}
-          <button class="play-all" onclick={() => play(0)}>
-            <Icon name="play_arrow" fill size={20} /> Play
-          </button>
-        {/if}
+    <div class="content">
+      <div class="hero">
+        <span class="hero-art">
+          {#if coverId !== null}
+            <img src={publicArtUrl(token, coverId)} alt="" />
+          {:else}
+            <Icon name="queue_music" size={64} />
+          {/if}
+        </span>
+        <div class="hero-info">
+          <p class="kicker">Shared playlist</p>
+          <h1>{data.name}</h1>
+          <p class="by">by {data.ownerName} · {data.songs.length} tracks</p>
+          {#if data.songs.length > 0}
+            <button class="play-all" onclick={() => play(0)}>
+              <Icon name="play_arrow" fill size={20} /> Play
+            </button>
+          {/if}
+        </div>
       </div>
-    </div>
 
-    <ol>
-      {#each data.songs as song, i (song.id)}
-        {@const isCurrent = i === currentIndex}
-        <li class:current={isCurrent}>
-          <button class="row" onclick={() => play(i)}>
-            {#if isCurrent && isPlaying}
-              <span class="num"><EqualizerBars size={16} /></span>
-            {/if}
-            <span class="meta">
-              <span class="name">{song.originalFilename}</span>
-              {#if song.artist}<span class="artist">{song.artist}</span>{/if}
-            </span>
-            <span class="dur">{fmtDur(song.duration)}</span>
-          </button>
-        </li>
-      {/each}
-    </ol>
+      <ul class="tracks">
+        {#each data.songs as song, i (song.id)}
+          {@const isCurrent = i === currentIndex}
+          <li
+            class="song-row"
+            class:current={isCurrent}
+            class:playing={isCurrent && isPlaying}
+          >
+            <button class="row" onclick={() => play(i)}>
+              <span class="thumb">
+                {#if song.hasArt}
+                  <img src={publicArtUrl(token, song.id)} alt="" />
+                {:else}
+                  <Icon name="music_note" size={20} />
+                {/if}
+                <span class="thumb-play">
+                  <Icon
+                    name={isCurrent && isPlaying ? "pause" : "play_arrow"}
+                    fill
+                    size={22}
+                  />
+                </span>
+                {#if isCurrent && isPlaying}
+                  <span class="thumb-wave"><EqualizerBars size={20} /></span>
+                {/if}
+              </span>
+              <span class="meta">
+                <span class="name">{song.originalFilename}</span>
+                {#if song.artist}<span class="artist">{song.artist}</span>{/if}
+              </span>
+              <span class="dur">{song.duration ? fmt(song.duration) : "—"}</span>
+            </button>
+          </li>
+        {/each}
+      </ul>
+    </div>
   {/if}
 
   <audio
@@ -141,31 +172,102 @@
   ></audio>
 
   {#if current}
+    <!-- Collapsed now-playing bar. Tapping the title/art opens the full-screen
+         view, matching the main app's player. -->
     <div class="player">
-      <div class="np" title={current.originalFilename}>
+      <button
+        class="now-playing"
+        onclick={() => (expanded = true)}
+        title="Open now playing"
+      >
         <span class="np-art">
           {#if current.hasArt}
             <img src={publicArtUrl(token, current.id)} alt="" />
           {:else}
-            <Icon name="music_note" size={18} />
+            <Icon name="music_note" size={20} />
           {/if}
         </span>
         <span class="np-meta">
           <span class="np-title">{current.originalFilename}</span>
           {#if current.artist}<span class="np-artist">{current.artist}</span>{/if}
         </span>
-      </div>
+      </button>
+
       <div class="controls">
-        <button onclick={prev} aria-label="Previous"><Icon name="skip_previous" fill size={24} /></button>
-        <button class="pp" onclick={toggle} aria-label="Play/pause">
+        <button onclick={prev} aria-label="Previous" title="Previous">
+          <Icon name="skip_previous" fill size={26} />
+        </button>
+        <button class="play" onclick={toggle} aria-label="Play/Pause" title="Play/Pause">
           <Icon name={isPlaying ? "pause" : "play_arrow"} fill size={30} />
         </button>
-        <button onclick={next} aria-label="Next"><Icon name="skip_next" fill size={24} /></button>
+        <button onclick={next} aria-label="Next" title="Next">
+          <Icon name="skip_next" fill size={26} />
+        </button>
       </div>
-      <div class="seek">
-        <span class="t">{fmt(currentTime)}</span>
-        <input type="range" min="0" max={duration || 0} step="0.1" value={currentTime} oninput={onSeek} aria-label="Seek" />
-        <span class="t">{fmt(duration)}</span>
+
+      <div class="progress">
+        <span class="time">{fmt(currentTime)}</span>
+        <input
+          type="range"
+          min="0"
+          max={duration || 0}
+          step="0.1"
+          value={currentTime}
+          oninput={onSeek}
+          aria-label="Seek"
+        />
+        <span class="time">{fmt(duration)}</span>
+      </div>
+    </div>
+  {/if}
+
+  {#if current && expanded}
+    <div class="np-full">
+      <button
+        class="np-collapse"
+        onclick={() => (expanded = false)}
+        aria-label="Close"
+      >
+        <Icon name="keyboard_arrow_down" size={28} />
+      </button>
+
+      <div class="npf-art">
+        <div class="npf-card">
+          {#if current.hasArt}
+            <img src={publicArtUrl(token, current.id)} alt="" />
+          {:else}
+            <Icon name="music_note" size={72} />
+          {/if}
+        </div>
+      </div>
+
+      <div class="npf-meta"><h2>{current.originalFilename}</h2></div>
+      {#if current.artist}<p class="npf-artist">{current.artist}</p>{/if}
+
+      <div class="npf-seek">
+        <span class="time">{fmt(currentTime)}</span>
+        <input
+          type="range"
+          min="0"
+          max={duration || 0}
+          step="0.1"
+          value={currentTime}
+          oninput={onSeek}
+          aria-label="Seek"
+        />
+        <span class="time">{fmt(duration)}</span>
+      </div>
+
+      <div class="npf-controls">
+        <button onclick={prev} aria-label="Previous">
+          <Icon name="skip_previous" fill size={38} />
+        </button>
+        <button class="npf-play" onclick={toggle} aria-label="Play/Pause">
+          <Icon name={isPlaying ? "pause" : "play_arrow"} fill size={48} />
+        </button>
+        <button onclick={next} aria-label="Next">
+          <Icon name="skip_next" fill size={38} />
+        </button>
       </div>
     </div>
   {/if}
@@ -175,17 +277,18 @@
   .page {
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    max-width: 820px;
-    margin: 0 auto;
+    height: 100vh; /* fallback */
+    height: 100dvh;
   }
-  header {
-    padding: 1rem 1.5rem;
+  .topbar {
+    flex-shrink: 0;
+    padding: 1rem 2rem;
   }
   .brand {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
+    font-size: 1.15rem;
     font-weight: 700;
     color: var(--accent-text);
   }
@@ -198,42 +301,55 @@
     gap: 0.75rem;
     color: var(--muted);
   }
+
+  /* Full-bleed scroll area, mirroring the app's main content column. */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem 2rem 2rem;
+  }
+
   .hero {
     display: flex;
-    gap: 1.25rem;
+    gap: 1.5rem;
     align-items: flex-end;
-    padding: 1rem 1.5rem 1.5rem;
+    padding: 1rem 0 1.75rem;
   }
-  .art {
-    width: 150px;
-    height: 150px;
+  .hero-art {
+    width: 180px;
+    height: 180px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--surface-2);
-    border-radius: 0.6rem;
+    border-radius: 0.75rem;
     color: var(--dim);
     overflow: hidden;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
   }
-  .art img,
-  .np-art img {
+  .hero-art img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  .hero-info {
+    min-width: 0;
   }
   .kicker {
     margin: 0;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    font-size: 0.7rem;
+    font-size: 0.72rem;
+    font-weight: 600;
     color: var(--muted);
   }
   h1 {
-    margin: 0.15rem 0 0.25rem;
-    font-size: 2rem;
+    margin: 0.3rem 0 0.4rem;
+    font-size: 2.5rem;
+    line-height: 1.1;
   }
-  .muted {
+  .by {
     color: var(--muted);
     margin: 0;
   }
@@ -241,13 +357,14 @@
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    margin-top: 0.85rem;
-    padding: 0.55rem 1.2rem;
+    margin-top: 1rem;
+    padding: 0.6rem 1.4rem;
     background: var(--accent);
     color: #fff;
     border: none;
     border-radius: 2rem;
     font-weight: 600;
+    font-size: 0.95rem;
     cursor: pointer;
   }
   @media (hover: hover) {
@@ -255,25 +372,37 @@
       background: var(--accent-hover);
     }
   }
-  ol {
+
+  /* --- Track list: identical treatment to the in-app song list. --- */
+  .tracks {
     list-style: none;
     margin: 0;
-    padding: 0 0.75rem;
-    flex: 1;
-    overflow-y: auto;
+    padding: 0;
   }
-  li {
+  li.song-row {
+    display: flex;
+    align-items: center;
+    padding: 0 0.75rem;
     border-bottom: 1px solid var(--surface-2);
   }
   li.current {
     background: var(--active-bg);
   }
+  @media (hover: hover) {
+    li.song-row:hover {
+      background: var(--hover);
+    }
+    li.current:hover {
+      background: var(--active-bg);
+    }
+  }
   .row {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 0.6rem 0.75rem;
+    gap: 0.85rem;
+    padding: 0.6rem 0;
     background: transparent;
     border: none;
     color: inherit;
@@ -281,15 +410,57 @@
     text-align: left;
     cursor: pointer;
   }
+  .thumb {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-2);
+    border-radius: 0.35rem;
+    color: var(--dim);
+    overflow: hidden;
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .thumb-play {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  li.current:not(.playing) .thumb-play {
+    opacity: 1;
+  }
   @media (hover: hover) {
-    .row:hover {
-      background: var(--hover);
+    li.song-row:hover .thumb-play {
+      opacity: 1;
     }
   }
-  .num {
-    width: 1.5rem;
-    text-align: center;
-    color: var(--dim);
+  .thumb-wave {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.45);
+    transition: opacity 0.12s;
+  }
+  @media (hover: hover) {
+    li.song-row:hover .thumb-wave {
+      opacity: 0;
+    }
   }
   .meta {
     flex: 1;
@@ -298,6 +469,7 @@
     flex-direction: column;
   }
   .name {
+    font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -305,26 +477,42 @@
   .artist {
     color: var(--muted);
     font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .dur {
-    color: var(--muted);
-    font-size: 0.8rem;
+    flex-shrink: 0;
+    color: var(--dim);
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
   }
+
+  /* --- Collapsed now-playing bar (matches the app's .player). --- */
   .player {
     flex-shrink: 0;
     display: grid;
-    grid-template-columns: 1fr auto 1.5fr;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.6fr);
     align-items: center;
     gap: 1rem;
     padding: 0.75rem 1.5rem;
     background: var(--surface);
     border-top: 1px solid var(--surface-2);
+    -webkit-user-select: none;
+    user-select: none;
   }
-  .np {
+  .now-playing {
     display: flex;
     align-items: center;
     gap: 0.6rem;
     min-width: 0;
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
   }
   .np-art {
     width: 40px;
@@ -337,6 +525,11 @@
     border-radius: 0.35rem;
     color: var(--dim);
     overflow: hidden;
+  }
+  .np-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
   .np-meta {
     display: flex;
@@ -352,14 +545,20 @@
   .np-artist {
     color: var(--muted);
     font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .controls {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.4rem;
   }
   .controls button {
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: transparent;
     border: none;
     color: var(--text);
@@ -367,32 +566,150 @@
     padding: 0.3rem;
     border-radius: 0.4rem;
   }
-  .controls .pp {
-    color: var(--accent-text);
-  }
   @media (hover: hover) {
     .controls button:hover {
       background: var(--surface-2);
     }
   }
-  .seek {
+  .controls .play {
+    color: var(--accent-text);
+  }
+  .progress {
     display: flex;
     align-items: center;
     gap: 0.5rem;
   }
-  .seek input {
+  .progress input {
     flex: 1;
     accent-color: var(--accent);
   }
-  .t {
+  .time {
     color: var(--muted);
     font-size: 0.75rem;
-    min-width: 2.5rem;
+    min-width: 2.75rem;
     text-align: center;
+    font-variant-numeric: tabular-nums;
   }
-  @media (max-width: 600px) {
+  /* Narrow screens: drop the inline scrubber, keep art + transport (the
+     full-screen view has the scrubber). */
+  @media (max-width: 700px) {
     .player {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr) auto;
     }
+    .progress {
+      display: none;
+    }
+  }
+
+  /* --- Full-screen now-playing view (matches the app's .np-full). --- */
+  .np-full {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 2rem 1.5rem;
+    padding-bottom: clamp(1rem, 3.5vh, 3rem);
+    box-sizing: border-box;
+  }
+  .np-collapse {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    display: inline-flex;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 0.5rem;
+  }
+  @media (hover: hover) {
+    .np-collapse:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+  }
+  .npf-art {
+    width: min(520px, 90vw);
+    aspect-ratio: 1;
+    position: relative;
+  }
+  .npf-card {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-2);
+    color: var(--dim);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  }
+  .npf-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .npf-meta {
+    text-align: center;
+    max-width: min(520px, 90vw);
+  }
+  .npf-meta h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .npf-artist {
+    margin: -0.5rem 0 0;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.95rem;
+    max-width: min(520px, 90vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .npf-seek {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: min(520px, 90vw);
+    padding: 0.5rem 0;
+  }
+  .npf-seek input {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+  .npf-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .npf-controls button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 50%;
+  }
+  @media (hover: hover) {
+    .npf-controls button:hover {
+      background: var(--surface-2);
+    }
+  }
+  .npf-controls .npf-play {
+    color: var(--accent-text);
   }
 </style>
