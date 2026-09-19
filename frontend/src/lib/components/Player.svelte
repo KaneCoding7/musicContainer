@@ -4,6 +4,7 @@
   import MiniPlayer from "$lib/components/MiniPlayer.svelte";
   import QueueView from "$lib/components/QueueView.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
+  import TransportControls from "$lib/components/TransportControls.svelte";
   import {
     artUrl,
     clipUrl,
@@ -1244,15 +1245,13 @@
         onclick={() => vm.toggleShuffle()}
         aria-label="Shuffle"><Icon name="shuffle" size={26} /></button
       >
-      <button onclick={buttonPrev} aria-label="Previous"
-        ><Icon name="skip_previous" fill size={38} /></button
-      >
-      <button class="npf-play" onclick={togglePlay} aria-label="Play/Pause">
-        <Icon name={vm.isPlaying ? "pause" : "play_arrow"} fill size={48} />
-      </button>
-      <button onclick={buttonNext} aria-label="Next"
-        ><Icon name="skip_next" fill size={38} /></button
-      >
+      <TransportControls
+        isPlaying={vm.isPlaying}
+        variant="full"
+        onPrev={buttonPrev}
+        onToggle={togglePlay}
+        onNext={buttonNext}
+      />
       <button
         class="toggle"
         class:active={vm.repeat !== "off"}
@@ -1337,22 +1336,16 @@
         aria-label="Shuffle"
         title="Shuffle"><Icon name="shuffle" size={22} /></button
       >
-      <button onclick={() => vm.prev()} aria-label="Previous" title="Previous"
-        ><Icon name="skip_previous" fill size={26} /></button
-      >
-      <button
-        class="play"
-        onclick={() => {
+      <TransportControls
+        isPlaying={vm.isPlaying}
+        variant="bar"
+        onPrev={() => vm.prev()}
+        onToggle={() => {
           if (barSwiped) return; // ignore a play tap that was really a swipe
           togglePlay();
         }}
-        aria-label="Play/Pause"
-      >
-        <Icon name={vm.isPlaying ? "pause" : "play_arrow"} fill size={32} />
-      </button>
-      <button onclick={() => vm.next()} aria-label="Next" title="Next"
-        ><Icon name="skip_next" fill size={26} /></button
-      >
+        onNext={() => vm.next()}
+      />
       <button
         class="toggle"
         class:active={vm.repeat !== "off"}
@@ -1812,9 +1805,6 @@
       background: var(--surface-2);
     }
   }
-  .npf-controls .npf-play {
-    color: var(--accent-text);
-  }
   .npf-controls .toggle {
     color: var(--muted);
     opacity: 0.7;
@@ -1915,9 +1905,6 @@
     .controls button:hover {
       background: var(--surface-2);
     }
-  }
-  .controls .play {
-    color: var(--accent-text);
   }
   .controls .toggle {
     color: var(--muted);
@@ -2099,8 +2086,10 @@
       grid-area: extras;
     }
     /* Only play/pause stays in the controls; prev/next become swipe, and
-       shuffle/repeat live in the full-screen view. */
-    .controls button:not(.play) {
+       shuffle/repeat live in the full-screen view. Shuffle/repeat are this
+       component's own buttons; prev/next are TransportControls' (.tc). */
+    .controls button,
+    .controls :global(.tc:not(.play)) {
       display: none;
     }
     /* Extras: keep only the queue button. Sleep timer + volume live in the
@@ -2127,7 +2116,7 @@
         var(--surface-2) var(--pct, 0%)
       );
     }
-    .play,
+    .controls :global(.tc.play),
     .queue-toggle {
       padding: 0.4rem;
     }

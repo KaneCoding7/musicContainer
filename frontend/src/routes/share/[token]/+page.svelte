@@ -2,7 +2,8 @@
   import { onMount } from "svelte";
   import { page } from "$app/stores";
   import Icon from "$lib/components/Icon.svelte";
-  import EqualizerBars from "$lib/components/EqualizerBars.svelte";
+  import SongRow from "$lib/components/SongRow.svelte";
+  import TransportControls from "$lib/components/TransportControls.svelte";
   import {
     fetchPublicShare,
     publicArtUrl,
@@ -132,30 +133,15 @@
             class:current={isCurrent}
             class:playing={isCurrent && isPlaying}
           >
-            <button class="row" onclick={() => play(i)}>
-              <span class="thumb">
-                {#if song.hasArt}
-                  <img src={publicArtUrl(token, song.id)} alt="" />
-                {:else}
-                  <Icon name="music_note" size={20} />
-                {/if}
-                <span class="thumb-play">
-                  <Icon
-                    name={isCurrent && isPlaying ? "pause" : "play_arrow"}
-                    fill
-                    size={22}
-                  />
-                </span>
-                {#if isCurrent && isPlaying}
-                  <span class="thumb-wave"><EqualizerBars size={20} /></span>
-                {/if}
-              </span>
-              <span class="meta">
-                <span class="name">{song.originalFilename}</span>
-                {#if song.artist}<span class="artist">{song.artist}</span>{/if}
-              </span>
-              <span class="dur">{song.duration ? fmt(song.duration) : "—"}</span>
-            </button>
+            <SongRow
+              artUrl={song.hasArt ? publicArtUrl(token, song.id) : null}
+              title={song.originalFilename}
+              artist={song.artist}
+              current={isCurrent}
+              playing={isCurrent && isPlaying}
+              onclick={() => play(i)}
+            />
+            <span class="dur">{song.duration ? fmt(song.duration) : "—"}</span>
           </li>
         {/each}
       </ul>
@@ -194,15 +180,13 @@
       </button>
 
       <div class="controls">
-        <button onclick={prev} aria-label="Previous" title="Previous">
-          <Icon name="skip_previous" fill size={26} />
-        </button>
-        <button class="play" onclick={toggle} aria-label="Play/Pause" title="Play/Pause">
-          <Icon name={isPlaying ? "pause" : "play_arrow"} fill size={30} />
-        </button>
-        <button onclick={next} aria-label="Next" title="Next">
-          <Icon name="skip_next" fill size={26} />
-        </button>
+        <TransportControls
+          {isPlaying}
+          variant="bar"
+          onPrev={prev}
+          onToggle={toggle}
+          onNext={next}
+        />
       </div>
 
       <div class="progress">
@@ -259,15 +243,13 @@
       </div>
 
       <div class="npf-controls">
-        <button onclick={prev} aria-label="Previous">
-          <Icon name="skip_previous" fill size={38} />
-        </button>
-        <button class="npf-play" onclick={toggle} aria-label="Play/Pause">
-          <Icon name={isPlaying ? "pause" : "play_arrow"} fill size={48} />
-        </button>
-        <button onclick={next} aria-label="Next">
-          <Icon name="skip_next" fill size={38} />
-        </button>
+        <TransportControls
+          {isPlaying}
+          variant="full"
+          onPrev={prev}
+          onToggle={toggle}
+          onNext={next}
+        />
       </div>
     </div>
   {/if}
@@ -396,91 +378,6 @@
       background: var(--active-bg);
     }
   }
-  .row {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-    padding: 0.6rem 0;
-    background: transparent;
-    border: none;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-  .thumb {
-    position: relative;
-    width: 40px;
-    height: 40px;
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--surface-2);
-    border-radius: 0.35rem;
-    color: var(--dim);
-    overflow: hidden;
-  }
-  .thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .thumb-play {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    background: rgba(0, 0, 0, 0.45);
-    opacity: 0;
-    transition: opacity 0.12s;
-  }
-  li.current:not(.playing) .thumb-play {
-    opacity: 1;
-  }
-  @media (hover: hover) {
-    li.song-row:hover .thumb-play {
-      opacity: 1;
-    }
-  }
-  .thumb-wave {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    background: rgba(0, 0, 0, 0.45);
-    transition: opacity 0.12s;
-  }
-  @media (hover: hover) {
-    li.song-row:hover .thumb-wave {
-      opacity: 0;
-    }
-  }
-  .meta {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-  }
-  .name {
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .artist {
-    color: var(--muted);
-    font-size: 0.8rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
   .dur {
     flex-shrink: 0;
     color: var(--dim);
@@ -554,25 +451,6 @@
     align-items: center;
     justify-content: center;
     gap: 0.4rem;
-  }
-  .controls button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    color: var(--text);
-    cursor: pointer;
-    padding: 0.3rem;
-    border-radius: 0.4rem;
-  }
-  @media (hover: hover) {
-    .controls button:hover {
-      background: var(--surface-2);
-    }
-  }
-  .controls .play {
-    color: var(--accent-text);
   }
   .progress {
     display: flex;
@@ -692,24 +570,5 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-  }
-  .npf-controls button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    color: var(--text);
-    cursor: pointer;
-    padding: 0.4rem;
-    border-radius: 50%;
-  }
-  @media (hover: hover) {
-    .npf-controls button:hover {
-      background: var(--surface-2);
-    }
-  }
-  .npf-controls .npf-play {
-    color: var(--accent-text);
   }
 </style>

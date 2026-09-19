@@ -36,3 +36,7 @@ npm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Live dev compose (local only, not for git)
+compose.yaml
+compose.yaml.bak

@@ -1,9 +1,9 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
   import Dropdown from "$lib/components/Dropdown.svelte";
-  import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
+  import SongRow from "$lib/components/SongRow.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
   import { thumbUrl, type SongMetadata } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -318,37 +318,15 @@
               </button>
             </span>
           {/if}
-          <button
-            class="row"
+          <SongRow
+            artUrl={song.hasArt ? thumbUrl(song.id, 128) : null}
+            title={song.originalFilename}
+            artist={song.artist}
+            current={isCurrent}
+            playing={isCurrent && vm.isPlaying}
             onclick={(e) =>
-              selecting
-                ? selectAt(i, e)
-                : vm.playQueue(vm.filteredSongs, i)}
-          >
-            <span class="thumb">
-              {#if song.hasArt}
-                <img src={thumbUrl(song.id, 128)} alt="" />
-              {:else}
-                <Icon name="music_note" size={20} />
-              {/if}
-              <span class="thumb-play">
-                <Icon
-                  name={isCurrent && vm.isPlaying ? "pause" : "play_arrow"}
-                  fill
-                  size={22}
-                />
-              </span>
-              {#if isCurrent && vm.isPlaying}
-                <span class="thumb-wave"><EqualizerBars size={20} /></span>
-              {/if}
-            </span>
-            <span class="meta">
-              <span class="name">{song.originalFilename}</span>
-              {#if song.artist}
-                <span class="artist">{song.artist}</span>
-              {/if}
-            </span>
-          </button>
+              selecting ? selectAt(i, e) : vm.playQueue(vm.filteredSongs, i)}
+          />
           <div class="row-end">
             <span class="col-date" title={formatDate(song.uploadedAt)}>
               {relativeDate(song.uploadedAt)}
@@ -627,20 +605,6 @@
     width: 1.75rem;
     flex-shrink: 0;
   }
-  .row {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-    padding: 0.6rem 0;
-    background: transparent;
-    border: none;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
   /* Fixed widths keep the header labels lined up over their values. */
   .col-date {
     width: 7.5rem;
@@ -677,80 +641,6 @@
     color: var(--dim);
     font-size: 0.78rem;
     font-variant-numeric: tabular-nums;
-  }
-  .thumb {
-    position: relative;
-    width: 40px;
-    height: 40px;
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--surface-2);
-    border-radius: 0.35rem;
-    color: var(--dim);
-    overflow: hidden;
-  }
-  .thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .thumb-play {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    background: rgba(0, 0, 0, 0.45);
-    opacity: 0;
-    transition: opacity 0.12s;
-  }
-  li.current:not(.playing) .thumb-play {
-    opacity: 1;
-  }
-
-  @media (hover: hover) {
-    li.song-row:hover .thumb-play {
-      opacity: 1;
-    }
-  }
-  /* The playing track shows the live sound-wave by default; hovering hides it
-     so the play/pause control underneath is reachable. */
-  .thumb-wave {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    background: rgba(0, 0, 0, 0.45);
-    transition: opacity 0.12s;
-  }
-  @media (hover: hover) {
-    li.song-row:hover .thumb-wave {
-      opacity: 0;
-    }
-  }
-  .meta {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-  }
-  .name {
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .artist {
-    color: var(--muted);
-    font-size: 0.8rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .muted {
     color: var(--muted);
@@ -803,9 +693,6 @@
     .song-list .col-plays,
     .song-list .col-dur {
       display: none;
-    }
-    .row {
-      gap: 0.6rem;
     }
   }
 </style>
