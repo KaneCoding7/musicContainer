@@ -79,6 +79,7 @@ export interface ListenBrainzStats {
   username?: string | null;
   range?: StatsRange;
   listenCount?: number | null;
+  periodListens?: number | null;
   artists?: StatEntry[];
   recordings?: StatEntry[];
   releases?: StatEntry[];

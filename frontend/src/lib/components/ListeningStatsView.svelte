@@ -146,9 +146,11 @@
   const rangeListens = $derived(
     range === "all_time" && data?.listenCount != null
       ? data.listenCount // the canonical lifetime total (matches the header)
-      : activityTotal > 0
-        ? activityTotal
-        : clockTotal
+      : data?.periodListens != null
+        ? data.periodListens // an explicit per-range total (Last.fm)
+        : activityTotal > 0
+          ? activityTotal
+          : clockTotal
   );
   const rangeNoun = $derived(
     range === "week"

@@ -100,6 +100,44 @@ interface LfAlbumsResp {
 interface LfInfoResp {
   user?: { playcount?: string };
 }
+interface LfRecentResp {
+  recenttracks?: { "@attr"?: { total?: string } };
+}
+
+// Last.fm exposes no day-by-day/period total directly, but getRecentTracks with
+// a `from` window returns the exact scrobble count for that window in its
+// @attr.total. We use it so the recap can show real per-range scrobbles (the
+// top-artist lists have data even when there's no activity series to sum).
+const DAY_SECONDS = 86400;
+function periodFromSeconds(period: LfPeriod): number | null {
+  const now = Math.floor(Date.now() / 1000);
+  switch (period) {
+    case "7day":
+      return now - 7 * DAY_SECONDS;
+    case "1month":
+      return now - 30 * DAY_SECONDS;
+    case "12month":
+      return now - 365 * DAY_SECONDS;
+    default:
+      return null; // "overall" uses the lifetime playcount instead
+  }
+}
+
+async function periodScrobbles(
+  username: string,
+  period: LfPeriod
+): Promise<number | null> {
+  const from = periodFromSeconds(period);
+  if (from == null) return null;
+  const d = await call<LfRecentResp>({
+    method: "user.getRecentTracks",
+    user: username,
+    from: String(from),
+    limit: "1",
+  });
+  const total = d?.recenttracks?.["@attr"]?.total;
+  return total ? num(total) : null;
+}
 
 // Exchanges a web-auth token (from the Last.fm authorize redirect) for a
 // permanent per-user session key + username.
@@ -224,11 +262,12 @@ export async function getUserStats(
   period: LfPeriod
 ): Promise<UserStats> {
   const u = encodeURIComponent(username);
-  const [ta, tt, tal, info] = await Promise.all([
+  const [ta, tt, tal, info, periodListens] = await Promise.all([
     call<LfArtistsResp>({ method: "user.getTopArtists", user: u, period, limit: "10" }),
     call<LfTracksResp>({ method: "user.getTopTracks", user: u, period, limit: "10" }),
     call<LfAlbumsResp>({ method: "user.getTopAlbums", user: u, period, limit: "10" }),
     call<LfInfoResp>({ method: "user.getInfo", user: u }),
+    periodScrobbles(username, period),
   ]);
 
   const artists: StatEntry[] = (ta?.topartists?.artist ?? [])
@@ -256,6 +295,7 @@ export async function getUserStats(
   // totals here, so those panels stay empty for the Last.fm source.
   return {
     listenCount,
+    periodListens,
     artists,
     recordings,
     releases,

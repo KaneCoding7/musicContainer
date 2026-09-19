@@ -131,6 +131,10 @@ export interface HourBucket {
 
 export interface UserStats {
   listenCount: number | null; // all-time total listens
+  // Total listens within the selected range. Null means "derive it from the
+  // activity/clock series" (ListenBrainz); Last.fm sets it explicitly since it
+  // exposes no day-by-day series to sum.
+  periodListens: number | null;
   artists: StatEntry[];
   recordings: StatEntry[];
   releases: StatEntry[]; // top albums
@@ -294,6 +298,7 @@ export async function getUserStats(
 
   return {
     listenCount,
+    periodListens: null, // derived from the activity/clock series on the client
     artists,
     recordings,
     releases,
