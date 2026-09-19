@@ -17,19 +17,27 @@
   let error = $state<string | null>(null);
 
   let audio = $state<HTMLAudioElement | null>(null);
-  let currentIndex = $state<number | null>(null);
-  let isPlaying = $state(false);
   let currentTime = $state(0);
   let duration = $state(0);
-  // Full-screen now-playing view, opened by tapping the bar — mirrors the
-  // expandable player in the main app.
+  let isPlaying = $state(false);
   let expanded = $state(false);
+  let shuffle = $state(false);
+  let repeat = $state<"off" | "all" | "one">("off");
 
+  // Play order (indices into data.songs) and the position within it, so shuffle
+  // and repeat work like the in-app player without reordering the visible list.
+  let order = $state<number[]>([]);
+  let pos = $state<number | null>(null);
+
+  const currentIndex = $derived(pos !== null ? (order[pos] ?? null) : null);
   const current = $derived(
     data && currentIndex !== null ? data.songs[currentIndex] : null
   );
-  // The first track with artwork stands in as the playlist cover.
+  // First track with artwork stands in as the playlist cover.
   const coverId = $derived(data?.songs.find((s) => s.hasArt)?.id ?? null);
+  const totalDuration = $derived(
+    (data?.songs ?? []).reduce((sum, s) => sum + (s.duration ?? 0), 0)
+  );
 
   onMount(async () => {
     try {
@@ -52,14 +60,52 @@
     }
   });
 
+  function shuffledFrom(n: number, first: number): number[] {
+    const a = Array.from({ length: n }, (_, k) => k);
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    const at = a.indexOf(first);
+    if (at > 0) {
+      a.splice(at, 1);
+      a.unshift(first);
+    }
+    return a;
+  }
+  function buildOrder(start: number) {
+    const n = data?.songs.length ?? 0;
+    if (n === 0) {
+      order = [];
+      pos = null;
+      return;
+    }
+    if (shuffle) {
+      order = shuffledFrom(n, start);
+      pos = 0;
+    } else {
+      order = Array.from({ length: n }, (_, k) => k);
+      pos = start;
+    }
+  }
   function play(i: number) {
-    // Tapping the row that's already playing toggles it, so the pause icon the
-    // thumbnail shows is actually actionable (matches the in-app song list).
     if (i === currentIndex) {
       toggle();
       return;
     }
-    currentIndex = i;
+    buildOrder(i);
+    isPlaying = true;
+  }
+  function playAll() {
+    shuffle = false;
+    buildOrder(0);
+    isPlaying = true;
+  }
+  function shufflePlay() {
+    const n = data?.songs.length ?? 0;
+    if (n === 0) return;
+    shuffle = true;
+    buildOrder(Math.floor(Math.random() * n));
     isPlaying = true;
   }
   function toggle() {
@@ -67,12 +113,47 @@
     if (audio.paused) audio.play().catch(() => {});
     else audio.pause();
   }
+  function advance(): boolean {
+    if (pos === null) return false;
+    if (pos < order.length - 1) {
+      pos += 1;
+      return true;
+    }
+    if (repeat === "all") {
+      if (shuffle) buildOrder(Math.floor(Math.random() * (data?.songs.length ?? 1)));
+      else pos = 0;
+      return true;
+    }
+    return false;
+  }
   function next() {
-    if (data && currentIndex !== null && currentIndex < data.songs.length - 1)
-      currentIndex += 1;
+    advance();
   }
   function prev() {
-    if (currentIndex !== null && currentIndex > 0) currentIndex -= 1;
+    if (pos === null) return;
+    if (audio && audio.currentTime > 3) {
+      audio.currentTime = 0; // restart the track first, like most players
+      return;
+    }
+    if (pos > 0) pos -= 1;
+    else if (repeat === "all") pos = order.length - 1;
+  }
+  function onEnded() {
+    if (repeat === "one") {
+      if (audio) {
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+      }
+      return;
+    }
+    if (!advance()) isPlaying = false;
+  }
+  function toggleShuffle() {
+    shuffle = !shuffle;
+    if (currentIndex !== null) buildOrder(currentIndex);
+  }
+  function cycleRepeat() {
+    repeat = repeat === "off" ? "all" : repeat === "all" ? "one" : "off";
   }
   function onSeek(e: Event) {
     const v = Number((e.target as HTMLInputElement).value);
@@ -83,6 +164,12 @@
     const m = Math.floor(s / 60);
     const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, "0")}`;
+  }
+  function fmtTotal(s: number): string {
+    if (!s) return "";
+    const h = Math.floor(s / 3600);
+    const m = Math.round((s % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
   }
 </script>
 
@@ -105,46 +192,74 @@
     <div class="state"><p>Loading…</p></div>
   {:else}
     <div class="content">
-      <div class="hero">
-        <span class="hero-art">
-          {#if coverId !== null}
-            <img src={publicArtUrl(token, coverId)} alt="" />
-          {:else}
-            <Icon name="queue_music" size={64} />
-          {/if}
-        </span>
-        <div class="hero-info">
-          <p class="kicker">Shared playlist</p>
-          <h1>{data.name}</h1>
-          <p class="by">by {data.ownerName} · {data.songs.length} tracks</p>
-          {#if data.songs.length > 0}
-            <button class="play-all" onclick={() => play(0)}>
-              <Icon name="play_arrow" fill size={20} /> Play
-            </button>
-          {/if}
+      {#if coverId !== null}
+        <div class="pl-backdrop" aria-hidden="true">
+          <img src={publicArtUrl(token, coverId)} alt="" />
         </div>
-      </div>
+      {/if}
 
-      <ul class="tracks">
-        {#each data.songs as song, i (song.id)}
-          {@const isCurrent = i === currentIndex}
-          <li
-            class="song-row"
-            class:current={isCurrent}
-            class:playing={isCurrent && isPlaying}
-          >
-            <SongRow
-              artUrl={song.hasArt ? publicArtUrl(token, song.id) : null}
-              title={song.originalFilename}
-              artist={song.artist}
-              current={isCurrent}
-              playing={isCurrent && isPlaying}
-              onclick={() => play(i)}
-            />
-            <span class="dur">{song.duration ? fmt(song.duration) : "—"}</span>
-          </li>
-        {/each}
-      </ul>
+      <div class="detail" class:has-hero={coverId !== null}>
+        <div class="head">
+          <span class="cover-lg">
+            {#if coverId !== null}
+              <img src={publicArtUrl(token, coverId)} alt="" />
+            {:else}
+              <Icon name="queue_music" size={48} />
+            {/if}
+          </span>
+          <div class="head-info">
+            <h3><span class="pl-name">{data.name}</span></h3>
+            <p class="muted">
+              Shared by {data.ownerName} · {data.songs.length}
+              {data.songs.length === 1 ? "track" : "tracks"}
+              {#if totalDuration}· {fmtTotal(totalDuration)}{/if}
+            </p>
+          </div>
+        </div>
+
+        {#if data.songs.length > 0}
+          <div class="toolbar-row">
+            <div class="play-actions">
+              <button class="pa play" onclick={playAll} title="Play" aria-label="Play">
+                <Icon name="play_arrow" fill size={20} /><span>Play</span>
+              </button>
+              <button
+                class="pa shuffle"
+                onclick={shufflePlay}
+                title="Shuffle"
+                aria-label="Shuffle"
+              >
+                <Icon name="shuffle" size={20} /><span>Shuffle</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="list-head" aria-hidden="true">
+            <span class="head-title">Title</span>
+            <span class="head-dur"><Icon name="schedule" size={18} /></span>
+          </div>
+          <ul class="tracks">
+            {#each data.songs as song, i (song.id)}
+              {@const isCurrent = i === currentIndex}
+              <li
+                class="song-row"
+                class:current={isCurrent}
+                class:playing={isCurrent && isPlaying}
+              >
+                <SongRow
+                  artUrl={song.hasArt ? publicArtUrl(token, song.id) : null}
+                  title={song.originalFilename}
+                  artist={song.artist}
+                  current={isCurrent}
+                  playing={isCurrent && isPlaying}
+                  onclick={() => play(i)}
+                />
+                <span class="col-dur">{song.duration ? fmt(song.duration) : "—"}</span>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
     </div>
   {/if}
 
@@ -154,12 +269,11 @@
     onloadedmetadata={() => (duration = audio?.duration ?? 0)}
     onplay={() => (isPlaying = true)}
     onpause={() => (isPlaying = false)}
-    onended={next}
+    onended={onEnded}
   ></audio>
 
   {#if current}
-    <!-- Collapsed now-playing bar. Tapping the title/art opens the full-screen
-         view, matching the main app's player. -->
+    <!-- Collapsed now-playing bar; tap the art/title to open the full screen. -->
     <div class="player">
       <button
         class="now-playing"
@@ -180,6 +294,13 @@
       </button>
 
       <div class="controls">
+        <button
+          class="toggle"
+          class:active={shuffle}
+          onclick={toggleShuffle}
+          aria-label="Shuffle"
+          title="Shuffle"><Icon name="shuffle" size={22} /></button
+        >
         <TransportControls
           {isPlaying}
           variant="bar"
@@ -187,6 +308,14 @@
           onToggle={toggle}
           onNext={next}
         />
+        <button
+          class="toggle"
+          class:active={repeat !== "off"}
+          onclick={cycleRepeat}
+          aria-label="Repeat"
+          title={repeat === "one" ? "Repeat one" : repeat === "all" ? "Repeat all" : "Repeat off"}
+          ><Icon name={repeat === "one" ? "repeat_one" : "repeat"} size={22} /></button
+        >
       </div>
 
       <div class="progress">
@@ -243,6 +372,12 @@
       </div>
 
       <div class="npf-controls">
+        <button
+          class="toggle"
+          class:active={shuffle}
+          onclick={toggleShuffle}
+          aria-label="Shuffle"><Icon name="shuffle" size={26} /></button
+        >
         <TransportControls
           {isPlaying}
           variant="full"
@@ -250,6 +385,13 @@
           onToggle={toggle}
           onNext={next}
         />
+        <button
+          class="toggle"
+          class:active={repeat !== "off"}
+          onclick={cycleRepeat}
+          aria-label="Repeat"
+          ><Icon name={repeat === "one" ? "repeat_one" : "repeat"} size={26} /></button
+        >
       </div>
     </div>
   {/if}
@@ -284,78 +426,169 @@
     color: var(--muted);
   }
 
-  /* Full-bleed scroll area, mirroring the app's main content column. */
   .content {
     flex: 1;
     overflow-y: auto;
-    padding: 0.5rem 2rem 2rem;
+    padding: 1.5rem 2rem 2rem;
+    position: relative;
+  }
+  .detail {
+    position: relative;
+    z-index: 1;
   }
 
-  .hero {
-    display: flex;
-    gap: 1.5rem;
-    align-items: flex-end;
-    padding: 1rem 0 1.75rem;
+  /* Immersive, blurred cover-art backdrop behind the header — identical to the
+     app's open-playlist view. */
+  .pl-backdrop {
+    position: absolute;
+    z-index: 0;
+    top: -1.5rem;
+    left: -2rem;
+    right: -2rem;
+    height: 620px;
+    overflow: hidden;
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 0%,
+      #000 52%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(to bottom, #000 0%, #000 52%, transparent 100%);
   }
-  .hero-art {
-    width: 180px;
-    height: 180px;
+  .pl-backdrop img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: blur(44px) saturate(1.7);
+    transform: scale(1.3);
+    opacity: 0.85;
+  }
+  .pl-backdrop::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--bg) 8%, transparent),
+      color-mix(in srgb, var(--bg) 34%, transparent)
+    );
+  }
+  .detail.has-hero .head-info h3,
+  .detail.has-hero .head-info .muted {
+    text-shadow: 0 1px 14px rgba(0, 0, 0, 0.55);
+  }
+
+  .head {
+    display: flex;
+    gap: 1.25rem;
+    align-items: center;
+    margin-bottom: 1.25rem;
+  }
+  .cover-lg {
     flex-shrink: 0;
+    width: 260px;
+    height: 260px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--surface-2);
-    border-radius: 0.75rem;
+    border-radius: 0.6rem;
     color: var(--dim);
     overflow: hidden;
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
   }
-  .hero-art img {
+  .detail.has-hero .cover-lg {
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .cover-lg img {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
-  .hero-info {
+  .head-info {
     min-width: 0;
   }
-  .kicker {
-    margin: 0;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-size: 0.72rem;
-    font-weight: 600;
+  .head-info h3 {
+    margin: 0 0 0.25rem;
+    font-size: 1.5rem;
+    min-width: 0;
+  }
+  .head-info h3 .pl-name {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .head-info .muted {
+    margin: 0 0 0.6rem;
     color: var(--muted);
+    font-size: 0.82rem;
   }
-  h1 {
-    margin: 0.3rem 0 0.4rem;
-    font-size: 2.5rem;
-    line-height: 1.1;
+
+  .toolbar-row {
+    display: flex;
+    align-items: center;
+    margin: 0 0 1rem;
   }
-  .by {
-    color: var(--muted);
-    margin: 0;
+  .play-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
   }
-  .play-all {
+  .pa {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    margin-top: 1rem;
-    padding: 0.6rem 1.4rem;
-    background: var(--accent);
-    color: #fff;
+    padding: 0.28rem 0.95rem;
     border: none;
     border-radius: 2rem;
+    font: inherit;
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     cursor: pointer;
   }
+  .pa.play {
+    background: var(--accent);
+    color: #fff;
+  }
   @media (hover: hover) {
-    .play-all:hover {
+    .pa.play:hover {
       background: var(--accent-hover);
     }
   }
+  .pa.shuffle {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+  }
+  @media (hover: hover) {
+    .pa.shuffle:hover {
+      background: var(--hover);
+    }
+  }
 
-  /* --- Track list: identical treatment to the in-app song list. --- */
+  /* Track-list column header, matching the app. */
+  .list-head {
+    display: flex;
+    align-items: center;
+    padding: 0 0.75rem 0.5rem;
+    border-bottom: 1px solid var(--border-strong);
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .head-title {
+    flex: 1;
+    min-width: 0;
+  }
+  .head-dur {
+    display: inline-flex;
+    justify-content: flex-end;
+    width: 3rem;
+  }
+
   .tracks {
     list-style: none;
     margin: 0;
@@ -378,8 +611,10 @@
       background: var(--active-bg);
     }
   }
-  .dur {
+  .col-dur {
     flex-shrink: 0;
+    width: 3rem;
+    text-align: right;
     color: var(--dim);
     font-size: 0.82rem;
     font-variant-numeric: tabular-nums;
@@ -452,6 +687,29 @@
     justify-content: center;
     gap: 0.4rem;
   }
+  /* Shuffle / repeat toggles flanking the shared transport. */
+  .controls .toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    opacity: 0.65;
+    cursor: pointer;
+    padding: 0.3rem;
+    border-radius: 0.4rem;
+  }
+  @media (hover: hover) {
+    .controls .toggle:hover {
+      background: var(--surface-2);
+    }
+  }
+  .controls .toggle.active {
+    opacity: 1;
+    color: var(--accent-text);
+    background: var(--active-bg);
+  }
   .progress {
     display: flex;
     align-items: center;
@@ -467,16 +725,6 @@
     min-width: 2.75rem;
     text-align: center;
     font-variant-numeric: tabular-nums;
-  }
-  /* Narrow screens: drop the inline scrubber, keep art + transport (the
-     full-screen view has the scrubber). */
-  @media (max-width: 700px) {
-    .player {
-      grid-template-columns: minmax(0, 1fr) auto;
-    }
-    .progress {
-      display: none;
-    }
   }
 
   /* --- Full-screen now-playing view (matches the app's .np-full). --- */
@@ -570,5 +818,61 @@
     display: flex;
     align-items: center;
     gap: 1rem;
+  }
+  .npf-controls .toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    opacity: 0.7;
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 50%;
+  }
+  @media (hover: hover) {
+    .npf-controls .toggle:hover {
+      background: var(--surface-2);
+    }
+  }
+  .npf-controls .toggle.active {
+    color: var(--accent-text);
+    opacity: 1;
+  }
+
+  /* Phones: center the hero and shrink the cover, like the app. */
+  @media (max-width: 768px) {
+    .content {
+      padding: 1rem;
+    }
+    .pl-backdrop {
+      left: -1rem;
+      right: -1rem;
+      top: -1rem;
+      height: 480px;
+    }
+    .head {
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      text-align: center;
+      margin-bottom: 0.6rem;
+    }
+    .head-info {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .cover-lg {
+      width: 220px;
+      height: 220px;
+    }
+    .player {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .progress {
+      display: none;
+    }
   }
 </style>
