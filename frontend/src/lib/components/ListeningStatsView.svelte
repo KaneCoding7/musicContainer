@@ -133,6 +133,96 @@
     return m ? `${Number(m[1])} ${m[2].slice(0, 3)}` : raw;
   }
 
+  // --- Recap / summary derived from the loaded stats -----------------------
+  // listenCount is the ALL-TIME total; plays within the selected range are the
+  // sum of the activity buckets.
+  const clockTotal = $derived(
+    (data?.hourly ?? []).reduce((n, h) => n + h.count, 0)
+  );
+  // Range total = the day-by-day activity sum, falling back to the clock's
+  // hourly sum when ListenBrainz hasn't computed the listening-activity series
+  // for this range yet (it builds each stat on its own schedule, so top artists
+  // and the clock can be ready while the day-by-day series is still empty).
+  const rangeListens = $derived(
+    range === "all_time" && data?.listenCount != null
+      ? data.listenCount // the canonical lifetime total (matches the header)
+      : activityTotal > 0
+        ? activityTotal
+        : clockTotal
+  );
+  const rangeNoun = $derived(
+    range === "week"
+      ? "this week"
+      : range === "month"
+        ? "this month"
+        : range === "year"
+          ? "this year"
+          : "all-time"
+  );
+  const scrobbleWord = $derived(source === "lastfm" ? "scrobbles" : "listens");
+  // avg/day for the day-based ranges (week = 7 days; month uses the actual
+  // bucket count when present, else ~30). Null for year/all-time.
+  const daysInRange = $derived(
+    range === "week"
+      ? 7
+      : range === "month"
+        ? data?.activity?.length || 30
+        : range === "year"
+          ? 365
+          : 0
+  );
+  const avgPerDay = $derived(
+    daysInRange > 0 && rangeListens > 0
+      ? Math.round(rangeListens / daysInRange)
+      : null
+  );
+  // All-time has no meaningful "per day" (unbounded span), so the 4th tile
+  // there shows average plays per artist instead — keeps the row at four tiles.
+  const perArtist = $derived(
+    data?.uniqueArtists ? Math.round(rangeListens / data.uniqueArtists) : null
+  );
+  const topArtist = $derived(data?.artists?.[0] ?? null);
+  const topArtistPct = $derived(
+    topArtist && rangeListens > 0
+      ? Math.round((topArtist.count / rangeListens) * 100)
+      : null
+  );
+  const topTracks3 = $derived((data?.recordings ?? []).slice(0, 3));
+  const topTrack3Peak = $derived(
+    Math.max(1, ...topTracks3.map((t) => t.count))
+  );
+
+  // Listening clock: 24 hour-of-day buckets. Same nice-ceil scaling as the
+  // activity chart so the bars read against a clean max.
+  const clockPeak = $derived(
+    Math.max(0, ...(data?.hourly ?? []).map((h) => h.count))
+  );
+  const clockScale = $derived(niceCeil(clockPeak));
+  const clockPeakHour = $derived.by(() => {
+    const hs = data?.hourly ?? [];
+    if (!hs.length) return null;
+    return hs.reduce((best, h) => (h.count > best.count ? h : best), hs[0]);
+  });
+  function hourLabel(h: number): string {
+    const suffix = h < 12 ? "a" : "p";
+    const hr = h % 12 === 0 ? 12 : h % 12;
+    return `${hr}${suffix}`;
+  }
+  // "Play the month/week/…": queue the library tracks that match this range's
+  // top tracks (ListenBrainz names → library songs by title). No-op when none
+  // are in the library.
+  const playableTopTracks = $derived.by(() => {
+    const names = new Set(
+      (data?.recordings ?? []).map((r) => r.name.trim().toLowerCase())
+    );
+    return vm.songs.filter((s) =>
+      names.has((s.originalFilename ?? "").trim().toLowerCase())
+    );
+  });
+  function playTopTracks() {
+    if (playableTopTracks.length) vm.playList(playableTopTracks);
+  }
+
   // Recommendations + fresh releases are range-independent, so load them once.
   let recs = $state<Recommendation[]>([]);
   let fresh = $state<FreshRelease[]>([]);
@@ -254,10 +344,10 @@
     <div class="data">
     <div class="head">
       <div class="who">
-        {#if data?.username}
-          <span class="sub">{sourceLabel} · {data.username}</span>
-        {/if}
-        <span class="total">{fmt(data?.listenCount)} <span class="total-l">all-time {source === "lastfm" ? "scrobbles" : "listens"}</span></span>
+        <span class="sub">
+          {#if data?.username}{data.username} · {/if}{fmt(data?.listenCount)}
+          all-time {scrobbleWord}
+        </span>
       </div>
       <div class="ranges">
         {#each RANGES as r (r.id)}
@@ -272,17 +362,103 @@
       </div>
     </div>
 
+    {#if hasData}
+      <section class="recap">
+        <div class="recap-main">
+          <p class="recap-kicker">{rangeNoun} recap</p>
+          <p class="recap-big">
+            You logged {rangeListens.toLocaleString()}
+            {scrobbleWord} {rangeNoun}.
+          </p>
+          {#if topArtist}
+            <p class="recap-sub">
+              {topArtist.name} led the way{#if data?.uniqueArtists}, across {fmt(
+                  data.uniqueArtists
+                )} artists{/if}.
+            </p>
+          {/if}
+          {#if playableTopTracks.length}
+            <button class="recap-play" onclick={playTopTracks}>
+              <Icon name="play_arrow" fill size={18} /> Play top tracks
+            </button>
+          {/if}
+        </div>
+        {#if topArtist}
+          <div class="recap-artist">
+            <p class="recap-artist-l">Top artist {rangeNoun}</p>
+            <p class="recap-artist-name">{topArtist.name}</p>
+            <p class="recap-artist-sub">
+              {plays(topArtist.count)}{#if topArtistPct} · {topArtistPct}% of all{/if}
+            </p>
+            {#if topTracks3.length}
+              <ul class="mini-bars">
+                {#each topTracks3 as t (t.name)}
+                  <li>
+                    <span class="mini-name" title={t.name}>{t.name}</span>
+                    <span class="mini-track">
+                      <span
+                        class="mini-fill"
+                        style="width:{Math.max(8, (t.count / topTrack3Peak) * 100)}%"
+                      ></span>
+                    </span>
+                    <span class="mini-val">{fmt(t.count)}</span>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
+        {/if}
+      </section>
+
+      <div class="tiles">
+        <div class="tile">
+          <span class="tile-l">plays {rangeNoun}</span>
+          <span class="tile-v">{fmt(rangeListens)}</span>
+        </div>
+        {#if avgPerDay !== null}
+          <div class="tile">
+            <span class="tile-l">avg per day</span>
+            <span class="tile-v">{fmt(avgPerDay)}</span>
+          </div>
+        {:else if perArtist !== null}
+          <div class="tile">
+            <span class="tile-l">plays / artist</span>
+            <span class="tile-v">{fmt(perArtist)}</span>
+          </div>
+        {/if}
+        {#if data?.uniqueArtists != null}
+          <div class="tile">
+            <span class="tile-l">unique artists</span>
+            <span class="tile-v">{fmt(data.uniqueArtists)}</span>
+          </div>
+        {/if}
+        {#if data?.uniqueTracks != null}
+          <div class="tile">
+            <span class="tile-l">unique tracks</span>
+            <span class="tile-v">{fmt(data.uniqueTracks)}</span>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
     {#if loading}
       <p class="status"><Icon name="progress_activity" size={18} /> Updating…</p>
     {:else if !hasData}
-      <p class="status">
-        No listening data for this range yet. {sourceLabel} updates stats
-        periodically — check back once you've scrobbled some plays.
-      </p>
+      <div class="empty-range">
+        <Icon name="bar_chart" size={34} />
+        <p class="empty-range-t">No {sourceLabel} stats for {rangeNoun} yet</p>
+        <p class="empty-range-s">
+          {sourceLabel} computes each range on its own schedule — this one
+          hasn't been built yet. Your all-time and shorter ranges are ready;
+          check back for {rangeNoun}.
+        </p>
+      </div>
     {/if}
 
+    {#if hasData}
+    <div class="panels">
     {#if data?.activity?.length}
-      <section class="activity">
+      <section class="activity panel">
         <div class="activity-head">
           <h3>Listening activity</h3>
           <span class="activity-sum"
@@ -334,6 +510,37 @@
         </div>
       </section>
     {/if}
+    {#if data?.hourly?.length}
+      <section class="clock panel">
+        <div class="activity-head">
+          <h3>Listening clock</h3>
+          {#if clockPeakHour}
+            <span class="activity-sum"
+              >peak {hourLabel(clockPeakHour.hour)}–{hourLabel(
+                (clockPeakHour.hour + 1) % 24
+              )}</span
+            >
+          {/if}
+        </div>
+        <div class="clock-bars">
+          {#each data.hourly as h (h.hour)}
+            <div class="clock-col" title={`${hourLabel(h.hour)}: ${plays(h.count)}`}>
+              <div
+                class="clock-fill"
+                class:peak={h.count === clockPeak && h.count > 0}
+                style="height:{h.count <= 0
+                  ? 0
+                  : Math.max(3, (h.count / clockScale) * 100)}%"
+              ></div>
+            </div>
+          {/each}
+        </div>
+        <div class="clock-axis" aria-hidden="true">
+          <span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>11p</span>
+        </div>
+      </section>
+    {/if}
+    </div>
 
     <div class="cols">
       <section class="col">
@@ -363,6 +570,7 @@
         {/if}
       </section>
     </div>
+    {/if}
 
     {#if source === "listenbrainz" && recs.length}
       <section class="discover">
@@ -448,7 +656,7 @@
   /* .stats is full width so the not-connected panel can center across the whole
      view; the connected stats/data is left-aligned (like other views), capped. */
   .data {
-    max-width: 900px;
+    max-width: 1000px;
   }
   .status {
     display: flex;
@@ -538,16 +746,6 @@
     flex-direction: column;
     gap: 0.15rem;
   }
-  .total {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--text);
-  }
-  .total-l {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--dim);
-  }
   .ranges {
     display: inline-flex;
     gap: 0.25rem;
@@ -611,6 +809,7 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 1.5rem;
+    margin-bottom: 1.25rem;
   }
   @media (max-width: 820px) {
     .cols {
@@ -700,11 +899,305 @@
     color: var(--dim);
     font-size: 0.9rem;
   }
+  .empty-range {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.4rem;
+    padding: 2.5rem 1.5rem;
+    margin-bottom: 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--surface-2);
+    border-radius: 0.9rem;
+    color: var(--muted);
+  }
+  .empty-range :global(.material-symbols-rounded) {
+    color: var(--dim);
+  }
+  .empty-range-t {
+    margin: 0.2rem 0 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .empty-range-s {
+    margin: 0;
+    max-width: 46ch;
+    font-size: 0.88rem;
+  }
+
+  /* --- Recap hero ------------------------------------------------------- */
+  .recap {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1.25rem;
+    padding: 1.5rem 1.6rem;
+    border-radius: 1rem;
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--surface-2));
+    background:
+      radial-gradient(
+        130% 150% at 0% 0%,
+        color-mix(in srgb, var(--accent) 26%, transparent),
+        transparent 58%
+      ),
+      var(--surface);
+  }
+  .recap-main {
+    flex: 1;
+    min-width: 0;
+  }
+  .recap-kicker {
+    margin: 0 0 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--accent-text);
+  }
+  .recap-big {
+    margin: 0 0 0.5rem;
+    font-size: 1.9rem;
+    line-height: 1.15;
+    font-weight: 800;
+    color: var(--text);
+  }
+  .recap-sub {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.95rem;
+    max-width: 44ch;
+  }
+  .recap-play {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 1rem;
+    padding: 0.5rem 1.1rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 2rem;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  .recap-play :global(.material-symbols-rounded) {
+    color: #fff;
+  }
+  @media (hover: hover) {
+    .recap-play:hover {
+      background: var(--accent-hover);
+    }
+  }
+  .recap-artist {
+    flex-shrink: 0;
+    width: 300px;
+    align-self: center;
+  }
+  .recap-artist-l {
+    margin: 0 0 0.2rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--dim);
+  }
+  .recap-artist-name {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .recap-artist-sub {
+    margin: 0.1rem 0 0.7rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+  .mini-bars {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .mini-bars li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .mini-name {
+    flex: 0 0 42%;
+    min-width: 0;
+    font-size: 0.8rem;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mini-track {
+    flex: 1;
+    height: 6px;
+    background: var(--surface-2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .mini-fill {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+  }
+  .mini-val {
+    flex-shrink: 0;
+    width: 1.6rem;
+    text-align: right;
+    font-size: 0.78rem;
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+  }
+  @media (max-width: 720px) {
+    .recap {
+      flex-direction: column;
+    }
+    .recap-artist {
+      width: auto;
+    }
+    .recap-big {
+      font-size: 1.5rem;
+    }
+  }
+
+  /* --- Stat tiles ------------------------------------------------------- */
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.9rem;
+    margin-bottom: 1.5rem;
+  }
+  @media (max-width: 720px) {
+    .tiles {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  .tile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.9rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--surface-2);
+    border-radius: 0.8rem;
+  }
+  .tile-l {
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+  .tile-v {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- Chart panels (activity + clock) ---------------------------------- */
+  /* Flexbox (not grid) so align-items: stretch reliably gives the two cards the
+     exact same height. */
+  .panels {
+    display: flex;
+    align-items: stretch;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .panel {
+    flex: 1 1 0;
+    min-width: 0;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    padding: 1.1rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--surface-2);
+    border-radius: 0.9rem;
+    margin-bottom: 0;
+  }
+  @media (max-width: 720px) {
+    .panels {
+      flex-direction: column;
+    }
+  }
+  /* Contain the card padding so the multi-column rows never overflow. */
+  .recap,
+  .tile,
+  .col,
+  .discover,
+  .empty-range {
+    box-sizing: border-box;
+    min-width: 0;
+  }
+  /* Both charts flex-fill the card, so the two panels stay the exact same
+     height and their bar baselines sit on the same line. */
+  .panel .chart {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .panel .plot,
+  .panel .clock-bars {
+    flex: 1;
+    min-height: 180px;
+  }
+
+  /* Listening clock */
+  .clock-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    padding-top: 0.5rem;
+  }
+  .clock-col {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+  }
+  .clock-fill {
+    width: 100%;
+    min-height: 2px;
+    background: linear-gradient(
+      to top,
+      color-mix(in srgb, var(--accent) 55%, transparent),
+      var(--accent)
+    );
+    border-radius: 2px 2px 0 0;
+  }
+  .clock-fill.peak {
+    background: linear-gradient(to top, var(--accent), var(--accent-text));
+  }
+  .clock-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.4rem;
+    color: var(--dim);
+    font-size: 0.72rem;
+  }
+
+  /* Card-ify the top-lists row. */
+  .col {
+    padding: 1.1rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--surface-2);
+    border-radius: 0.9rem;
+  }
 
   /* Listening activity bar chart */
-  .activity {
-    margin-bottom: 1.75rem;
-  }
+  /* The activity chart is a flex panel now; a bottom margin here would eat into
+     its stretched height and leave it shorter than the clock card. */
   .activity-head {
     display: flex;
     flex-wrap: wrap;
@@ -728,7 +1221,6 @@
   }
   .plot {
     position: relative;
-    height: 200px;
   }
   /* Gridlines: evenly spaced horizontal rules spanning the plot, each carrying
      its value on the left so magnitudes are readable at a glance. */
@@ -864,7 +1356,16 @@
 
   /* Discover: recommendations + fresh releases */
   .discover {
-    margin-top: 1.75rem;
+    margin-top: 0;
+    margin-bottom: 1.25rem;
+    padding: 1.1rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--surface-2);
+    border-radius: 0.9rem;
+  }
+  .discover h3 {
+    margin: 0 0 0.15rem;
+    font-size: 0.95rem;
   }
   .discover h3 {
     margin: 0;

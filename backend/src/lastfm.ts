@@ -252,5 +252,16 @@ export async function getUserStats(
     }));
   const listenCount = info?.user?.playcount ? num(info.user.playcount) : null;
 
-  return { listenCount, artists, recordings, releases, activity: [] };
+  // Last.fm's API doesn't expose hourly/daily activity or distinct-count
+  // totals here, so those panels stay empty for the Last.fm source.
+  return {
+    listenCount,
+    artists,
+    recordings,
+    releases,
+    activity: [],
+    hourly: [],
+    uniqueArtists: null,
+    uniqueTracks: null,
+  };
 }

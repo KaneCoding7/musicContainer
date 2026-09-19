@@ -124,16 +124,25 @@ export interface ActivityBucket {
   count: number;
 }
 
+export interface HourBucket {
+  hour: number; // 0–23
+  count: number;
+}
+
 export interface UserStats {
   listenCount: number | null; // all-time total listens
   artists: StatEntry[];
   recordings: StatEntry[];
   releases: StatEntry[]; // top albums
   activity: ActivityBucket[]; // listens per time bucket in the range
+  hourly: HourBucket[]; // listens per hour-of-day (the "listening clock")
+  uniqueArtists: number | null; // distinct artists heard in the range
+  uniqueTracks: number | null; // distinct tracks heard in the range
 }
 
 interface LbArtistsResp {
   payload?: {
+    total_artist_count?: number;
     artists?: {
       artist_name?: string;
       listen_count?: number;
@@ -143,6 +152,7 @@ interface LbArtistsResp {
 }
 interface LbRecordingsResp {
   payload?: {
+    total_recording_count?: number;
     recordings?: {
       track_name?: string;
       artist_name?: string;
@@ -168,6 +178,40 @@ interface LbActivityResp {
   payload?: {
     listening_activity?: { time_range?: string; listen_count?: number }[];
   };
+}
+type LbHourEntry = { hour?: number; listen_count?: number };
+interface LbDailyActivityResp {
+  payload?: {
+    // Keyed by weekday ("Monday" → hourly entries); older/variant shapes may
+    // hand back a flat array. Both are aggregated into 24 hour-of-day buckets.
+    daily_activity?: Record<string, LbHourEntry[]> | LbHourEntry[];
+  };
+}
+
+// Sums a daily-activity payload into 24 hour-of-day buckets. Returns [] when the
+// user has no computed daily activity (e.g. Last.fm source or a fresh account).
+function toHourly(d: LbDailyActivityResp | null): HourBucket[] {
+  const buckets = new Array(24).fill(0);
+  const da = d?.payload?.daily_activity;
+  if (da) {
+    const groups = Array.isArray(da) ? [da] : Object.values(da);
+    for (const g of groups) {
+      if (!Array.isArray(g)) continue;
+      for (const e of g) {
+        if (
+          typeof e?.hour === "number" &&
+          e.hour >= 0 &&
+          e.hour < 24 &&
+          typeof e.listen_count === "number"
+        ) {
+          buckets[e.hour] += e.listen_count;
+        }
+      }
+    }
+  }
+  return buckets.some((n) => n > 0)
+    ? buckets.map((count, hour) => ({ hour, count }))
+    : [];
 }
 
 const STAT_COUNT = 10; // entries per top-list
@@ -200,13 +244,15 @@ export async function getUserStats(
   token?: string | null
 ): Promise<UserStats> {
   const u = encodeURIComponent(username);
-  const [artistsData, recData, relData, actData, countData] = await Promise.all([
-    lbGet<LbArtistsResp>(`/stats/user/${u}/artists?range=${range}&count=${STAT_COUNT}`, token),
-    lbGet<LbRecordingsResp>(`/stats/user/${u}/recordings?range=${range}&count=${STAT_COUNT}`, token),
-    lbGet<LbReleasesResp>(`/stats/user/${u}/releases?range=${range}&count=${STAT_COUNT}`, token),
-    lbGet<LbActivityResp>(`/stats/user/${u}/listening-activity?range=${range}`, token),
-    lbGet<LbCountResp>(`/user/${u}/listen-count`, token),
-  ]);
+  const [artistsData, recData, relData, actData, countData, dailyData] =
+    await Promise.all([
+      lbGet<LbArtistsResp>(`/stats/user/${u}/artists?range=${range}&count=${STAT_COUNT}`, token),
+      lbGet<LbRecordingsResp>(`/stats/user/${u}/recordings?range=${range}&count=${STAT_COUNT}`, token),
+      lbGet<LbReleasesResp>(`/stats/user/${u}/releases?range=${range}&count=${STAT_COUNT}`, token),
+      lbGet<LbActivityResp>(`/stats/user/${u}/listening-activity?range=${range}`, token),
+      lbGet<LbCountResp>(`/user/${u}/listen-count`, token),
+      lbGet<LbDailyActivityResp>(`/stats/user/${u}/daily-activity?range=${range}`, token),
+    ]);
 
   const artists: StatEntry[] = (artistsData?.payload?.artists ?? [])
     .filter((a) => a.artist_name)
@@ -236,8 +282,26 @@ export async function getUserStats(
     .map((b) => ({ label: b.time_range!, count: b.listen_count! }));
   const listenCount =
     typeof countData?.payload?.count === "number" ? countData.payload.count : null;
+  const hourly = toHourly(dailyData);
+  const uniqueArtists =
+    typeof artistsData?.payload?.total_artist_count === "number"
+      ? artistsData.payload.total_artist_count
+      : null;
+  const uniqueTracks =
+    typeof recData?.payload?.total_recording_count === "number"
+      ? recData.payload.total_recording_count
+      : null;
 
-  return { listenCount, artists, recordings, releases, activity };
+  return {
+    listenCount,
+    artists,
+    recordings,
+    releases,
+    activity,
+    hourly,
+    uniqueArtists,
+    uniqueTracks,
+  };
 }
 
 // --- Recommendations + fresh releases (discovery) --------------------------

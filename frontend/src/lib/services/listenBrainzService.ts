@@ -69,6 +69,11 @@ export interface ActivityBucket {
   count: number;
 }
 
+export interface HourBucket {
+  hour: number; // 0–23
+  count: number;
+}
+
 export interface ListenBrainzStats {
   connected: boolean;
   username?: string | null;
@@ -78,6 +83,9 @@ export interface ListenBrainzStats {
   recordings?: StatEntry[];
   releases?: StatEntry[];
   activity?: ActivityBucket[];
+  hourly?: HourBucket[];
+  uniqueArtists?: number | null;
+  uniqueTracks?: number | null;
 }
 
 // Fetches the user's ListenBrainz stats for a range. Returns { connected:false }
