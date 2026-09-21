@@ -6,6 +6,7 @@
   import SongMenu from "$lib/components/SongMenu.svelte";
   import TransportControls from "$lib/components/TransportControls.svelte";
   import ArtistLinks from "$lib/components/ArtistLinks.svelte";
+  import { afterNavigate } from "$app/navigation";
   import {
     artUrl,
     clipUrl,
@@ -665,6 +666,11 @@
 
   // Full-screen now-playing overlay (Cycle 36).
   let expanded = $state(false);
+  // Any client-side navigation (e.g. tapping an artist name in the expanded
+  // view) should drop the full-screen overlay so the destination is visible.
+  afterNavigate(() => {
+    expanded = false;
+  });
   // Queue sheet that slides up over the now-playing screen.
   let queueSheet = $state(false);
   // Reset the queue sheet whenever the now-playing view closes, so it doesn't
