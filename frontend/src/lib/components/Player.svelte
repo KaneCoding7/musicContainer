@@ -1766,9 +1766,9 @@
      generic ".npf-actions button" rule (which would otherwise force a circular
      hover shape onto this wider text button). */
   .npf-actions .npf-lyrics-btn {
-    padding: 0.28rem 0.72rem;
+    padding: 0.28rem 0.6rem;
     border-radius: 999px;
-    border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+    border: none;
     background: transparent;
     color: var(--muted);
     font: inherit;
@@ -1780,9 +1780,8 @@
   }
   @media (hover: hover) {
     .npf-actions .npf-lyrics-btn:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--text) 12%, transparent);
-      border-color: color-mix(in srgb, currentColor 55%, transparent);
       color: var(--text);
+      background: transparent;
     }
   }
   /* Lyrics sheet: a slightly translucent, blurred backdrop over the now-playing
@@ -1823,21 +1822,16 @@
     border: none;
     border-radius: 0.4rem;
     font: inherit;
-    font-size: 1.2rem;
+    font-size: 1.6rem;
     font-weight: 700;
-    line-height: 1.45;
+    line-height: 1.4;
     color: color-mix(in srgb, var(--text) 45%, transparent);
-    padding: 0.4rem 0.4rem;
+    padding: 0.45rem 0.4rem;
     cursor: pointer;
     transition: color 0.2s ease;
   }
   .lyric-line.active {
     color: var(--text);
-  }
-  @media (hover: hover) {
-    .lyric-line:hover {
-      color: var(--text);
-    }
   }
   .lyric-plain {
     margin: 0;
@@ -1845,7 +1839,7 @@
     white-space: pre-wrap;
     text-align: center;
     font: inherit;
-    font-size: 1.05rem;
+    font-size: 1.35rem;
     line-height: 1.7;
     color: var(--text);
   }
