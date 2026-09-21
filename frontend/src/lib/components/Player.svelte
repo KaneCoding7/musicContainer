@@ -1792,6 +1792,22 @@
     backdrop-filter: blur(26px) saturate(1.1);
     -webkit-backdrop-filter: blur(26px) saturate(1.1);
   }
+  /* Thin, subtle scrollbar instead of the fat default that stood out against
+     the translucent sheet. */
+  .npf-lyrics-body {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--text) 30%, transparent) transparent;
+  }
+  .npf-lyrics-body::-webkit-scrollbar {
+    width: 6px;
+  }
+  .npf-lyrics-body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .npf-lyrics-body::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--text) 25%, transparent);
+    border-radius: 999px;
+  }
   /* Synced lyric lines: centered, dim by default, the active line brightens;
      extra bottom padding lets the last lines scroll to the vertical centre. */
   .lyric-lines {
