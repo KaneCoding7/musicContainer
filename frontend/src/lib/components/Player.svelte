@@ -10,11 +10,14 @@
   import {
     artUrl,
     clipUrl,
+    fetchLyrics,
     generateClip,
     streamUrl,
     thumbUrl,
+    type Lyrics,
   } from "$lib/services/songService";
   import { setNowPlaying } from "$lib/services/listenBrainzService";
+  import { parseLrc, activeLineIndex } from "$lib/lrc";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
   import type { Song } from "$lib/types";
 
@@ -673,11 +676,46 @@
   });
   // Queue sheet that slides up over the now-playing screen.
   let queueSheet = $state(false);
-  // Reset the queue sheet whenever the now-playing view closes, so it doesn't
+  // Lyrics sheet (same slide-up treatment as the queue sheet).
+  let lyricsSheet = $state(false);
+  // Reset both sheets whenever the now-playing view closes, so they don't
   // pop back open (already slid up) next time the screen is expanded.
   $effect(() => {
-    if (!expanded) queueSheet = false;
+    if (!expanded) {
+      queueSheet = false;
+      lyricsSheet = false;
+    }
   });
+
+  // --- Lyrics (fetched lazily when the sheet opens; cached per song id) ---
+  let lyricsById = $state<Record<number, Lyrics | null>>({});
+  let lyricsLinesEl = $state<HTMLElement | null>(null);
+  $effect(() => {
+    if (!expanded || !lyricsSheet || !song || !song.hasLyrics) return;
+    const id = song.id;
+    if (lyricsById[id] !== undefined) return; // cached (content or null)
+    fetchLyrics(id)
+      .then((ly) => (lyricsById[id] = ly))
+      .catch(() => (lyricsById[id] = null));
+  });
+  const curLyrics = $derived(song ? lyricsById[song.id] : undefined);
+  const lyricLines = $derived(
+    curLyrics?.synced ? parseLrc(curLyrics.synced) : []
+  );
+  const activeLyric = $derived(
+    lyricLines.length ? activeLineIndex(lyricLines, currentTime) : -1
+  );
+  // Keep the active synced line in view (query it from the list container so we
+  // don't have to bind every line's element).
+  $effect(() => {
+    if (!lyricsSheet || activeLyric < 0 || !lyricsLinesEl) return;
+    const el = lyricsLinesEl.querySelector<HTMLElement>(".lyric-line.active");
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  });
+  function seekToLine(t: number) {
+    currentTime = t;
+    vm.seek(t); // local seek, or a command when this device is remote
+  }
 
   // Whether to actually show a clip: it has one, clips are on globally, and this
   // song isn't individually opted out.
@@ -728,7 +766,8 @@
   // Esc closes the queue sheet first, then the full-screen now-playing view.
   function onWindowKeydown(e: KeyboardEvent) {
     if (e.key !== "Escape") return;
-    if (queueSheet) queueSheet = false;
+    if (lyricsSheet) lyricsSheet = false;
+    else if (queueSheet) queueSheet = false;
     else if (expanded) expanded = false;
   }
 
@@ -1215,6 +1254,14 @@
       <span class="npf-actions-artist"
         ><ArtistLinks artists={song.artists} fallback={song.artist} link
       /></span>
+      {#if song.hasLyrics}
+        <button
+          class="npf-lyrics-btn"
+          onclick={() => (lyricsSheet = true)}
+          aria-label="Lyrics"
+          title="Lyrics">Lyrics</button
+        >
+      {/if}
       <button
         class="npf-ctl-queue"
         onclick={() => (queueSheet = true)}
@@ -1290,6 +1337,42 @@
           <p class="npf-queue-empty">Nothing queued yet.</p>
         {:else}
           <QueueView {vm} />
+        {/if}
+      </div>
+    </div>
+
+    <!-- Lyrics sheet (same slide-up treatment as the queue sheet). -->
+    <div class="npf-queue npf-lyrics" class:open={lyricsSheet}>
+      <div class="npf-queue-head">
+        <span class="npf-queue-title">Lyrics</span>
+        <button
+          class="np-collapse npf-queue-close"
+          onclick={() => (lyricsSheet = false)}
+          aria-label="Close lyrics"
+        >
+          <Icon name="keyboard_arrow_down" size={28} />
+        </button>
+      </div>
+      <div class="npf-queue-body npf-lyrics-body">
+        {#if curLyrics === undefined}
+          <p class="npf-queue-empty">Loading…</p>
+        {:else if lyricLines.length > 0}
+          <!-- Synced: tap a line to seek; the active line highlights + scrolls. -->
+          <div class="lyric-lines" bind:this={lyricsLinesEl}>
+            {#each lyricLines as line, i (i)}
+              <button
+                class="lyric-line"
+                class:active={i === activeLyric}
+                onclick={() => seekToLine(line.t)}
+              >
+                {line.text || "♪"}
+              </button>
+            {/each}
+          </div>
+        {:else if curLyrics?.plain}
+          <pre class="lyric-plain">{curLyrics.plain}</pre>
+        {:else}
+          <p class="npf-queue-empty">No lyrics for this track.</p>
         {/if}
       </div>
     </div>
@@ -1674,6 +1757,64 @@
     color: var(--muted);
     text-align: center;
     margin-top: 2rem;
+  }
+  /* Lyrics toggle pill in the actions row. */
+  .npf-lyrics-btn {
+    background: none;
+    border: 1px solid var(--muted);
+    color: inherit;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 0.3rem 0.8rem;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .npf-lyrics-btn:hover {
+    border-color: var(--text);
+    color: var(--text);
+  }
+  /* Synced lyric lines: dim by default, the active line brightens; extra bottom
+     padding lets the last lines scroll to the vertical centre. */
+  .lyric-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding-bottom: 42vh;
+  }
+  .lyric-line {
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    border-radius: 0.4rem;
+    font: inherit;
+    font-size: 1.15rem;
+    font-weight: 600;
+    line-height: 1.45;
+    color: var(--muted);
+    padding: 0.35rem 0.4rem;
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+  .lyric-line.active {
+    color: var(--text);
+  }
+  @media (hover: hover) {
+    .lyric-line:hover {
+      color: var(--text);
+    }
+  }
+  .lyric-plain {
+    margin: 0;
+    padding-bottom: 20vh;
+    white-space: pre-wrap;
+    font: inherit;
+    font-size: 1.05rem;
+    line-height: 1.6;
+    color: var(--text);
   }
   .npf-art {
     /* Square stage holding the stacked record cards. Matches the width of the

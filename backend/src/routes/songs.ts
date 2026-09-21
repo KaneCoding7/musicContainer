@@ -28,8 +28,11 @@ import {
   listSongsNeedingLoudness,
   recordPlay,
   findOrCreateArtist,
+  getSongLyricsById,
+  listSongsNeedingLyrics,
   pruneOrphanArtists,
   recordSong,
+  setSongLyrics,
   resolveSongArtById,
   resolveSongClipById,
   resolveSongFileById,
@@ -74,6 +77,8 @@ import {
   updateNowPlaying as lastfmNowPlaying,
 } from "../lastfm.js";
 import { measureLoudness } from "../loudness.js";
+import { enrichLyrics } from "../lyrics-enrich.js";
+import { fetchLyricsFromLrclib } from "../lyrics.js";
 import { streamSongFile } from "../stream.js";
 import { serveArt } from "../thumbnails.js";
 import { rateLimit } from "../rate-limit.js";
@@ -438,6 +443,14 @@ songsRouter.post("/upload", uploadLimiter, (req, res) => {
         if (lufs !== null) setSongLoudness(getDb(), songId, lufs);
       })
       .catch(() => {});
+    // Fetch lyrics in the background (LRCLIB, falling back to embedded tags).
+    enrichLyrics(getDb(), songId, {
+      artist: result.value.artist,
+      track: result.value.originalFilename,
+      album: result.value.album,
+      durationSec: result.value.duration,
+      embedded: meta.lyrics,
+    }).catch(() => {});
 
     return res.status(201).json({ song: result.value });
   });
@@ -886,6 +899,13 @@ songsRouter.post("/import-link", importLimiter, async (req, res) => {
           if (lufs !== null) setSongLoudness(getDb(), songId, lufs);
         })
         .catch(() => {});
+      enrichLyrics(getDb(), songId, {
+        artist: result.value.artist,
+        track: result.value.originalFilename,
+        album: result.value.album,
+        durationSec: result.value.duration,
+        embedded: meta.lyrics,
+      }).catch(() => {});
       songs.push(result.value);
     }
 
@@ -1542,6 +1562,31 @@ songsRouter.post("/songs/analyze-loudness", heavyLimiter, async (req, res) => {
   return res.json({ analyzed, remaining: pending.length - batch.length });
 });
 
+// POST /api/songs/fetch-lyrics — fetch lyrics for any of the user's tracks not
+// yet checked (backfill over the existing library). Bounded batch per call; the
+// client calls repeatedly until `remaining` reaches 0. Mirrors analyze-loudness.
+songsRouter.post("/songs/fetch-lyrics", heavyLimiter, async (req, res) => {
+  const pending = listSongsNeedingLyrics(getDb(), req.userId!);
+  const batch = pending.slice(0, 10);
+  let fetched = 0;
+  for (const song of batch) {
+    const found = await fetchLyricsFromLrclib({
+      artist: song.artist,
+      track: song.track,
+      album: song.album,
+      durationSec: song.duration,
+    });
+    if (found && (found.plain || found.synced)) {
+      setSongLyrics(getDb(), song.id, { ...found, source: "lrclib" });
+      fetched += 1;
+    } else {
+      // Stamp "checked, none" so it isn't retried on the next pass.
+      setSongLyrics(getDb(), song.id, null);
+    }
+  }
+  return res.json({ fetched, remaining: pending.length - batch.length });
+});
+
 // PATCH /api/songs/order — persist a manual ordering for a set of songs
 // (e.g. the tracks within an artist). Body: { ids: number[] } in desired order.
 songsRouter.patch("/songs/order", (req, res) => {
@@ -1767,6 +1812,60 @@ songsRouter.get("/songs/:id/art", async (req, res) => {
       .json({ error: result.error });
   }
   await serveArt(req, res, result.value.path, result.value.contentType, req.query.size);
+});
+
+// GET /api/songs/:id/lyrics — the song's stored lyrics ({plain, synced, source})
+// or 404. Gated by canAccessSong so shared/collaborative songs work too, like art.
+songsRouter.get("/songs/:id/lyrics", (req, res) => {
+  const id = Number(req.params.id);
+  if (!canAccessSong(getDb(), req.userId!, id)) {
+    return res.status(404).json({ error: { code: "not_found", message: "Not found" } });
+  }
+  const lyrics = getSongLyricsById(getDb(), id);
+  if (!lyrics || (!lyrics.plain && !lyrics.synced)) {
+    return res.status(404).json({ error: { code: "not_found", message: "No lyrics" } });
+  }
+  return res.json({ lyrics });
+});
+
+// POST /api/songs/:id/lyrics/refetch — force a fresh LRCLIB lookup (owner only).
+songsRouter.post("/songs/:id/lyrics/refetch", heavyLimiter, async (req, res) => {
+  const id = Number(req.params.id);
+  const song = getSong(getDb(), id, req.userId!);
+  if (!song.ok) {
+    return res.status(statusForError(song.error.code)).json({ error: song.error });
+  }
+  const found = await fetchLyricsFromLrclib({
+    artist: song.value.artist,
+    track: song.value.originalFilename,
+    album: song.value.album,
+    durationSec: song.value.duration,
+  });
+  setSongLyrics(getDb(), id, found ? { ...found, source: "lrclib" } : null);
+  const updated = getSong(getDb(), id, req.userId!);
+  return res.json({ song: updated.ok ? updated.value : song.value });
+});
+
+// PUT /api/songs/:id/lyrics — manually set lyrics (owner only). Body: { plain?,
+// synced? }. Empty both clears them. For tracks LRCLIB doesn't have (e.g. Marcus's
+// unreleased beats).
+songsRouter.put("/songs/:id/lyrics", (req, res) => {
+  const id = Number(req.params.id);
+  const song = getSong(getDb(), id, req.userId!);
+  if (!song.ok) {
+    return res.status(statusForError(song.error.code)).json({ error: song.error });
+  }
+  const plain =
+    typeof req.body?.plain === "string" && req.body.plain.trim()
+      ? req.body.plain
+      : null;
+  const synced =
+    typeof req.body?.synced === "string" && req.body.synced.trim()
+      ? req.body.synced
+      : null;
+  setSongLyrics(getDb(), id, plain || synced ? { plain, synced, source: "manual" } : null);
+  const updated = getSong(getDb(), id, req.userId!);
+  return res.json({ song: updated.ok ? updated.value : song.value });
 });
 
 // PUT /api/songs/:id/clip-enabled — toggle whether this song's clip is shown.

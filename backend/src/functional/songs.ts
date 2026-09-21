@@ -72,10 +72,11 @@ interface SongRow {
   suggestion: number;
   track_no: number | null;
   disc_no: number | null;
+  has_lyrics: number;
 }
 
 const SONG_COLUMNS =
-  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness, sort_order, album_sort_order, source_url, clip_filename, clip_disabled, suggestion, track_no, disc_no";
+  "id, filename, original_filename, uploaded_at, artist, album, art_filename, duration, play_count, last_played_at, liked, loudness, sort_order, album_sort_order, source_url, clip_filename, clip_disabled, suggestion, track_no, disc_no, has_lyrics";
 
 function rowToSong(row: SongRow): Song {
   return {
@@ -101,6 +102,7 @@ function rowToSong(row: SongRow): Song {
     clipDisabled: row.clip_disabled === 1,
     sourceUrl: row.source_url,
     isSuggestion: row.suggestion === 1,
+    hasLyrics: row.has_lyrics === 1,
   };
 }
 
@@ -294,6 +296,99 @@ export function listSongsNeedingLoudness(
         "SELECT id, filename FROM songs WHERE user_id = ? AND loudness IS NULL AND pending = 0"
       )
       .all(userId) as { id: number; filename: string }[];
+  } catch {
+    return [];
+  }
+}
+
+// --- Lyrics ----------------------------------------------------------------
+
+export interface StoredLyrics {
+  plain: string | null;
+  synced: string | null; // raw LRC
+  source: string | null; // 'lrclib' | 'embedded' | 'manual'
+}
+
+// Stores (or clears) a song's lyrics and stamps the has_lyrics flag +
+// lyrics_checked_at marker. Passing null (or empty) records "checked, none
+// found" so the backfill won't retry it. Best-effort; by id (routes/ingest
+// establish ownership before calling).
+export function setSongLyrics(
+  db: Database,
+  id: number,
+  lyrics: StoredLyrics | null
+): void {
+  const has = !!(lyrics && (lyrics.plain || lyrics.synced));
+  try {
+    db.transaction(() => {
+      if (has) {
+        db.prepare(
+          `INSERT INTO song_lyrics (song_id, plain, synced, source, updated_at)
+           VALUES (?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(song_id) DO UPDATE SET
+             plain = excluded.plain, synced = excluded.synced,
+             source = excluded.source, updated_at = excluded.updated_at`
+        ).run(id, lyrics!.plain ?? null, lyrics!.synced ?? null, lyrics!.source);
+      } else {
+        db.prepare("DELETE FROM song_lyrics WHERE song_id = ?").run(id);
+      }
+      db.prepare(
+        "UPDATE songs SET has_lyrics = ?, lyrics_checked_at = datetime('now') WHERE id = ?"
+      ).run(has ? 1 : 0, id);
+    })();
+  } catch {
+    /* best-effort */
+  }
+}
+
+// Owner-scoped read of a song's stored lyrics.
+export function getSongLyrics(
+  db: Database,
+  id: number,
+  userId: string
+): StoredLyrics | null {
+  const row = db
+    .prepare(
+      `SELECT sl.plain, sl.synced, sl.source
+         FROM song_lyrics sl JOIN songs s ON s.id = sl.song_id
+        WHERE sl.song_id = ? AND s.user_id = ?`
+    )
+    .get(id, userId) as StoredLyrics | undefined;
+  return row ?? null;
+}
+
+// Unscoped read for public-share routes (access is gated by the share token at
+// the route, matching the public stream/art resolvers).
+export function getSongLyricsById(
+  db: Database,
+  id: number
+): StoredLyrics | null {
+  const row = db
+    .prepare("SELECT plain, synced, source FROM song_lyrics WHERE song_id = ?")
+    .get(id) as StoredLyrics | undefined;
+  return row ?? null;
+}
+
+// Songs not yet fetched-or-attempted for lyrics, with the fields the LRCLIB
+// lookup needs. Drives the backfill (mirrors listSongsNeedingLoudness).
+export function listSongsNeedingLyrics(
+  db: Database,
+  userId: string
+): { id: number; track: string; artist: string | null; album: string | null; duration: number | null }[] {
+  try {
+    return db
+      .prepare(
+        `SELECT id, original_filename AS track, artist, album, duration
+           FROM songs
+          WHERE user_id = ? AND lyrics_checked_at IS NULL AND pending = 0`
+      )
+      .all(userId) as {
+      id: number;
+      track: string;
+      artist: string | null;
+      album: string | null;
+      duration: number | null;
+    }[];
   } catch {
     return [];
   }

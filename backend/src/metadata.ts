@@ -7,6 +7,7 @@ export interface ExtractedMetadata {
   title: string | null;
   artist: string | null; // joined display string (kept for back-compat)
   artists: string[]; // individual artists, in tag order
+  lyrics: string | null; // embedded lyrics text (USLT etc.), if present
   album: string | null;
   artFilename: string | null;
   duration: number | null;
@@ -88,10 +89,26 @@ export async function extractMetadata(
       .map((a) => a.trim())
       .filter(Boolean);
 
+    // Embedded lyrics (ID3 USLT / Vorbis LYRICS). music-metadata exposes
+    // common.lyrics as an array of strings or {text, syncText} objects across
+    // versions — handle both, take the first non-empty text.
+    let lyrics: string | null = null;
+    for (const l of common.lyrics ?? []) {
+      const text =
+        typeof l === "string"
+          ? l
+          : ((l as { text?: string; syncText?: unknown }).text ?? null);
+      if (text && text.trim()) {
+        lyrics = text;
+        break;
+      }
+    }
+
     return {
       title: common.title ?? null,
       artist: common.artist ?? (artists.length ? artists.join(", ") : null),
       artists,
+      lyrics,
       album: common.album ?? null,
       artFilename,
       duration: format.duration ?? null,
@@ -104,6 +121,7 @@ export async function extractMetadata(
       title: null,
       artist: null,
       artists: [],
+      lyrics: null,
       album: null,
       artFilename: null,
       duration: null,

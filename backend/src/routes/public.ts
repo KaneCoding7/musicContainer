@@ -5,7 +5,11 @@ import {
   publicTokenAllowsSong,
   resolvePublicShare,
 } from "../functional/publicShares.js";
-import { resolveSongArtById, resolveSongFileById } from "../functional/songs.js";
+import {
+  getSongLyricsById,
+  resolveSongArtById,
+  resolveSongFileById,
+} from "../functional/songs.js";
 import { streamSongFile } from "../stream.js";
 import { serveArt } from "../thumbnails.js";
 
@@ -57,4 +61,21 @@ publicRouter.get("/public/:token/songs/:id/art", async (req, res) => {
       .json({ error: result.error });
   }
   await serveArt(req, res, result.value.path, result.value.contentType, req.query.size);
+});
+
+// GET /api/public/:token/songs/:id/lyrics — lyrics for a song in the shared list.
+publicRouter.get("/public/:token/songs/:id/lyrics", (req, res) => {
+  const id = Number(req.params.id);
+  if (!publicTokenAllowsSong(getDb(), req.params.token, id)) {
+    return res
+      .status(404)
+      .json({ error: { code: "not_found", message: "Not found" } });
+  }
+  const lyrics = getSongLyricsById(getDb(), id);
+  if (!lyrics || (!lyrics.plain && !lyrics.synced)) {
+    return res
+      .status(404)
+      .json({ error: { code: "not_found", message: "No lyrics" } });
+  }
+  return res.json({ lyrics });
 });

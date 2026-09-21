@@ -244,6 +244,60 @@ export async function analyzeLoudness(): Promise<{
   return (await res.json()) as { analyzed: number; remaining: number };
 }
 
+export interface Lyrics {
+  plain: string | null;
+  synced: string | null; // raw LRC
+  source: string | null;
+}
+
+// Fetches a song's stored lyrics, or null if it has none (404).
+export async function fetchLyrics(songId: number): Promise<Lyrics | null> {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}/lyrics`, {
+    headers: authHeaders(),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).lyrics as Lyrics;
+}
+
+// Forces a fresh LRCLIB lookup for a song; returns the updated song.
+export async function refetchLyrics(songId: number): Promise<Song> {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}/lyrics/refetch`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).song as Song;
+}
+
+// Manually sets (or clears) a song's lyrics; returns the updated song.
+export async function setLyrics(
+  songId: number,
+  fields: { plain?: string | null; synced?: string | null }
+): Promise<Song> {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}/lyrics`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(fields),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()).song as Song;
+}
+
+// Fetches lyrics for one batch of not-yet-checked tracks (library backfill).
+// Returns how many were found this call and how many remain (call until 0).
+export async function fetchLyricsBatch(): Promise<{
+  fetched: number;
+  remaining: number;
+}> {
+  const res = await fetch(`${apiBase()}/api/songs/fetch-lyrics`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()) as { fetched: number; remaining: number };
+}
+
 // Persists a manual ordering (sort_order) for the given song ids, in order.
 export async function reorderSongs(ids: number[]): Promise<void> {
   const res = await fetch(`${apiBase()}/api/songs/order`, {

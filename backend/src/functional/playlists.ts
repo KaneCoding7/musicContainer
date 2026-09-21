@@ -33,6 +33,7 @@ interface SongRow {
   clip_disabled: number;
   track_no: number | null;
   disc_no: number | null;
+  has_lyrics: number;
 }
 
 function rowToPlaylist(row: PlaylistRow): Playlist {
@@ -66,6 +67,7 @@ function rowToSong(row: SongRow): Song {
     hasSource: row.source_url !== null,
     hasClip: row.clip_filename !== null,
     clipDisabled: row.clip_disabled === 1,
+    hasLyrics: row.has_lyrics === 1,
     sourceUrl: row.source_url,
   };
 }
@@ -356,7 +358,7 @@ export function songsInPlaylist(
       `SELECT s.id, s.filename, s.original_filename, s.uploaded_at,
               s.artist, s.album, s.art_filename, s.duration,
               s.play_count, s.last_played_at, s.liked, s.loudness, s.sort_order,
-              s.album_sort_order, s.track_no, s.disc_no,
+              s.album_sort_order, s.track_no, s.disc_no, s.has_lyrics,
               s.source_url, s.clip_filename, s.clip_disabled, au.name AS added_by_name,
               ps.added_by AS added_by_id, s.user_id AS song_user_id
        FROM playlist_songs ps

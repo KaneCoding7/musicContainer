@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
-  import { analyzeLoudness } from "$lib/services/songService";
+  import { analyzeLoudness, fetchLyricsBatch } from "$lib/services/songService";
   import { apiBase } from "$lib/services/apiBase";
   import {
     getSubsonicCredential,
@@ -74,6 +74,43 @@
       };
     } finally {
       analyzing = false;
+    }
+  }
+
+  // How many tracks haven't had lyrics fetched yet (no hasLyrics). This is an
+  // upper bound — some simply have no lyrics on LRCLIB — but it's the count the
+  // backfill will attempt.
+  const pendingLyrics = $derived(
+    songVm.songs.filter((s) => !s.hasLyrics).length
+  );
+  let fetchingLyrics = $state(false);
+  let lyricsMsg = $state<{ ok: boolean; text: string } | null>(null);
+
+  async function runFetchLyrics() {
+    fetchingLyrics = true;
+    lyricsMsg = null;
+    try {
+      let remaining = Infinity;
+      let found = 0;
+      let guard = 0;
+      while (remaining > 0 && guard++ < 1000) {
+        const r = await fetchLyricsBatch();
+        found += r.fetched;
+        remaining = r.remaining;
+        lyricsMsg = { ok: true, text: `Fetching lyrics… ${remaining} left` };
+      }
+      await songVm.load(); // pick up the new hasLyrics flags
+      lyricsMsg = {
+        ok: true,
+        text: `Done — found lyrics for ${found} track${found === 1 ? "" : "s"}`,
+      };
+    } catch (e) {
+      lyricsMsg = {
+        ok: false,
+        text: e instanceof Error ? e.message : "Lyrics fetch failed",
+      };
+    } finally {
+      fetchingLyrics = false;
     }
   }
 
@@ -322,6 +359,26 @@
     </button>
   </div>
   {#if analyzeMsg}<p class="msg" class:err={!analyzeMsg.ok}>{analyzeMsg.text}</p>{/if}
+  <div class="row">
+    <div class="info">
+      <span class="t">Lyrics</span>
+      <span class="sub">
+        {#if pendingLyrics === 0}
+          All tracks checked
+        {:else}
+          {pendingLyrics} to check
+        {/if}
+      </span>
+    </div>
+    <button
+      class="ghost"
+      onclick={runFetchLyrics}
+      disabled={fetchingLyrics || pendingLyrics === 0}
+    >
+      {fetchingLyrics ? "Fetching…" : "Fetch lyrics"}
+    </button>
+  </div>
+  {#if lyricsMsg}<p class="msg" class:err={!lyricsMsg.ok}>{lyricsMsg.text}</p>{/if}
 
   <p class="section">Profile</p>
   <form onsubmit={saveName}>

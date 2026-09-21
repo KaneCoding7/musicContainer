@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { onMount, untrack } from "svelte";
   import FramePickerDialog from "$lib/components/FramePickerDialog.svelte";
   import Icon from "$lib/components/Icon.svelte";
 
@@ -22,6 +22,9 @@
     thumbUrl,
     removeArt,
     uploadArt,
+    fetchLyrics,
+    setLyrics,
+    refetchLyrics,
     type SongMetadata,
   } from "$lib/services/songService";
   import {
@@ -68,6 +71,42 @@
   let artistDraft = $state("");
   let dragIndex = $state<number | null>(null);
   let album = $state(untrack(() => song.album ?? ""));
+
+  // Lyrics: load the current plain text lazily so it can be edited. Editing
+  // replaces LRCLIB/synced lyrics with manual plain text (a note warns of this).
+  let lyricsText = $state("");
+  let lyricsLoaded = $state(""); // baseline to detect an actual edit on save
+  let lyricsHasSynced = $state(false);
+  let lyricsBusy = $state(false);
+  let lyricsError = $state<string | null>(null);
+  onMount(async () => {
+    if (readOnly || !song.hasLyrics) return;
+    try {
+      const ly = await fetchLyrics(song.id);
+      lyricsText = ly?.plain ?? "";
+      lyricsLoaded = lyricsText;
+      lyricsHasSynced = !!ly?.synced;
+    } catch {
+      /* leave the field empty on failure */
+    }
+  });
+  async function reFetchLyrics() {
+    lyricsBusy = true;
+    lyricsError = null;
+    try {
+      const updated = await refetchLyrics(song.id);
+      onArtChanged?.(updated); // propagates the hasLyrics flag
+      const ly = await fetchLyrics(song.id);
+      lyricsText = ly?.plain ?? "";
+      lyricsLoaded = lyricsText;
+      lyricsHasSynced = !!ly?.synced;
+      if (!ly) lyricsError = "No lyrics found on LRCLIB for this track.";
+    } catch (e) {
+      lyricsError = e instanceof Error ? e.message : "Re-fetch failed";
+    } finally {
+      lyricsBusy = false;
+    }
+  }
 
   // Adds the current draft as a chip (deduped case-insensitively).
   function addArtist() {
@@ -224,6 +263,18 @@
         return; // keep the dialog open on failure
       }
       artBusy = false;
+    }
+    // Persist edited lyrics (manual plain text) if they changed.
+    if (lyricsText !== lyricsLoaded) {
+      try {
+        const updated = await setLyrics(song.id, {
+          plain: lyricsText.trim() || null,
+        });
+        onArtChanged?.(updated);
+      } catch (e) {
+        lyricsError = e instanceof Error ? e.message : "Failed to save lyrics";
+        return; // keep the dialog open on failure
+      }
     }
     // Commit any half-typed artist before saving, then send the ordered list.
     if (artistDraft.trim()) addArtist();
@@ -391,6 +442,35 @@
     {/if}
 
     {#if !readOnly}
+      <div class="lyrics-block">
+        <div class="lyrics-head">
+          <span class="source-label">Lyrics</span>
+          {#if song.artist}
+            <button
+              type="button"
+              class="link-toggle"
+              onclick={reFetchLyrics}
+              disabled={lyricsBusy}
+            >
+              {lyricsBusy ? "Fetching…" : "Fetch from LRCLIB"}
+            </button>
+          {/if}
+        </div>
+        <textarea
+          class="lyrics-input"
+          bind:value={lyricsText}
+          rows="6"
+          placeholder="No lyrics yet — paste or type them here"
+        ></textarea>
+        {#if lyricsHasSynced}
+          <p class="hint">
+            This track has time-synced lyrics — editing here replaces them with
+            plain text.
+          </p>
+        {/if}
+        {#if lyricsError}<p class="hint err">{lyricsError}</p>{/if}
+      </div>
+
       <div class="public-block">
         <div class="public-head">
           <span><Icon name="public" size={18} /> Public link</span>
@@ -653,6 +733,34 @@
     margin-bottom: 0.75rem;
     padding-top: 0.5rem;
     border-top: 1px solid var(--surface-2);
+  }
+  .lyrics-block {
+    margin-bottom: 0.75rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--surface-2);
+  }
+  .lyrics-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+  .lyrics-input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem 0.7rem;
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+    color: var(--text);
+    font: inherit;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    resize: vertical;
+  }
+  .hint.err {
+    color: var(--danger-text);
   }
   .source-label {
     display: inline-flex;

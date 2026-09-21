@@ -139,6 +139,19 @@ export function migrate(database: Database.Database): void {
       created_by TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Per-song lyrics (one row per song). Kept out of the songs table because
+    -- the text is large and never needed in the library list; songs.has_lyrics
+    -- is the cheap flag the list uses. synced holds raw LRC ("[mm:ss.xx]...")
+    -- when time-synced lyrics exist; plain is the unsynced text. source is
+    -- lrclib | embedded | manual.
+    CREATE TABLE IF NOT EXISTS song_lyrics (
+      song_id    INTEGER PRIMARY KEY REFERENCES songs(id) ON DELETE CASCADE,
+      plain      TEXT,
+      synced     TEXT,
+      source     TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     -- Artists as first-class rows (per user, case-insensitive unique name) and
     -- the ordered song↔artist links. song_artists is the source of truth for a
     -- song's artists and their order; songs.artist is kept as a denormalized
@@ -340,6 +353,17 @@ export function migrate(database: Database.Database): void {
   }
   if (!columns.includes("disc_no")) {
     database.exec("ALTER TABLE songs ADD COLUMN disc_no INTEGER");
+  }
+  // Lyrics markers (content lives in song_lyrics). has_lyrics gates the UI's
+  // Lyrics button cheaply; lyrics_checked_at is stamped once a song has been
+  // fetched-or-attempted so the backfill never retries a confirmed miss.
+  if (!columns.includes("has_lyrics")) {
+    database.exec(
+      "ALTER TABLE songs ADD COLUMN has_lyrics INTEGER NOT NULL DEFAULT 0"
+    );
+  }
+  if (!columns.includes("lyrics_checked_at")) {
+    database.exec("ALTER TABLE songs ADD COLUMN lyrics_checked_at TEXT");
   }
   const plColumns = (
     database.prepare("PRAGMA table_info(playlists)").all() as { name: string }[]

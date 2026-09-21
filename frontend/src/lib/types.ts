@@ -21,6 +21,7 @@ export interface Song {
   hasSource: boolean; // imported from a video link (can offer frame artwork)
   hasClip: boolean; // has a cached looping canvas clip (shown in expanded player)
   clipDisabled: boolean; // per-song opt-out: don't show this song's clip
+  hasLyrics: boolean; // has stored lyrics (content fetched via a separate route)
   sourceUrl: string | null; // the original import link (e.g. YouTube), if any
   isSuggestion?: boolean; // auto-queued suggestion-radio track awaiting keep/discard
   addedBy?: string | null; // name of who added it to a playlist (playlist views)
