@@ -154,6 +154,13 @@
     text-align: left;
     cursor: pointer;
   }
+  /* The row itself is the play affordance — no focus outline box on the parts. */
+  .thumb-btn:focus,
+  .thumb-btn:focus-visible,
+  .name-btn:focus,
+  .name-btn:focus-visible {
+    outline: none;
+  }
   .name {
     display: block;
     font-weight: 500;

@@ -132,6 +132,14 @@
     text-align: inherit;
     cursor: pointer;
   }
+  /* No focus ring on the row play buttons: the whole row is the affordance, and
+     a full-width outline box around each row looked out of place (the rest of
+     the app doesn't ring its rows). Keyboard users still get the row's hover/
+     active styling. */
+  :global(.row-play:focus),
+  :global(.row-play:focus-visible) {
+    outline: none;
+  }
 
   /* Transient confirmation toast (e.g. swipe-to-queue). */
   :global(.swipe-toast) {
