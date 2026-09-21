@@ -1242,32 +1242,36 @@
     <!-- Row above the progress bar: library status (✓ in library / + to add) on
          the left, the artist centered in the middle, queue on the right. -->
     <div class="npf-actions">
-      <button
-        class="npf-keep"
-        class:kept={inLibrary}
-        onclick={keepCurrent}
-        disabled={inLibrary}
-        title={inLibrary ? "In your library" : "Add to your library"}
-        aria-label={inLibrary ? "In your library" : "Add to your library"}
-        ><Icon name={inLibrary ? "check" : "add"} size={24} /></button
-      >
+      <div class="npf-actions-side left">
+        <button
+          class="npf-keep"
+          class:kept={inLibrary}
+          onclick={keepCurrent}
+          disabled={inLibrary}
+          title={inLibrary ? "In your library" : "Add to your library"}
+          aria-label={inLibrary ? "In your library" : "Add to your library"}
+          ><Icon name={inLibrary ? "check" : "add"} size={24} /></button
+        >
+      </div>
       <span class="npf-actions-artist"
         ><ArtistLinks artists={song.artists} fallback={song.artist} link
       /></span>
-      {#if song.hasLyrics}
+      <div class="npf-actions-side right">
+        {#if song.hasLyrics}
+          <button
+            class="npf-lyrics-btn"
+            onclick={() => (lyricsSheet = true)}
+            aria-label="Lyrics"
+            title="Lyrics">Lyrics</button
+          >
+        {/if}
         <button
-          class="npf-lyrics-btn"
-          onclick={() => (lyricsSheet = true)}
-          aria-label="Lyrics"
-          title="Lyrics">Lyrics</button
+          class="npf-ctl-queue"
+          onclick={() => (queueSheet = true)}
+          aria-label="Queue"
+          title="Queue"><Icon name="queue_music" size={24} /></button
         >
-      {/if}
-      <button
-        class="npf-ctl-queue"
-        onclick={() => (queueSheet = true)}
-        aria-label="Queue"
-        title="Queue"><Icon name="queue_music" size={24} /></button
-      >
+      </div>
     </div>
     <div
       class="npf-seek"
@@ -1758,26 +1762,38 @@
     text-align: center;
     margin-top: 2rem;
   }
-  /* Lyrics toggle pill in the actions row. */
-  .npf-lyrics-btn {
-    background: none;
-    border: 1px solid var(--muted);
-    color: inherit;
-    font: inherit;
-    font-size: 0.8rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    padding: 0.3rem 0.8rem;
+  /* Lyrics toggle pill in the actions row. Scoped under .npf-actions to beat the
+     generic ".npf-actions button" rule (which would otherwise force a circular
+     hover shape onto this wider text button). */
+  .npf-actions .npf-lyrics-btn {
+    padding: 0.28rem 0.72rem;
     border-radius: 999px;
-    cursor: pointer;
+    border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     white-space: nowrap;
   }
-  .npf-lyrics-btn:hover {
-    border-color: var(--text);
-    color: var(--text);
+  @media (hover: hover) {
+    .npf-actions .npf-lyrics-btn:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--text) 12%, transparent);
+      border-color: color-mix(in srgb, currentColor 55%, transparent);
+      color: var(--text);
+    }
   }
-  /* Synced lyric lines: dim by default, the active line brightens; extra bottom
-     padding lets the last lines scroll to the vertical centre. */
+  /* Lyrics sheet: a slightly translucent, blurred backdrop over the now-playing
+     art (overrides the solid .npf-queue background it shares). */
+  .npf-lyrics {
+    background: color-mix(in srgb, var(--bg) 76%, transparent);
+    backdrop-filter: blur(26px) saturate(1.1);
+    -webkit-backdrop-filter: blur(26px) saturate(1.1);
+  }
+  /* Synced lyric lines: centered, dim by default, the active line brightens;
+     extra bottom padding lets the last lines scroll to the vertical centre. */
   .lyric-lines {
     display: flex;
     flex-direction: column;
@@ -1786,16 +1802,16 @@
   }
   .lyric-line {
     width: 100%;
-    text-align: left;
+    text-align: center;
     background: none;
     border: none;
     border-radius: 0.4rem;
     font: inherit;
-    font-size: 1.15rem;
-    font-weight: 600;
+    font-size: 1.2rem;
+    font-weight: 700;
     line-height: 1.45;
-    color: var(--muted);
-    padding: 0.35rem 0.4rem;
+    color: color-mix(in srgb, var(--text) 45%, transparent);
+    padding: 0.4rem 0.4rem;
     cursor: pointer;
     transition: color 0.2s ease;
   }
@@ -1811,9 +1827,10 @@
     margin: 0;
     padding-bottom: 20vh;
     white-space: pre-wrap;
+    text-align: center;
     font: inherit;
     font-size: 1.05rem;
-    line-height: 1.6;
+    line-height: 1.7;
     color: var(--text);
   }
   .npf-art {
@@ -1883,7 +1900,10 @@
      left, artist centered in the middle, queue on the right. A slight negative
      top margin hugs it up under the title. */
   .npf-actions {
-    display: flex;
+    /* Three columns with equal-width sides so the artist stays truly centered
+       regardless of how many buttons sit on each side. */
+    display: grid;
+    grid-template-columns: 1fr minmax(0, auto) 1fr;
     align-items: center;
     gap: 0.5rem;
     width: min(520px, 90vw);
@@ -1892,8 +1912,18 @@
     margin-top: -0.85rem;
     margin-bottom: -0.8rem;
   }
+  .npf-actions-side {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .npf-actions-side.left {
+    justify-content: flex-start;
+  }
+  .npf-actions-side.right {
+    justify-content: flex-end;
+  }
   .npf-actions-artist {
-    flex: 1;
     min-width: 0;
     text-align: center;
     color: var(--muted);
