@@ -195,7 +195,8 @@ export async function discardSuggestions(ids: number[]): Promise<void> {
 // Editable song metadata fields.
 export interface SongMetadata {
   originalFilename?: string;
-  artist?: string;
+  artist?: string; // legacy single-value; prefer `artists`
+  artists?: string[]; // ordered list of artist names
   album?: string;
 }
 
@@ -218,7 +219,7 @@ export async function updateSongMeta(
 // leave it untouched across the selection.
 export async function updateSongsMeta(
   ids: number[],
-  fields: { artist?: string; album?: string }
+  fields: { artist?: string; artists?: string[]; album?: string }
 ): Promise<Song[]> {
   const res = await fetch(`${apiBase()}/api/songs/bulk`, {
     method: "PATCH",

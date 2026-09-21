@@ -38,6 +38,7 @@
     onClose,
     onArtChanged,
     readOnly = false,
+    knownArtists = [],
   }: {
     song: Song;
     // Not required in read-only mode (nothing to save).
@@ -47,12 +48,64 @@
     // View-only: show the same fields you'd normally edit, but not editable and
     // with no save. Used for tracks the viewer doesn't own (shared playlists).
     readOnly?: boolean;
+    // Optional: existing artist names for the add-field autocomplete.
+    knownArtists?: string[];
   } = $props();
 
   // The dialog mounts fresh per edit, so seed the form from the song once.
   let name = $state(untrack(() => song.originalFilename));
-  let artist = $state(untrack(() => song.artist ?? ""));
+  // Ordered artist list. Seed from the relational list, falling back to the
+  // legacy single string (split isn't attempted — one string = one artist).
+  let artistList = $state<string[]>(
+    untrack(() =>
+      song.artists.length > 0
+        ? song.artists.map((a) => a.name)
+        : song.artist
+          ? [song.artist]
+          : []
+    )
+  );
+  let artistDraft = $state("");
+  let dragIndex = $state<number | null>(null);
   let album = $state(untrack(() => song.album ?? ""));
+
+  // Adds the current draft as a chip (deduped case-insensitively).
+  function addArtist() {
+    const v = artistDraft.trim();
+    artistDraft = "";
+    if (!v) return;
+    if (artistList.some((a) => a.toLowerCase() === v.toLowerCase())) return;
+    artistList = [...artistList, v];
+  }
+  function removeArtist(i: number) {
+    artistList = artistList.filter((_, idx) => idx !== i);
+  }
+  function onArtistKey(e: KeyboardEvent) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addArtist();
+    } else if (e.key === "Backspace" && artistDraft === "" && artistList.length) {
+      // Backspace on an empty field removes the last chip, like a tag input.
+      artistList = artistList.slice(0, -1);
+    }
+  }
+  function dropArtist(target: number) {
+    if (dragIndex === null || dragIndex === target) {
+      dragIndex = null;
+      return;
+    }
+    const next = [...artistList];
+    const [moved] = next.splice(dragIndex, 1);
+    next.splice(target, 0, moved);
+    artistList = next;
+    dragIndex = null;
+  }
+  // Names not already chosen, for the datalist suggestions.
+  const artistSuggestions = $derived(
+    knownArtists.filter(
+      (n) => !artistList.some((a) => a.toLowerCase() === n.toLowerCase())
+    )
+  );
 
   // Album art state (Cycle 32). `hasArt` + a cache-buster track changes locally.
   let hasArt = $state(untrack(() => song.hasArt));
@@ -172,9 +225,11 @@
       }
       artBusy = false;
     }
+    // Commit any half-typed artist before saving, then send the ordered list.
+    if (artistDraft.trim()) addArtist();
     onSave?.(song.id, {
       originalFilename: name.trim(),
-      artist: artist.trim(),
+      artists: artistList,
       album: album.trim(),
     });
     onClose();
@@ -263,7 +318,9 @@
       </label>
       <label>
         Artist
-        <p class="ro-value" class:empty={!artist}>{artist || "Unknown artist"}</p>
+        <p class="ro-value" class:empty={artistList.length === 0}>
+          {artistList.length ? artistList.join(", ") : "Unknown artist"}
+        </p>
       </label>
       <label>
         Album
@@ -274,10 +331,44 @@
         Name
         <input bind:value={name} />
       </label>
-      <label>
-        Artist
-        <input bind:value={artist} placeholder="Unknown artist" />
-      </label>
+      <div class="field">
+        <span class="field-label">Artists</span>
+        <div class="chips">
+          {#each artistList as a, i (a)}
+            <span
+              class="chip"
+              role="listitem"
+              draggable="true"
+              ondragstart={() => (dragIndex = i)}
+              ondragover={(e) => e.preventDefault()}
+              ondrop={() => dropArtist(i)}
+              ondragend={() => (dragIndex = null)}
+            >
+              <span class="chip-name">{a}</span>
+              <button
+                type="button"
+                class="chip-x"
+                aria-label={`Remove ${a}`}
+                onclick={() => removeArtist(i)}><Icon name="close" size={16} /></button
+              >
+            </span>
+          {/each}
+          <input
+            class="chip-input"
+            bind:value={artistDraft}
+            onkeydown={onArtistKey}
+            onblur={addArtist}
+            placeholder={artistList.length ? "Add another…" : "Add an artist…"}
+            list="artist-suggestions"
+          />
+          {#if artistSuggestions.length}
+            <datalist id="artist-suggestions">
+              {#each artistSuggestions as s (s)}<option value={s}></option>{/each}
+            </datalist>
+          {/if}
+        </div>
+        <span class="field-hint">Enter or comma to add · drag to reorder</span>
+      </div>
       <label>
         Album
         <input bind:value={album} placeholder="No album" />
@@ -489,6 +580,74 @@
   }
   .ro-value.empty {
     color: var(--dim);
+  }
+  /* Multi-artist chip editor */
+  .field {
+    margin-bottom: 0.75rem;
+  }
+  .field-label {
+    display: block;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.25rem;
+    padding: 0.35rem 0.4rem;
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 0.5rem;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.2rem 0.2rem 0.2rem 0.6rem;
+    background: var(--surface-2);
+    border-radius: 1rem;
+    color: var(--text);
+    font-size: 0.85rem;
+    cursor: grab;
+    user-select: none;
+  }
+  .chip-name {
+    line-height: 1;
+  }
+  .chip-x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.1rem;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    color: var(--dim);
+    cursor: pointer;
+  }
+  .chip-x:hover {
+    color: var(--text);
+  }
+  .chip-input {
+    flex: 1;
+    width: auto;
+    min-width: 9ch;
+    margin: 0;
+    padding: 0.25rem 0.3rem;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+  }
+  .chip-input:focus {
+    outline: none;
+  }
+  .field-hint {
+    display: block;
+    margin-top: 0.3rem;
+    color: var(--dim);
+    font-size: 0.75rem;
   }
   .source-block {
     margin-bottom: 0.75rem;

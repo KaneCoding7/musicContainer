@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "$lib/components/Icon.svelte";
+  import ArtistLinks from "$lib/components/ArtistLinks.svelte";
   import { thumbUrl } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -35,7 +36,9 @@
   <div class="overlay">
     <div class="meta">
       <span class="title">{song?.originalFilename ?? "Nothing playing"}</span>
-      {#if song?.artist}<span class="artist">{song.artist}</span>{/if}
+      {#if song && song.artist}<span class="artist"
+          ><ArtistLinks artists={song.artists} fallback={song.artist} link
+        /></span>{/if}
     </div>
 
     <div class="seek">

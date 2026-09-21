@@ -2,6 +2,7 @@
   import { goto } from "$app/navigation";
   import Icon from "$lib/components/Icon.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
+  import ArtistLinks from "$lib/components/ArtistLinks.svelte";
   import { thumbUrl } from "$lib/services/songService";
   import type { Song } from "$lib/types";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -17,11 +18,18 @@
   const mostPlayedArtists = $derived.by(() => {
     const map = new Map<string, Song[]>();
     for (const s of vm.songs) {
-      const name = s.artist?.trim();
-      if (!name) continue;
-      const list = map.get(name) ?? [];
-      list.push(s);
-      map.set(name, list);
+      // Credit each of the song's artists (fall back to the legacy string).
+      const names =
+        s.artists.length > 0
+          ? s.artists.map((a) => a.name)
+          : s.artist?.trim()
+            ? [s.artist.trim()]
+            : [];
+      for (const name of names) {
+        const list = map.get(name) ?? [];
+        list.push(s);
+        map.set(name, list);
+      }
     }
     return [...map.entries()]
       .map(([name, songs]) => ({
@@ -71,18 +79,29 @@
           <!-- Right-click anywhere on the card opens the same menu as the list's
                ⋮ button; SongMenu wires it up via the data-song-menu-row marker. -->
           <div class="card" data-song-menu-row>
-            <button class="card-btn" onclick={() => vm.playQueue(list, i)}>
-              <span class="cover">
-                {#if song.hasArt}
-                  <img src={thumbUrl(song.id, 512)} alt="" />
-                {:else}
-                  <Icon name="music_note" size={26} />
-                {/if}
-                <span class="play-overlay"><Icon name="play_arrow" fill size={26} /></span>
-              </span>
-              <span class="c-name">{song.originalFilename}</span>
-              {#if song.artist}<span class="c-sub">{song.artist}</span>{/if}
-            </button>
+            <div class="card-btn">
+              <button
+                class="row-play cover-btn"
+                onclick={() => vm.playQueue(list, i)}
+                aria-label={`Play ${song.originalFilename}`}
+              >
+                <span class="cover">
+                  {#if song.hasArt}
+                    <img src={thumbUrl(song.id, 512)} alt="" />
+                  {:else}
+                    <Icon name="music_note" size={26} />
+                  {/if}
+                  <span class="play-overlay"><Icon name="play_arrow" fill size={26} /></span>
+                </span>
+              </button>
+              <button
+                class="row-play c-name"
+                onclick={() => vm.playQueue(list, i)}>{song.originalFilename}</button
+              >
+              {#if song.artist}<span class="c-sub"
+                  ><ArtistLinks artists={song.artists} fallback={song.artist} link
+                /></span>{/if}
+            </div>
             <SongMenu {vm} {song} />
           </div>
         {/each}

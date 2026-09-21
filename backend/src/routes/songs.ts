@@ -27,6 +27,8 @@ import {
   listSongs,
   listSongsNeedingLoudness,
   recordPlay,
+  findOrCreateArtist,
+  pruneOrphanArtists,
   recordSong,
   resolveSongArtById,
   resolveSongClipById,
@@ -269,23 +271,45 @@ function artistParam(req: { query: Record<string, unknown> }): string {
   return typeof req.query.name === "string" ? req.query.name : "";
 }
 
+// Looks up an existing artist id by name for a user (no creation). Used by the
+// read/delete image routes, which shouldn't materialize an artist row.
+function lookupArtistId(
+  db: ReturnType<typeof getDb>,
+  userId: string,
+  name: string
+): number | undefined {
+  const row = db
+    .prepare(
+      "SELECT id FROM artists WHERE user_id = ? AND name = ? COLLATE NOCASE"
+    )
+    .get(userId, name.trim()) as { id: number } | undefined;
+  return row?.id;
+}
+
 // GET /api/artists/images — names of artists the user has a custom image for.
 songsRouter.get("/artists/images", (req, res) => {
   const rows = getDb()
-    .prepare("SELECT artist FROM artist_images WHERE user_id = ?")
-    .all(req.userId!) as { artist: string }[];
-  return res.json({ artists: rows.map((r) => r.artist) });
+    .prepare(
+      `SELECT a.name FROM artist_images ai
+         JOIN artists a ON a.id = ai.artist_id
+        WHERE ai.user_id = ?`
+    )
+    .all(req.userId!) as { name: string }[];
+  return res.json({ artists: rows.map((r) => r.name) });
 });
 
 // GET /api/artists/image?name=… — serve the user's custom image, or 404.
 songsRouter.get("/artists/image", (req, res) => {
   const artist = artistParam(req);
   if (!artist) return res.status(404).end();
-  const row = getDb()
+  const db = getDb();
+  const artistId = lookupArtistId(db, req.userId!, artist);
+  if (artistId === undefined) return res.status(404).end();
+  const row = db
     .prepare(
-      "SELECT filename FROM artist_images WHERE user_id = ? AND artist = ?"
+      "SELECT filename FROM artist_images WHERE user_id = ? AND artist_id = ?"
     )
-    .get(req.userId!, artist) as { filename: string } | undefined;
+    .get(req.userId!, artistId) as { filename: string } | undefined;
   if (!row) return res.status(404).end();
   const path = join(ART_DIR, row.filename);
   if (!existsSync(path)) return res.status(404).end();
@@ -315,17 +339,18 @@ songsRouter.put("/artists/image", (req, res) => {
       });
     }
     const db = getDb();
+    const artistId = findOrCreateArtist(db, req.userId!, artist);
     const existing = db
       .prepare(
-        "SELECT filename FROM artist_images WHERE user_id = ? AND artist = ?"
+        "SELECT filename FROM artist_images WHERE user_id = ? AND artist_id = ?"
       )
-      .get(req.userId!, artist) as { filename: string } | undefined;
+      .get(req.userId!, artistId) as { filename: string } | undefined;
     db.prepare(
-      `INSERT INTO artist_images (user_id, artist, filename, updated_at)
+      `INSERT INTO artist_images (user_id, artist_id, filename, updated_at)
        VALUES (?, ?, ?, datetime('now'))
-       ON CONFLICT(user_id, artist) DO UPDATE SET
+       ON CONFLICT(user_id, artist_id) DO UPDATE SET
          filename = excluded.filename, updated_at = excluded.updated_at`
-    ).run(req.userId!, artist, req.file.filename);
+    ).run(req.userId!, artistId, req.file.filename);
     if (existing?.filename) cleanupArt(existing.filename);
     return res.status(201).json({ ok: true });
   });
@@ -336,14 +361,20 @@ songsRouter.delete("/artists/image", (req, res) => {
   const artist = artistParam(req);
   if (!artist) return res.status(204).end();
   const db = getDb();
+  const artistId = lookupArtistId(db, req.userId!, artist);
+  if (artistId === undefined) return res.status(204).end();
   const row = db
-    .prepare("SELECT filename FROM artist_images WHERE user_id = ? AND artist = ?")
-    .get(req.userId!, artist) as { filename: string } | undefined;
-  db.prepare("DELETE FROM artist_images WHERE user_id = ? AND artist = ?").run(
-    req.userId!,
-    artist
-  );
+    .prepare(
+      "SELECT filename FROM artist_images WHERE user_id = ? AND artist_id = ?"
+    )
+    .get(req.userId!, artistId) as { filename: string } | undefined;
+  db.prepare(
+    "DELETE FROM artist_images WHERE user_id = ? AND artist_id = ?"
+  ).run(req.userId!, artistId);
   if (row?.filename) cleanupArt(row.filename);
+  // The artist row may now be unreferenced (e.g. an image for a name with no
+  // songs); prune it so stray artists don't accumulate.
+  pruneOrphanArtists(db, [artistId]);
   return res.status(204).end();
 });
 
@@ -371,6 +402,7 @@ songsRouter.post("/upload", uploadLimiter, (req, res) => {
       originalFilename: meta.title?.trim() || req.file.originalname,
       userId: req.userId!,
       artist: meta.artist,
+      artists: meta.artists, // individual artists from the embedded tags
       album: meta.album,
       artFilename: meta.artFilename,
       duration: meta.duration,
@@ -824,6 +856,9 @@ songsRouter.post("/import-link", importLimiter, async (req, res) => {
         originalFilename: cleanName,
         userId: req.userId!,
         artist: info.artist ?? meta.artist,
+        // Keep multiple artists only when the embedded tags actually list them;
+        // otherwise let the (often enriched) single `artist` string stand.
+        artists: meta.artists.length > 1 ? meta.artists : undefined,
         album: info.album ?? meta.album,
         artFilename,
         duration: meta.duration,
@@ -952,6 +987,7 @@ async function ingestSuggestion(
       originalFilename: cleanName,
       userId,
       artist: info.artist ?? meta.artist ?? hint.artist,
+      artists: meta.artists.length > 1 ? meta.artists : undefined,
       album: info.album ?? meta.album,
       artFilename,
       duration: meta.duration,
@@ -1594,8 +1630,13 @@ songsRouter.patch("/songs/bulk", (req, res) => {
     });
   }
 
-  const fields: { artist?: string; album?: string } = {};
+  const fields: { artist?: string; artists?: string[]; album?: string } = {};
   if (typeof req.body?.artist === "string") fields.artist = req.body.artist;
+  if (Array.isArray(req.body?.artists)) {
+    fields.artists = req.body.artists.filter(
+      (x: unknown): x is string => typeof x === "string"
+    );
+  }
   if (typeof req.body?.album === "string") fields.album = req.body.album;
 
   const result = updateSongsBulk(getDb(), ids, fields, req.userId!);
@@ -1609,11 +1650,20 @@ songsRouter.patch("/songs/bulk", (req, res) => {
 
 // PATCH /api/songs/:id — edit a song's metadata (name, artist, album).
 songsRouter.patch("/songs/:id", (req, res) => {
-  const fields: { originalFilename?: string; artist?: string; album?: string } =
-    {};
+  const fields: {
+    originalFilename?: string;
+    artist?: string;
+    artists?: string[];
+    album?: string;
+  } = {};
   if (typeof req.body?.originalFilename === "string")
     fields.originalFilename = req.body.originalFilename;
   if (typeof req.body?.artist === "string") fields.artist = req.body.artist;
+  if (Array.isArray(req.body?.artists)) {
+    fields.artists = req.body.artists.filter(
+      (x: unknown): x is string => typeof x === "string"
+    );
+  }
   if (typeof req.body?.album === "string") fields.album = req.body.album;
 
   const result = updateSong(getDb(), Number(req.params.id), fields, req.userId!);

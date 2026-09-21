@@ -5,6 +5,7 @@
   import QueueView from "$lib/components/QueueView.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
   import TransportControls from "$lib/components/TransportControls.svelte";
+  import ArtistLinks from "$lib/components/ArtistLinks.svelte";
   import {
     artUrl,
     clipUrl,
@@ -1205,7 +1206,9 @@
         aria-label={inLibrary ? "In your library" : "Add to your library"}
         ><Icon name={inLibrary ? "check" : "add"} size={24} /></button
       >
-      <span class="npf-actions-artist">{song.artist ?? ""}</span>
+      <span class="npf-actions-artist"
+        ><ArtistLinks artists={song.artists} fallback={song.artist} link
+      /></span>
       <button
         class="npf-ctl-queue"
         onclick={() => (queueSheet = true)}
@@ -1299,32 +1302,43 @@
          SongMenu attaches its context-menu handler to this [data-song-menu-row]
          wrapper; its own ⋮ trigger is hidden here to keep the bar uncluttered. -->
     <div class="np-wrap" data-song-menu-row>
-      <button
+      <div
         class="now-playing"
         class:bar-dragging={barDragging}
         style="transform: translateX({barDragX}px)"
-        onclick={() => {
-          if (barSwiped) return; // a swipe just happened — don't open the view
-          expanded = true;
-        }}
-        title="Open now playing"
       >
-        <span class="np-art">
-          {#if song.hasArt}
-            <img src={thumbUrl(song.id, 128)} alt="" />
-          {:else}
-            <Icon name="music_note" size={20} />
-          {/if}
-        </span>
+        <button
+          class="row-play np-art-btn"
+          onclick={() => {
+            if (barSwiped) return; // a swipe just happened — don't open the view
+            expanded = true;
+          }}
+          aria-label="Open now playing"
+        >
+          <span class="np-art">
+            {#if song.hasArt}
+              <img src={thumbUrl(song.id, 128)} alt="" />
+            {:else}
+              <Icon name="music_note" size={20} />
+            {/if}
+          </span>
+        </button>
         <span class="np-meta">
-          <span class="np-title" title={song.originalFilename}
-            >{song.originalFilename}</span
+          <button
+            class="row-play np-title"
+            title={song.originalFilename}
+            onclick={() => {
+              if (barSwiped) return; // a swipe just happened — don't open the view
+              expanded = true;
+            }}>{song.originalFilename}</button
           >
           {#if song.artist}
-            <span class="np-artist" title={song.artist}>{song.artist}</span>
+            <span class="np-artist"
+              ><ArtistLinks artists={song.artists} fallback={song.artist} link
+            /></span>
           {/if}
         </span>
-      </button>
+      </div>
       <SongMenu {vm} {song} showTrigger={false} />
     </div>
 
@@ -1849,6 +1863,9 @@
   }
   .now-playing.bar-dragging {
     transition: none; /* follow the finger 1:1 while dragging */
+  }
+  .np-art-btn {
+    flex-shrink: 0;
   }
   .np-art {
     width: 40px;

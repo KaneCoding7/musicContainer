@@ -9,6 +9,7 @@
   import SharedPlaylistDetail from "$lib/components/SharedPlaylistDetail.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
   import UserAutocomplete from "$lib/components/UserAutocomplete.svelte";
+  import ArtistLinks from "$lib/components/ArtistLinks.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
   import { reorderHandle } from "$lib/actions/reorderHandle";
   import {
@@ -844,31 +845,42 @@
                   <Icon name="drag_indicator" size={20} />
                 </span>
               {/if}
-              <button class="play-btn" onclick={() => playFrom(i)}>
-                <span class="thumb">
-                  {#if song.hasArt}
-                    <img src={thumbUrl(song.id, 128)} alt="" />
-                  {:else}
-                    <Icon name="music_note" size={18} />
-                  {/if}
-                  <span class="thumb-play">
-                    <Icon
-                      name={isCurrent && songVm.isPlaying ? "pause" : "play_arrow"}
-                      fill
-                      size={20}
-                    />
+              <div class="play-btn">
+                <button
+                  class="row-play thumb-btn"
+                  onclick={() => playFrom(i)}
+                  aria-label={`Play ${song.originalFilename}`}
+                >
+                  <span class="thumb">
+                    {#if song.hasArt}
+                      <img src={thumbUrl(song.id, 128)} alt="" />
+                    {:else}
+                      <Icon name="music_note" size={18} />
+                    {/if}
+                    <span class="thumb-play">
+                      <Icon
+                        name={isCurrent && songVm.isPlaying ? "pause" : "play_arrow"}
+                        fill
+                        size={20}
+                      />
+                    </span>
+                    {#if isCurrent && songVm.isPlaying}
+                      <span class="thumb-wave"><EqualizerBars size={18} /></span>
+                    {/if}
                   </span>
-                  {#if isCurrent && songVm.isPlaying}
-                    <span class="thumb-wave"><EqualizerBars size={18} /></span>
-                  {/if}
-                </span>
+                </button>
                 <span class="meta">
-                  <span class="name">{song.originalFilename}</span>
+                  <button
+                    class="row-play name"
+                    onclick={() => playFrom(i)}>{song.originalFilename}</button
+                  >
                   {#if song.artist}
-                    <span class="artist">{song.artist}</span>
+                    <span class="artist"
+                      ><ArtistLinks artists={song.artists} fallback={song.artist} link
+                    /></span>
                   {/if}
                 </span>
-              </button>
+              </div>
               {#if (collaborative || isSavedCopy) && song.addedBy}
                 <span class="added-by" title={`Added by ${song.addedBy}`}>
                   <Icon name="person" size={13} />{song.addedBy}
@@ -937,7 +949,9 @@
                   <li>
                     <span class="ar-meta">
                       <span class="ar-name">{song.originalFilename}</span>
-                      {#if song.artist}<span class="ar-artist">{song.artist}</span>{/if}
+                      {#if song.artist}<span class="ar-artist"
+                          ><ArtistLinks artists={song.artists} fallback={song.artist} link
+                        /></span>{/if}
                     </span>
                     <button
                       class="ar-add"

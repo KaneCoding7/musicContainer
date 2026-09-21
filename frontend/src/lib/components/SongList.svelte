@@ -109,9 +109,15 @@
   async function applyBulkEdit() {
     if (!onBulkEdit || selected.size === 0) return;
     const fields: SongMetadata = {};
-    if (bulkArtist.trim()) fields.artist = bulkArtist.trim();
+    if (bulkArtist.trim()) {
+      // Comma/semicolon-separated → an ordered artist list.
+      fields.artists = bulkArtist
+        .split(/[,;]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
     if (bulkAlbum.trim()) fields.album = bulkAlbum.trim();
-    if (fields.artist === undefined && fields.album === undefined) return;
+    if (fields.artists === undefined && fields.album === undefined) return;
     const n = await onBulkEdit([...selected], fields);
     addStatus = `Updated ${n} ${n === 1 ? "song" : "songs"}`;
     bulkArtist = "";
@@ -250,8 +256,8 @@
         <div class="selbar editbar">
           <input
             bind:value={bulkArtist}
-            placeholder="Artist (blank = keep)"
-            aria-label="Set artist on selected songs"
+            placeholder="Artists, comma-separated (blank = keep)"
+            aria-label="Set artists on selected songs"
           />
           <input
             bind:value={bulkAlbum}
@@ -322,6 +328,8 @@
             artUrl={song.hasArt ? thumbUrl(song.id, 128) : null}
             title={song.originalFilename}
             artist={song.artist}
+            artists={song.artists}
+            linkArtist
             current={isCurrent}
             playing={isCurrent && vm.isPlaying}
             onclick={(e) =>

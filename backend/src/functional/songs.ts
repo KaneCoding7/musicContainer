@@ -84,6 +84,7 @@ function rowToSong(row: SongRow): Song {
     originalFilename: row.original_filename,
     uploadedAt: row.uploaded_at,
     artist: row.artist,
+    artists: [], // filled in by attachArtists() for the UI-facing reads
     album: row.album,
     hasArt: row.art_filename !== null,
     duration: row.duration,
@@ -101,6 +102,120 @@ function rowToSong(row: SongRow): Song {
     sourceUrl: row.source_url,
     isSuggestion: row.suggestion === 1,
   };
+}
+
+// --- Artists (relational) --------------------------------------------------
+
+// Resolves an artist name to its id for a user, creating the row if needed.
+// Case-insensitive (the artists table has UNIQUE(user_id, name COLLATE NOCASE)),
+// so "Drake" and "drake" collapse to one artist; the first-seen casing wins.
+export function findOrCreateArtist(
+  db: Database,
+  userId: string,
+  name: string
+): number {
+  const trimmed = name.trim();
+  db.prepare(
+    "INSERT OR IGNORE INTO artists (user_id, name) VALUES (?, ?)"
+  ).run(userId, trimmed);
+  const row = db
+    .prepare(
+      "SELECT id FROM artists WHERE user_id = ? AND name = ? COLLATE NOCASE"
+    )
+    .get(userId, trimmed) as { id: number } | undefined;
+  // The row was just inserted or already existed, so this is always defined.
+  return row!.id;
+}
+
+// Sets a song's ordered artist list (the source of truth), replacing any
+// existing links, and refreshes the denormalized songs.artist display string.
+// Blank/duplicate names are ignored; an empty result clears the artist. Also
+// prunes artists that this change left with no songs, image, or public share.
+// Owner-scoped; assumes it runs inside a caller transaction where appropriate.
+export function syncSongArtists(
+  db: Database,
+  songId: number,
+  userId: string,
+  names: string[]
+): void {
+  // Normalize: trim, drop blanks, de-dupe case-insensitively, keep order.
+  const seen = new Set<string>();
+  const clean: string[] = [];
+  for (const raw of names) {
+    const t = (raw ?? "").trim();
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    clean.push(t);
+  }
+
+  const priorIds = (
+    db
+      .prepare("SELECT artist_id FROM song_artists WHERE song_id = ?")
+      .all(songId) as { artist_id: number }[]
+  ).map((r) => r.artist_id);
+
+  db.prepare("DELETE FROM song_artists WHERE song_id = ?").run(songId);
+
+  const link = db.prepare(
+    "INSERT INTO song_artists (song_id, artist_id, position) VALUES (?, ?, ?)"
+  );
+  clean.forEach((name, i) => {
+    const artistId = findOrCreateArtist(db, userId, name);
+    link.run(songId, artistId, i);
+  });
+
+  const display = clean.length ? clean.join(", ") : null;
+  db.prepare("UPDATE songs SET artist = ? WHERE id = ? AND user_id = ?").run(
+    display,
+    songId,
+    userId
+  );
+
+  pruneOrphanArtists(db, priorIds);
+}
+
+// Deletes artist rows (from the given candidate ids) that are no longer used by
+// any song, image, or public share — keeps the artists table from accumulating
+// dangling names after edits/deletes.
+export function pruneOrphanArtists(db: Database, artistIds: number[]): void {
+  if (artistIds.length === 0) return;
+  const del = db.prepare(
+    `DELETE FROM artists
+      WHERE id = ?
+        AND NOT EXISTS (SELECT 1 FROM song_artists WHERE artist_id = artists.id)
+        AND NOT EXISTS (SELECT 1 FROM artist_images WHERE artist_id = artists.id)
+        AND NOT EXISTS (SELECT 1 FROM artist_public_shares WHERE artist_id = artists.id)`
+  );
+  for (const id of new Set(artistIds)) del.run(id);
+}
+
+// Attaches the ordered artists array to each Song (one batched query). Call it
+// on the owner-facing reads that feed the UI; other reads keep only the scalar
+// `artist` string. No-op for an empty list.
+export function attachArtists<T extends Song>(db: Database, songs: T[]): T[] {
+  if (songs.length === 0) return songs;
+  const byId = new Map<number, T>();
+  for (const s of songs) {
+    s.artists = [];
+    byId.set(s.id, s);
+  }
+  const ids = [...byId.keys()];
+  const placeholders = ids.map(() => "?").join(", ");
+  const rows = db
+    .prepare(
+      `SELECT sa.song_id AS songId, a.id AS id, a.name AS name
+         FROM song_artists sa
+         JOIN artists a ON a.id = sa.artist_id
+        WHERE sa.song_id IN (${placeholders})
+        ORDER BY sa.song_id, sa.position`
+    )
+    .all(...ids) as { songId: number; id: number; name: string }[];
+  for (const r of rows) {
+    byId.get(r.songId)?.artists.push({ id: r.id, name: r.name });
+  }
+  return songs;
 }
 
 // Persists a manual ordering: assigns each id a sort_order matching its index
@@ -193,6 +308,7 @@ export function recordSong(
     originalFilename: string;
     userId: string;
     artist?: string | null;
+    artists?: string[]; // ordered; preferred over `artist` when provided
     album?: string | null;
     artFilename?: string | null;
     duration?: number | null;
@@ -210,35 +326,50 @@ export function recordSong(
     return err("validation", "filename and originalFilename are required");
   }
 
+  // Prefer the ordered `artists` list; fall back to the single `artist` string.
+  const artistNames =
+    params.artists && params.artists.length > 0
+      ? params.artists
+      : params.artist
+        ? [params.artist]
+        : [];
+
   try {
-    const info = db
-      .prepare(
-        "INSERT INTO songs (filename, original_filename, artist, album, art_filename, duration, user_id, pending, suggestion, source_url, mb_recording_id, track_no, disc_no) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-      )
-      .run(
-        filename,
-        originalFilename,
-        params.artist ?? null,
-        params.album ?? null,
-        params.artFilename ?? null,
-        params.duration ?? null,
-        params.userId,
-        params.pending ? 1 : 0,
-        params.suggestion ? 1 : 0,
-        params.sourceUrl ?? null,
-        params.mbRecordingId ?? null,
-        params.trackNo ?? null,
-        params.discNo ?? null
-      );
+    const insert = db.transaction((): number => {
+      const info = db
+        .prepare(
+          "INSERT INTO songs (filename, original_filename, artist, album, art_filename, duration, user_id, pending, suggestion, source_url, mb_recording_id, track_no, disc_no) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        .run(
+          filename,
+          originalFilename,
+          params.artist ?? null,
+          params.album ?? null,
+          params.artFilename ?? null,
+          params.duration ?? null,
+          params.userId,
+          params.pending ? 1 : 0,
+          params.suggestion ? 1 : 0,
+          params.sourceUrl ?? null,
+          params.mbRecordingId ?? null,
+          params.trackNo ?? null,
+          params.discNo ?? null
+        );
+      const id = info.lastInsertRowid as number;
+      // Links the artists and (re)writes the denormalized songs.artist string.
+      syncSongArtists(db, id, params.userId, artistNames);
+      return id;
+    });
+    const newId = insert();
 
     const row = db
       .prepare(`SELECT ${SONG_COLUMNS} FROM songs WHERE id = ?`)
-      .get(info.lastInsertRowid as number) as SongRow | undefined;
+      .get(newId) as SongRow | undefined;
 
     if (!row) {
       return err("internal", "Song was inserted but could not be read back");
     }
-    return ok(rowToSong(row));
+    return ok(attachArtists(db, [rowToSong(row)])[0]);
   } catch (e) {
     return err("internal", `Failed to record song: ${(e as Error).message}`);
   }
@@ -252,7 +383,7 @@ export function listSongs(db: Database, userId: string): Result<Song[]> {
         `SELECT ${SONG_COLUMNS} FROM songs WHERE user_id = ? AND pending = 0 ORDER BY datetime(uploaded_at) DESC, id DESC`
       )
       .all(userId) as SongRow[];
-    return ok(rows.map(rowToSong));
+    return ok(attachArtists(db, rows.map(rowToSong)));
   } catch (e) {
     return err("internal", `Failed to list songs: ${(e as Error).message}`);
   }
@@ -333,11 +464,24 @@ export function copySongToLibrary(
       }
     }
 
+    // Carry the source's ordered artist list so the copy keeps every artist,
+    // not just the joined display string.
+    const srcArtistNames = (
+      db
+        .prepare(
+          `SELECT a.name FROM song_artists sa
+             JOIN artists a ON a.id = sa.artist_id
+            WHERE sa.song_id = ? ORDER BY sa.position`
+        )
+        .all(songId) as { name: string }[]
+    ).map((r) => r.name);
+
     const result = recordSong(db, {
       filename: newFile,
       originalFilename: src.original_filename,
       userId,
       artist: src.artist,
+      artists: srcArtistNames.length > 0 ? srcArtistNames : undefined,
       album: src.album,
       artFilename: newArt,
       duration: src.duration,
@@ -361,14 +505,21 @@ export function listSongsByArtist(
   artist: string
 ): Result<Song[]> {
   try {
+    // Join through song_artists so a song counts for EVERY artist it credits,
+    // not just an exact match on the joined display string.
     const rows = db
       .prepare(
-        `SELECT ${SONG_COLUMNS} FROM songs
-         WHERE user_id = ? AND pending = 0 AND TRIM(COALESCE(artist, '')) = ?
-         ORDER BY datetime(uploaded_at) DESC, id DESC`
+        `SELECT ${SONG_COLUMNS.split(", ")
+          .map((c) => `s.${c}`)
+          .join(", ")}
+         FROM songs s
+         JOIN song_artists sa ON sa.song_id = s.id
+         JOIN artists a ON a.id = sa.artist_id
+         WHERE s.user_id = ? AND s.pending = 0 AND a.name = ? COLLATE NOCASE
+         ORDER BY datetime(s.uploaded_at) DESC, s.id DESC`
       )
       .all(userId, artist.trim()) as SongRow[];
-    return ok(rows.map(rowToSong));
+    return ok(attachArtists(db, rows.map(rowToSong)));
   } catch (e) {
     return err("internal", `Failed to list artist songs: ${(e as Error).message}`);
   }
@@ -382,7 +533,7 @@ export function listPendingSongs(db: Database, userId: string): Result<Song[]> {
         `SELECT ${SONG_COLUMNS} FROM songs WHERE user_id = ? AND pending = 1 AND suggestion = 0 ORDER BY id ASC`
       )
       .all(userId) as SongRow[];
-    return ok(rows.map(rowToSong));
+    return ok(attachArtists(db, rows.map(rowToSong)));
   } catch (e) {
     return err("internal", `Failed to list pending songs: ${(e as Error).message}`);
   }
@@ -415,7 +566,7 @@ export function finalizeSongs(
         `SELECT ${SONG_COLUMNS} FROM songs WHERE user_id = ? AND id IN (${placeholders}) ORDER BY datetime(uploaded_at) DESC, id DESC`
       )
       .all(userId, ...ids) as SongRow[];
-    return ok(rows.map(rowToSong));
+    return ok(attachArtists(db, rows.map(rowToSong)));
   } catch (e) {
     return err("internal", `Failed to confirm songs: ${(e as Error).message}`);
   }
@@ -714,7 +865,12 @@ export function resolveSongClipById(
 export function updateSong(
   db: Database,
   id: number,
-  fields: { originalFilename?: string; artist?: string; album?: string },
+  fields: {
+    originalFilename?: string;
+    artist?: string;
+    artists?: string[]; // ordered; preferred over `artist` when provided
+    album?: string;
+  },
   userId: string
 ): Result<Song> {
   const existing = getSong(db, id, userId);
@@ -729,23 +885,38 @@ export function updateSong(
     sets.push("original_filename = ?");
     values.push(name);
   }
-  if (fields.artist !== undefined) {
-    const artist = fields.artist.trim();
-    sets.push("artist = ?");
-    values.push(artist || null);
-  }
   if (fields.album !== undefined) {
     const album = fields.album.trim();
     sets.push("album = ?");
     values.push(album || null);
   }
 
-  if (sets.length === 0) return existing; // nothing to change
+  // The artist list is managed relationally (song_artists) with the display
+  // string kept in sync by syncSongArtists — so it's handled apart from the
+  // plain-column sets above. Accept the ordered `artists`, or a single legacy
+  // `artist` string as a one-element list.
+  const artistNames =
+    fields.artists !== undefined
+      ? fields.artists
+      : fields.artist !== undefined
+        ? fields.artist.trim()
+          ? [fields.artist]
+          : []
+        : undefined;
+
+  if (sets.length === 0 && artistNames === undefined) return existing; // nothing
 
   try {
-    db.prepare(
-      `UPDATE songs SET ${sets.join(", ")} WHERE id = ? AND user_id = ?`
-    ).run(...values, id, userId);
+    db.transaction(() => {
+      if (sets.length > 0) {
+        db.prepare(
+          `UPDATE songs SET ${sets.join(", ")} WHERE id = ? AND user_id = ?`
+        ).run(...values, id, userId);
+      }
+      if (artistNames !== undefined) {
+        syncSongArtists(db, id, userId, artistNames);
+      }
+    })();
     return getSong(db, id, userId);
   } catch (e) {
     return err("internal", `Failed to update song: ${(e as Error).message}`);
@@ -759,13 +930,17 @@ export function updateSong(
 export function updateSongsBulk(
   db: Database,
   ids: number[],
-  fields: { artist?: string; album?: string },
+  fields: { artist?: string; artists?: string[]; album?: string },
   userId: string
 ): Result<Song[]> {
   if (!Array.isArray(ids) || ids.length === 0) {
     return err("validation", "No songs selected");
   }
-  if (fields.artist === undefined && fields.album === undefined) {
+  if (
+    fields.artist === undefined &&
+    fields.artists === undefined &&
+    fields.album === undefined
+  ) {
     return err("validation", "No fields to update");
   }
 
@@ -830,7 +1005,7 @@ export function recordPlay(
       .prepare(`SELECT ${SONG_COLUMNS} FROM songs WHERE id = ?`)
       .get(id) as SongRow | undefined;
     if (!row) return err("not_found", `Song ${id} not found`);
-    return ok(rowToSong(row));
+    return ok(attachArtists(db, [rowToSong(row)])[0]);
   } catch (e) {
     return err("internal", `Failed to record play: ${(e as Error).message}`);
   }
@@ -906,8 +1081,17 @@ export function deleteSong(
     | { art_filename: string | null; clip_filename: string | null }
     | undefined;
 
+  // Artists this song credits, captured before the row (and its cascading
+  // song_artists links) go away, so we can prune any left with no references.
+  const priorArtistIds = (
+    db
+      .prepare("SELECT artist_id FROM song_artists WHERE song_id = ?")
+      .all(id) as { artist_id: number }[]
+  ).map((r) => r.artist_id);
+
   try {
     db.prepare("DELETE FROM songs WHERE id = ? AND user_id = ?").run(id, userId);
+    pruneOrphanArtists(db, priorArtistIds);
     const removeFile = (p: string) => {
       if (existsSync(p)) {
         try {
@@ -944,7 +1128,7 @@ export function getSong(
     if (!row) {
       return err("not_found", `Song ${id} not found`);
     }
-    return ok(rowToSong(row));
+    return ok(attachArtists(db, [rowToSong(row)])[0]);
   } catch (e) {
     return err("internal", `Failed to get song: ${(e as Error).message}`);
   }

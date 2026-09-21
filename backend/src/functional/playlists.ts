@@ -4,6 +4,7 @@ import type { Database } from "better-sqlite3";
 import type { Playlist, Song } from "../types.js";
 import { err, ok, type Result } from "./result.js";
 import { isOrgMemberOf } from "./orgPlaylists.js";
+import { attachArtists } from "./songs.js";
 
 interface PlaylistRow {
   id: number;
@@ -50,6 +51,7 @@ function rowToSong(row: SongRow): Song {
     originalFilename: row.original_filename,
     uploadedAt: row.uploaded_at,
     artist: row.artist,
+    artists: [], // filled in by attachArtists() where the UI needs them
     album: row.album,
     hasArt: row.art_filename !== null,
     duration: row.duration,
@@ -368,14 +370,17 @@ export function songsInPlaylist(
     added_by_id: string | null;
     song_user_id: string | null;
   })[];
-  return rows.map((row) => ({
-    ...rowToSong(row),
-    addedBy: row.added_by_name,
-    // Per-song ownership flags (used by org/team playlists). Only meaningful
-    // when a viewer is supplied.
-    addedByMe: viewerId != null && row.added_by_id === viewerId,
-    ownedByMe: viewerId != null && row.song_user_id === viewerId,
-  }));
+  return attachArtists(
+    db,
+    rows.map((row) => ({
+      ...rowToSong(row),
+      addedBy: row.added_by_name,
+      // Per-song ownership flags (used by org/team playlists). Only meaningful
+      // when a viewer is supplied.
+      addedByMe: viewerId != null && row.added_by_id === viewerId,
+      ownedByMe: viewerId != null && row.song_user_id === viewerId,
+    }))
+  );
 }
 
 // Returns the songs in a playlist (owner-scoped), ordered by their position.

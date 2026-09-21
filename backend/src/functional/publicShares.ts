@@ -2,21 +2,42 @@ import { randomBytes } from "node:crypto";
 import type { Database } from "better-sqlite3";
 import { getPlaylist, songsInPlaylist } from "./playlists.js";
 import { err, ok, type Result } from "./result.js";
-import { getSong, listSongsByArtist } from "./songs.js";
+import {
+  findOrCreateArtist,
+  getSong,
+  listSongsByArtist,
+  pruneOrphanArtists,
+} from "./songs.js";
 import type { Song } from "../types.js";
 
 // --- Artist public links (all of a user's songs by an artist) ---
+
+// Looks up an existing artist id by name (no creation).
+function artistIdByName(
+  db: Database,
+  ownerId: string,
+  artist: string
+): number | undefined {
+  const row = db
+    .prepare(
+      "SELECT id FROM artists WHERE user_id = ? AND name = ? COLLATE NOCASE"
+    )
+    .get(ownerId, artist.trim()) as { id: number } | undefined;
+  return row?.id;
+}
 
 export function getArtistPublicToken(
   db: Database,
   ownerId: string,
   artist: string
 ): Result<string | null> {
+  const artistId = artistIdByName(db, ownerId, artist);
+  if (artistId === undefined) return ok(null);
   const row = db
     .prepare(
-      "SELECT token FROM artist_public_shares WHERE user_id = ? AND artist = ?"
+      "SELECT token FROM artist_public_shares WHERE user_id = ? AND artist_id = ?"
     )
-    .get(ownerId, artist.trim()) as { token: string } | undefined;
+    .get(ownerId, artistId) as { token: string } | undefined;
   return ok(row?.token ?? null);
 }
 
@@ -28,16 +49,17 @@ export function enableArtistPublicLink(
   const a = artist.trim();
   if (!a) return err("validation", "Artist is required");
   try {
+    const artistId = findOrCreateArtist(db, ownerId, a);
     const existing = db
       .prepare(
-        "SELECT token FROM artist_public_shares WHERE user_id = ? AND artist = ?"
+        "SELECT token FROM artist_public_shares WHERE user_id = ? AND artist_id = ?"
       )
-      .get(ownerId, a) as { token: string } | undefined;
+      .get(ownerId, artistId) as { token: string } | undefined;
     if (existing) return ok(existing.token);
     const token = randomBytes(12).toString("base64url");
     db.prepare(
-      "INSERT INTO artist_public_shares (token, user_id, artist, created_by) VALUES (?, ?, ?, ?)"
-    ).run(token, ownerId, a, ownerId);
+      "INSERT INTO artist_public_shares (token, user_id, artist_id, created_by) VALUES (?, ?, ?, ?)"
+    ).run(token, ownerId, artistId, ownerId);
     return ok(token);
   } catch (e) {
     return err("internal", `Failed to create public link: ${(e as Error).message}`);
@@ -50,9 +72,13 @@ export function disableArtistPublicLink(
   artist: string
 ): Result<void> {
   try {
+    const artistId = artistIdByName(db, ownerId, artist);
+    if (artistId === undefined) return ok(undefined);
     db.prepare(
-      "DELETE FROM artist_public_shares WHERE user_id = ? AND artist = ?"
-    ).run(ownerId, artist.trim());
+      "DELETE FROM artist_public_shares WHERE user_id = ? AND artist_id = ?"
+    ).run(ownerId, artistId);
+    // The artist may now be unreferenced; prune it.
+    pruneOrphanArtists(db, [artistId]);
     return ok(undefined);
   } catch (e) {
     return err("internal", `Failed to disable public link: ${(e as Error).message}`);
@@ -211,8 +237,9 @@ export function resolvePublicShare(
   // Fall back to an artist link (all the owner's songs by that artist).
   const artistRow = db
     .prepare(
-      `SELECT aps.user_id, aps.artist, u.name AS owner_name
+      `SELECT aps.user_id, a.name AS artist, u.name AS owner_name
        FROM artist_public_shares aps
+       JOIN artists a ON a.id = aps.artist_id
        JOIN "user" u ON u.id = aps.user_id
        WHERE aps.token = ?`
     )
@@ -281,8 +308,8 @@ export function publicTokenAllowsSong(
     .prepare(
       `SELECT 1 AS x
        FROM artist_public_shares aps
-       JOIN songs s ON s.user_id = aps.user_id
-         AND TRIM(COALESCE(s.artist, '')) = aps.artist
+       JOIN song_artists sa ON sa.artist_id = aps.artist_id
+       JOIN songs s ON s.id = sa.song_id AND s.user_id = aps.user_id
        WHERE aps.token = ? AND s.id = ? AND s.pending = 0
        LIMIT 1`
     )

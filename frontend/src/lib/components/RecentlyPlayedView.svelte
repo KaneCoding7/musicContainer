@@ -3,6 +3,7 @@
   import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
+  import ArtistLinks from "$lib/components/ArtistLinks.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
   import { thumbUrl } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
@@ -49,22 +50,33 @@
         class:current={isCurrent}
         use:swipeQueue={{ onQueue: () => vm.playNext(song) }}
       >
-        <button class="row" onclick={() => vm.playQueue(vm.recentlyPlayed, i)}>
-          <span class="thumb">
-            {#if song.hasArt}
-              <img src={thumbUrl(song.id, 128)} alt="" />
-            {:else}
-              <Icon name="music_note" size={20} />
-            {/if}
-            {#if isCurrent && vm.isPlaying}
-              <span class="thumb-wave"><EqualizerBars size={20} /></span>
-            {/if}
-          </span>
+        <div class="row">
+          <button
+            class="row-play"
+            onclick={() => vm.playQueue(vm.recentlyPlayed, i)}
+            aria-label={`Play ${song.originalFilename}`}
+          >
+            <span class="thumb">
+              {#if song.hasArt}
+                <img src={thumbUrl(song.id, 128)} alt="" />
+              {:else}
+                <Icon name="music_note" size={20} />
+              {/if}
+              {#if isCurrent && vm.isPlaying}
+                <span class="thumb-wave"><EqualizerBars size={20} /></span>
+              {/if}
+            </span>
+          </button>
           <span class="meta">
-            <span class="name">{song.originalFilename}</span>
-            {#if song.artist}<span class="artist">{song.artist}</span>{/if}
+            <button
+              class="row-play name"
+              onclick={() => vm.playQueue(vm.recentlyPlayed, i)}>{song.originalFilename}</button
+            >
+            {#if song.artist}<span class="artist"
+                ><ArtistLinks artists={song.artists} fallback={song.artist} link
+              /></span>{/if}
           </span>
-        </button>
+        </div>
         <div class="row-end">
           <span class="col-date">{relativeTime(song.lastPlayedAt ?? "")}</span>
           <span

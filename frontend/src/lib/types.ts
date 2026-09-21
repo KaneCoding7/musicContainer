@@ -5,7 +5,8 @@ export interface Song {
   filename: string;
   originalFilename: string;
   uploadedAt: string;
-  artist: string | null;
+  artist: string | null; // denormalized ", "-joined display string of `artists`
+  artists: { id: number; name: string }[]; // ordered; source of truth for who
   album: string | null;
   hasArt: boolean;
   duration: number | null;

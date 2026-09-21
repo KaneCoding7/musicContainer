@@ -73,10 +73,19 @@
   const artists = $derived.by((): Artist[] => {
     const map = new Map<string, Song[]>();
     for (const s of vm.songs) {
-      const key = s.artist?.trim() || NO_ARTIST;
-      const list = map.get(key) ?? [];
-      list.push(s);
-      map.set(key, list);
+      // A song counts for EACH of its artists (fall back to the legacy single
+      // string, then to the "No artist" bucket).
+      const names =
+        s.artists.length > 0
+          ? s.artists.map((a) => a.name)
+          : s.artist?.trim()
+            ? [s.artist.trim()]
+            : [NO_ARTIST];
+      for (const key of names) {
+        const list = map.get(key) ?? [];
+        list.push(s);
+        map.set(key, list);
+      }
     }
     return [...map.entries()]
       .map(([name, songs]) => {

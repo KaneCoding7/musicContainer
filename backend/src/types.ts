@@ -5,7 +5,8 @@ export interface Song {
   filename: string; // actual file stored on disk
   originalFilename: string; // user-facing name
   uploadedAt: string; // ISO timestamp
-  artist: string | null;
+  artist: string | null; // denormalized ", "-joined display string of `artists`
+  artists: { id: number; name: string }[]; // ordered; source of truth for who
   album: string | null;
   hasArt: boolean; // whether embedded album art was extracted
   duration: number | null; // seconds, if known

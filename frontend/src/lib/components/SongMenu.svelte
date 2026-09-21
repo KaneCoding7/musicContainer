@@ -362,6 +362,9 @@
 {#if editing}
   <EditSongDialog
     {song}
+    knownArtists={[
+      ...new Set(vm.songs.flatMap((s) => s.artists.map((a) => a.name))),
+    ]}
     onSave={saveEdit}
     onArtChanged={(s) => {
       vm.replaceSong(s);

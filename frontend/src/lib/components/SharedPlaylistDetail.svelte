@@ -4,6 +4,7 @@
   import PlayActions from "$lib/components/PlayActions.svelte";
   import PlaylistMembers from "$lib/components/PlaylistMembers.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
+  import ArtistLinks from "$lib/components/ArtistLinks.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
   import { reorderHandle } from "$lib/actions/reorderHandle";
   import { copySongToLibrary, thumbUrl } from "$lib/services/songService";
@@ -387,7 +388,9 @@
                 <li>
                   <span class="ar-meta">
                     <span class="ar-name">{song.originalFilename}</span>
-                    {#if song.artist}<span class="ar-artist">{song.artist}</span>{/if}
+                    {#if song.artist}<span class="ar-artist"
+                        ><ArtistLinks artists={song.artists} fallback={song.artist} link
+                      /></span>{/if}
                   </span>
                   <button
                     class="ar-add"

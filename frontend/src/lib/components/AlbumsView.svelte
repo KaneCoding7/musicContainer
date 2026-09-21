@@ -5,6 +5,7 @@
   import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import PlayActions from "$lib/components/PlayActions.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
+  import ArtistLinks from "$lib/components/ArtistLinks.svelte";
   import { swipeQueue } from "$lib/actions/swipeQueue";
   import { reorderHandle } from "$lib/actions/reorderHandle";
   import { thumbUrl, downloadSongsZip } from "$lib/services/songService";
@@ -183,13 +184,18 @@
             <Icon name="drag_indicator" size={18} />
           </span>
         {/if}
-        <button class="track" onclick={() => vm.playQueue(current.songs, i)}>
+        <div class="track">
           {#if isCurrent && vm.isPlaying}
             <span class="num"><EqualizerBars size={14} /></span>
           {/if}
           <span class="t-meta">
-            <span class="t-name">{song.originalFilename}</span>
-            {#if song.artist}<span class="t-artist">{song.artist}</span>{/if}
+            <button
+              class="row-play t-name"
+              onclick={() => vm.playQueue(current.songs, i)}>{song.originalFilename}</button
+            >
+            {#if song.artist}<span class="t-artist"
+                ><ArtistLinks artists={song.artists} fallback={song.artist} link
+              /></span>{/if}
           </span>
           <span
             class="plays"
@@ -197,7 +203,7 @@
           >
             <Icon name="play_arrow" size={13} />{song.playCount}
           </span>
-        </button>
+        </div>
         <SongMenu {vm} {song} />
       </li>
     {/each}

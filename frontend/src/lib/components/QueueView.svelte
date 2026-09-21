@@ -2,6 +2,7 @@
   import Icon from "$lib/components/Icon.svelte";
   import EqualizerBars from "$lib/components/EqualizerBars.svelte";
   import SongMenu from "$lib/components/SongMenu.svelte";
+  import ArtistLinks from "$lib/components/ArtistLinks.svelte";
   import { swipeRemove } from "$lib/actions/swipeRemove";
   import { reorderHandle } from "$lib/actions/reorderHandle";
   import { thumbUrl } from "$lib/services/songService";
@@ -42,34 +43,42 @@
         <span class="handle" use:reorderHandle={{ index: i, onMove: moveTrack }} title="Drag to reorder" aria-label="Drag to reorder">
           <Icon name="drag_indicator" size={20} />
         </span>
-        <button class="row" onclick={() => vm.playQueue(vm.queue, i)}>
-          <span class="thumb">
-            {#if song.hasArt}
-              <img src={thumbUrl(song.id, 128)} alt="" />
-            {:else}
-              <Icon name="music_note" size={18} />
-            {/if}
-            {#if isCurrent}
-              <span class="thumb-state">
-                {#if vm.isPlaying}
-                  <EqualizerBars size={16} />
-                {:else}
-                  <Icon name="pause" fill size={18} />
-                {/if}
-              </span>
-            {/if}
-          </span>
+        <div class="row">
+          <button
+            class="row-play"
+            onclick={() => vm.playQueue(vm.queue, i)}
+            aria-label={`Play ${song.originalFilename}`}
+          >
+            <span class="thumb">
+              {#if song.hasArt}
+                <img src={thumbUrl(song.id, 128)} alt="" />
+              {:else}
+                <Icon name="music_note" size={18} />
+              {/if}
+              {#if isCurrent}
+                <span class="thumb-state">
+                  {#if vm.isPlaying}
+                    <EqualizerBars size={16} />
+                  {:else}
+                    <Icon name="pause" fill size={18} />
+                  {/if}
+                </span>
+              {/if}
+            </span>
+          </button>
           <span class="meta">
-            <span class="name">
+            <button class="row-play name" onclick={() => vm.playQueue(vm.queue, i)}>
               {song.originalFilename}
               {#if song.isSuggestion}<span class="tag">Suggested</span>{/if}
-            </span>
-            {#if song.artist}<span class="artist">{song.artist}</span>{/if}
+            </button>
+            {#if song.artist}<span class="artist"
+                ><ArtistLinks artists={song.artists} fallback={song.artist} link
+              /></span>{/if}
           </span>
           {#if isCurrent}
             <span class="badge">Now playing</span>
           {/if}
-        </button>
+        </div>
         {#if song.isSuggestion}
           <button
             class="keep"

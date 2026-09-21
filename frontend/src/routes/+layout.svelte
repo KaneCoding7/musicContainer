@@ -94,6 +94,45 @@
     background-color: var(--surface);
   }
 
+  /* Clickable artist name → opens the artist's profile (see $lib/artistNav).
+     A button reset that inherits the surrounding text's font/color so it looks
+     identical to the plain artist labels it replaces; each call site's own
+     scoped .artist/.t-artist/etc. rule still wins for color/size. Only the
+     hover underline + pointer mark it as interactive. */
+  :global(.artist-link) {
+    max-width: 100%;
+    padding: 0;
+    margin: 0;
+    background: none;
+    border: none;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+    cursor: pointer;
+  }
+  :global(.artist-link:hover),
+  :global(.artist-link:focus-visible) {
+    text-decoration: underline;
+  }
+
+  /* Button reset for the play-triggering pieces of a track row (thumbnail and
+     title) once the artist name is split out into its own .artist-link. Lets a
+     row that used to be a single <button> become a container holding two small
+     reset buttons + the artist link, without duplicating this reset per view.
+     Inherits layout from the row's existing flex rules. */
+  :global(.row-play) {
+    display: block;
+    max-width: 100%;
+    padding: 0;
+    margin: 0;
+    background: none;
+    border: none;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+    cursor: pointer;
+  }
+
   /* Transient confirmation toast (e.g. swipe-to-queue). */
   :global(.swipe-toast) {
     position: fixed;

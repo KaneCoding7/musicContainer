@@ -139,13 +139,32 @@ export function migrate(database: Database.Database): void {
       created_by TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    -- Artists as first-class rows (per user, case-insensitive unique name) and
+    -- the ordered song↔artist links. song_artists is the source of truth for a
+    -- song's artists and their order; songs.artist is kept as a denormalized
+    -- ", "-joined display string for search/sort/downloads/scrobbling.
+    CREATE TABLE IF NOT EXISTS artists (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    TEXT NOT NULL,
+      name       TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(user_id, name COLLATE NOCASE)
+    );
+    CREATE TABLE IF NOT EXISTS song_artists (
+      song_id   INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+      artist_id INTEGER NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
+      position  INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (song_id, artist_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_song_artists_artist ON song_artists(artist_id);
+
     CREATE TABLE IF NOT EXISTS artist_public_shares (
       token      TEXT PRIMARY KEY,
       user_id    TEXT NOT NULL,
-      artist     TEXT NOT NULL,
+      artist_id  INTEGER NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
       created_by TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(user_id, artist)
+      UNIQUE(user_id, artist_id)
     );
 
     -- Mutual friendships: one row per ordered pair. 'pending' until the
@@ -178,10 +197,10 @@ export function migrate(database: Database.Database): void {
     -- the artist's top track embedded art. The file lives in the art directory.
     CREATE TABLE IF NOT EXISTS artist_images (
       user_id    TEXT NOT NULL,
-      artist     TEXT NOT NULL,
+      artist_id  INTEGER NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
       filename   TEXT NOT NULL,
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      PRIMARY KEY (user_id, artist)
+      PRIMARY KEY (user_id, artist_id)
     );
 
     -- Last now-playing snapshot per user (queue, current track, position, etc.),
@@ -388,4 +407,122 @@ export function migrate(database: Database.Database): void {
        ) WHERE added_by IS NULL`
     );
   }
+
+  // Multi-artist (relational): seed artists/song_artists from the legacy
+  // denormalized songs.artist strings, then move the two artist-name-addressed
+  // tables onto artist_id. All idempotent — only the first upgrade does work.
+  backfillArtists(database);
+  rekeyArtistImages(database);
+  rekeyArtistPublicShares(database);
+}
+
+function tableColumns(
+  database: Database.Database,
+  table: string
+): string[] {
+  return (
+    database.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+  ).map((c) => c.name);
+}
+
+// Populate the relational artists / song_artists tables from the existing
+// single-string songs.artist values. Each legacy string becomes ONE artist
+// (no heuristic splitting); only owned songs (user_id set) are linked. Runs
+// once — guarded by song_artists being empty — so it's safe on every boot.
+export function backfillArtists(database: Database.Database): void {
+  const linked = (
+    database.prepare("SELECT COUNT(*) AS n FROM song_artists").get() as {
+      n: number;
+    }
+  ).n;
+  if (linked > 0) return;
+  const tx = database.transaction(() => {
+    database.exec(`
+      INSERT OR IGNORE INTO artists (user_id, name)
+      SELECT DISTINCT user_id, TRIM(artist)
+      FROM songs
+      WHERE user_id IS NOT NULL
+        AND artist IS NOT NULL AND TRIM(artist) <> ''
+    `);
+    database.exec(`
+      INSERT OR IGNORE INTO song_artists (song_id, artist_id, position)
+      SELECT s.id, a.id, 0
+      FROM songs s
+      JOIN artists a
+        ON a.user_id = s.user_id
+       AND a.name = TRIM(s.artist) COLLATE NOCASE
+      WHERE s.user_id IS NOT NULL
+        AND s.artist IS NOT NULL AND TRIM(s.artist) <> ''
+    `);
+  });
+  tx();
+}
+
+// Rebuild artist_images onto artist_id. Only fires for pre-existing DBs still
+// on the old name-keyed shape; fresh DBs are already created with artist_id.
+function rekeyArtistImages(database: Database.Database): void {
+  const cols = tableColumns(database, "artist_images");
+  if (cols.includes("artist_id") || !cols.includes("artist")) return;
+  const tx = database.transaction(() => {
+    database.exec(`
+      INSERT OR IGNORE INTO artists (user_id, name)
+      SELECT DISTINCT user_id, TRIM(artist) FROM artist_images
+      WHERE artist IS NOT NULL AND TRIM(artist) <> ''
+    `);
+    database.exec("ALTER TABLE artist_images RENAME TO artist_images_old");
+    database.exec(`
+      CREATE TABLE artist_images (
+        user_id    TEXT NOT NULL,
+        artist_id  INTEGER NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
+        filename   TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (user_id, artist_id)
+      )
+    `);
+    database.exec(`
+      INSERT OR IGNORE INTO artist_images (user_id, artist_id, filename, updated_at)
+      SELECT o.user_id, a.id, o.filename, o.updated_at
+      FROM artist_images_old o
+      JOIN artists a
+        ON a.user_id = o.user_id AND a.name = TRIM(o.artist) COLLATE NOCASE
+    `);
+    database.exec("DROP TABLE artist_images_old");
+  });
+  tx();
+}
+
+// Rebuild artist_public_shares onto artist_id (same one-time upgrade).
+function rekeyArtistPublicShares(database: Database.Database): void {
+  const cols = tableColumns(database, "artist_public_shares");
+  if (cols.includes("artist_id") || !cols.includes("artist")) return;
+  const tx = database.transaction(() => {
+    database.exec(`
+      INSERT OR IGNORE INTO artists (user_id, name)
+      SELECT DISTINCT user_id, TRIM(artist) FROM artist_public_shares
+      WHERE artist IS NOT NULL AND TRIM(artist) <> ''
+    `);
+    database.exec(
+      "ALTER TABLE artist_public_shares RENAME TO artist_public_shares_old"
+    );
+    database.exec(`
+      CREATE TABLE artist_public_shares (
+        token      TEXT PRIMARY KEY,
+        user_id    TEXT NOT NULL,
+        artist_id  INTEGER NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(user_id, artist_id)
+      )
+    `);
+    database.exec(`
+      INSERT OR IGNORE INTO artist_public_shares
+        (token, user_id, artist_id, created_by, created_at)
+      SELECT o.token, o.user_id, a.id, o.created_by, o.created_at
+      FROM artist_public_shares_old o
+      JOIN artists a
+        ON a.user_id = o.user_id AND a.name = TRIM(o.artist) COLLATE NOCASE
+    `);
+    database.exec("DROP TABLE artist_public_shares_old");
+  });
+  tx();
 }

@@ -5,7 +5,8 @@ import { parseFile } from "music-metadata";
 
 export interface ExtractedMetadata {
   title: string | null;
-  artist: string | null;
+  artist: string | null; // joined display string (kept for back-compat)
+  artists: string[]; // individual artists, in tag order
   album: string | null;
   artFilename: string | null;
   duration: number | null;
@@ -73,9 +74,24 @@ export async function extractMetadata(
       if (isUrl(c)) sourceUrl = c.trim();
     }
 
+    // music-metadata exposes `common.artists` (an array, e.g. from multiple
+    // TPE1/ARTIST frames) and `common.artist` (its joined form). Prefer the
+    // array; fall back to the single string as a one-element list. No heuristic
+    // splitting of a single "A & B" string.
+    const artists = (
+      common.artists && common.artists.length > 0
+        ? common.artists
+        : common.artist
+          ? [common.artist]
+          : []
+    )
+      .map((a) => a.trim())
+      .filter(Boolean);
+
     return {
       title: common.title ?? null,
-      artist: common.artist ?? null,
+      artist: common.artist ?? (artists.length ? artists.join(", ") : null),
+      artists,
       album: common.album ?? null,
       artFilename,
       duration: format.duration ?? null,
@@ -87,6 +103,7 @@ export async function extractMetadata(
     return {
       title: null,
       artist: null,
+      artists: [],
       album: null,
       artFilename: null,
       duration: null,
