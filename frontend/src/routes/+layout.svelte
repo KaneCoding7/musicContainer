@@ -102,11 +102,12 @@
   :global(.artist-link) {
     max-width: 100%;
     padding: 0;
-    margin: 0;
-    background: none;
-    border: none;
+    /* !important for the same reason as .row-play: beat a scoped bare button. */
+    margin: 0 !important;
+    background: none !important;
+    border: none !important;
     font: inherit;
-    color: inherit;
+    color: inherit !important;
     text-align: inherit;
     cursor: pointer;
   }
@@ -128,11 +129,14 @@
     display: block;
     max-width: 100%;
     padding: 0;
-    margin: 0;
-    background: none;
-    border: none;
+    /* !important so this reset beats a component's scoped bare `button {}` base
+       style (Svelte's scope hash gives that higher specificity than this global
+       class) — otherwise row play/title buttons inherit e.g. an accent fill. */
+    margin: 0 !important;
+    background: none !important;
+    border: none !important;
     font: inherit;
-    color: inherit;
+    color: inherit !important;
     text-align: inherit;
     cursor: pointer;
   }
