@@ -128,10 +128,11 @@
   :global(.row-play) {
     display: block;
     max-width: 100%;
-    padding: 0;
     /* !important so this reset beats a component's scoped bare `button {}` base
        style (Svelte's scope hash gives that higher specificity than this global
-       class) — otherwise row play/title buttons inherit e.g. an accent fill. */
+       class) — otherwise row play/title buttons inherit its fill AND padding,
+       which mis-sizes the row. */
+    padding: 0 !important;
     margin: 0 !important;
     background: none !important;
     border: none !important;
@@ -139,6 +140,10 @@
     color: inherit !important;
     text-align: inherit;
     cursor: pointer;
+  }
+  /* The thumbnail button in a row must never shrink (matches SongRow). */
+  :global(.row-play.thumb-btn) {
+    flex-shrink: 0;
   }
   /* No focus ring on the row play buttons: the whole row is the affordance, and
      a full-width outline box around each row looked out of place (the rest of
