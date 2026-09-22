@@ -111,7 +111,11 @@
     cursor: pointer;
   }
   :global(.artist-link:hover),
+  :global(.artist-link:focus) {
+    outline: none;
+  }
   :global(.artist-link:focus-visible) {
+    outline: none;
     text-decoration: underline;
   }
 

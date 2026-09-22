@@ -1464,6 +1464,10 @@
     cursor: pointer;
     text-align: left;
   }
+  .card:focus,
+  .card:focus-visible {
+    outline: none;
+  }
   @media (hover: hover) {
     .cards .card:hover {
       background: var(--hover);
