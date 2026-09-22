@@ -493,6 +493,16 @@
       max-width: 80vw;
       max-height: 80vw;
     }
+    /* Stack the header (cover on top, title + actions centered beneath) instead
+       of the desktop side-by-side row, which overflowed the phone width. */
+    .album-head {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    .head-actions {
+      justify-content: center;
+    }
   }
 
   /* Immersive blurred backdrop behind the open album's header — same treatment
