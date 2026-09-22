@@ -540,20 +540,10 @@
     .detail .list-head {
       display: none;
     }
-    /* Artist detail keeps its header fixed and scrolls the track list. */
-    .detail {
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-    }
-    .detail > :not(ol) {
-      flex-shrink: 0;
-    }
+    /* Scroll the whole detail with the page so the hero image scrolls away
+       (matching the playlist page), instead of pinning the header above a
+       separately-scrolling track list. */
     .detail ol {
-      flex: 1 1 auto;
-      min-height: 0;
-      overflow-y: auto;
       overflow-x: hidden;
     }
     .head {
