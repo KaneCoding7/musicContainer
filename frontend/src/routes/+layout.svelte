@@ -141,8 +141,11 @@
     text-align: inherit;
     cursor: pointer;
   }
-  /* The thumbnail button in a row must never shrink (matches SongRow). */
+  /* The thumbnail button in a row: inline-flex + no shrink so it hugs the 40px
+     thumb and doesn't add line-box height (matches SongRow's .thumb-btn). */
   :global(.row-play.thumb-btn) {
+    display: inline-flex;
+    align-items: center;
     flex-shrink: 0;
   }
   /* No focus ring on the row play buttons: the whole row is the affordance, and
