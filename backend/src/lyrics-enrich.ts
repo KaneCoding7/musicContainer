@@ -1,7 +1,11 @@
 import type { Database } from "better-sqlite3";
 import { fetchLyricsFromLrclib } from "./lyrics.js";
 import { fetchSyncedFromProviders } from "./syncedlyrics.js";
-import { setSongLyrics, type StoredLyrics } from "./functional/songs.js";
+import {
+  markLyricsChecked,
+  setSongLyrics,
+  type StoredLyrics,
+} from "./functional/songs.js";
 
 // Resolves the best available lyrics for a track:
 //   1. LRCLIB (plain + synced when it has them)
@@ -72,7 +76,8 @@ export async function enrichLyrics(
 ): Promise<void> {
   try {
     const lyrics = await resolveLyrics(opts);
-    setSongLyrics(db, songId, lyrics);
+    if (lyrics) setSongLyrics(db, songId, lyrics);
+    else markLyricsChecked(db, songId); // mark checked, don't clear
   } catch {
     /* leave unchecked so a later backfill can retry */
   }

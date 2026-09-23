@@ -341,6 +341,19 @@ export function setSongLyrics(
   }
 }
 
+// Marks a song as lyrics-checked WITHOUT touching its stored lyrics — used when
+// a fetch finds nothing, so a transient provider miss can't wipe lyrics the song
+// already has (only an explicit manual clear goes through setSongLyrics(null)).
+export function markLyricsChecked(db: Database, id: number): void {
+  try {
+    db.prepare(
+      "UPDATE songs SET lyrics_checked_at = datetime('now') WHERE id = ?"
+    ).run(id);
+  } catch {
+    /* best-effort */
+  }
+}
+
 // Owner-scoped read of a song's stored lyrics.
 export function getSongLyrics(
   db: Database,

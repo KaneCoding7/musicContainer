@@ -30,6 +30,7 @@ import {
   findOrCreateArtist,
   getSongLyricsById,
   listSongsNeedingLyrics,
+  markLyricsChecked,
   pruneOrphanArtists,
   recordSong,
   setSongLyrics,
@@ -1579,8 +1580,8 @@ songsRouter.post("/songs/fetch-lyrics", heavyLimiter, async (req, res) => {
       setSongLyrics(getDb(), song.id, found);
       fetched += 1;
     } else {
-      // Stamp "checked, none" so it isn't retried on the next pass.
-      setSongLyrics(getDb(), song.id, null);
+      // Mark checked (don't clear) so a transient miss can't wipe existing lyrics.
+      markLyricsChecked(getDb(), song.id);
     }
   }
   return res.json({ fetched, remaining: pending.length - batch.length });
@@ -1840,7 +1841,9 @@ songsRouter.post("/songs/:id/lyrics/refetch", heavyLimiter, async (req, res) => 
     album: song.value.album,
     durationSec: song.value.duration,
   });
-  setSongLyrics(getDb(), id, found);
+  // Keep existing lyrics on a miss rather than wiping them.
+  if (found) setSongLyrics(getDb(), id, found);
+  else markLyricsChecked(getDb(), id);
   const updated = getSong(getDb(), id, req.userId!);
   return res.json({ song: updated.ok ? updated.value : song.value });
 });
