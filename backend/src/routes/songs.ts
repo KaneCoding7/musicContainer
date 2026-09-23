@@ -77,8 +77,7 @@ import {
   updateNowPlaying as lastfmNowPlaying,
 } from "../lastfm.js";
 import { measureLoudness } from "../loudness.js";
-import { enrichLyrics } from "../lyrics-enrich.js";
-import { fetchLyricsFromLrclib } from "../lyrics.js";
+import { enrichLyrics, resolveLyrics } from "../lyrics-enrich.js";
 import { streamSongFile } from "../stream.js";
 import { serveArt } from "../thumbnails.js";
 import { rateLimit } from "../rate-limit.js";
@@ -1570,14 +1569,14 @@ songsRouter.post("/songs/fetch-lyrics", heavyLimiter, async (req, res) => {
   const batch = pending.slice(0, 10);
   let fetched = 0;
   for (const song of batch) {
-    const found = await fetchLyricsFromLrclib({
+    const found = await resolveLyrics({
       artist: song.artist,
       track: song.track,
       album: song.album,
       durationSec: song.duration,
     });
-    if (found && (found.plain || found.synced)) {
-      setSongLyrics(getDb(), song.id, { ...found, source: "lrclib" });
+    if (found) {
+      setSongLyrics(getDb(), song.id, found);
       fetched += 1;
     } else {
       // Stamp "checked, none" so it isn't retried on the next pass.
@@ -1828,20 +1827,20 @@ songsRouter.get("/songs/:id/lyrics", (req, res) => {
   return res.json({ lyrics });
 });
 
-// POST /api/songs/:id/lyrics/refetch — force a fresh LRCLIB lookup (owner only).
+// POST /api/songs/:id/lyrics/refetch — force a fresh lookup (all sources, owner only).
 songsRouter.post("/songs/:id/lyrics/refetch", heavyLimiter, async (req, res) => {
   const id = Number(req.params.id);
   const song = getSong(getDb(), id, req.userId!);
   if (!song.ok) {
     return res.status(statusForError(song.error.code)).json({ error: song.error });
   }
-  const found = await fetchLyricsFromLrclib({
+  const found = await resolveLyrics({
     artist: song.value.artist,
     track: song.value.originalFilename,
     album: song.value.album,
     durationSec: song.value.duration,
   });
-  setSongLyrics(getDb(), id, found ? { ...found, source: "lrclib" } : null);
+  setSongLyrics(getDb(), id, found);
   const updated = getSong(getDb(), id, req.userId!);
   return res.json({ song: updated.ok ? updated.value : song.value });
 });

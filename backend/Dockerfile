@@ -15,6 +15,12 @@ RUN apt-get update \
 RUN pip install --break-system-packages --no-cache-dir spotdl \
     && rm -rf /root/.cache
 
+# syncedlyrics: multi-provider synced (LRC) lyrics fetcher (Musixmatch, NetEase,
+# Megalobiz, …) used as a fallback when LRCLIB has no time-synced lyrics, so more
+# tracks get the line-by-line highlight.
+RUN pip install --break-system-packages --no-cache-dir syncedlyrics \
+    && rm -rf /root/.cache
+
 # yt-dlp goes stale within weeks (YouTube keeps changing its player), so it is
 # installed last, in a layer of its own: bumping it doesn't rebuild everything
 # above, and nothing above can pin this layer's cache to a months-old release --
