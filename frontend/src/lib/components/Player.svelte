@@ -702,8 +702,22 @@
   const lyricLines = $derived(
     curLyrics?.synced ? parseLrc(curLyrics.synced) : []
   );
+  // Drive the synced highlight off a timer that reads the LIVE position every
+  // 250ms while the sheet is open — reading the <audio> element directly on the
+  // active device (iOS Safari throttles `timeupdate`, which would otherwise make
+  // the highlight lag/freeze) and the mirrored remote position otherwise.
+  let lyricTime = $state(0);
+  $effect(() => {
+    if (!lyricsSheet || lyricLines.length === 0) return;
+    const tick = () => {
+      lyricTime = active ? (audio?.currentTime ?? 0) : vm.position;
+    };
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  });
   const activeLyric = $derived(
-    lyricLines.length ? activeLineIndex(lyricLines, currentTime) : -1
+    lyricLines.length ? activeLineIndex(lyricLines, lyricTime) : -1
   );
   // Keep the active synced line centered. Address the active line by INDEX (not
   // by querying `.lyric-line.active`, which can race Svelte's class update in the
