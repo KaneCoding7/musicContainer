@@ -29,7 +29,9 @@ import {
   recordPlay,
   findOrCreateArtist,
   getSongLyricsById,
+  listSongsNeedingAlignment,
   listSongsNeedingLyrics,
+  markAlignTried,
   markLyricsChecked,
   pruneOrphanArtists,
   recordSong,
@@ -79,6 +81,7 @@ import {
 } from "../lastfm.js";
 import { measureLoudness } from "../loudness.js";
 import { enrichLyrics, resolveLyrics } from "../lyrics-enrich.js";
+import { alignLyrics } from "../align.js";
 import { streamSongFile } from "../stream.js";
 import { serveArt } from "../thumbnails.js";
 import { rateLimit } from "../rate-limit.js";
@@ -1587,6 +1590,30 @@ songsRouter.post("/songs/fetch-lyrics", heavyLimiter, async (req, res) => {
   return res.json({ fetched, remaining: pending.length - batch.length });
 });
 
+// POST /api/songs/align-lyrics — force-align plain-only tracks to their audio to
+// generate synced (LRC) timing, so they too get the line-by-line highlight.
+// Small batch per call (alignment is CPU work); the client loops until done.
+songsRouter.post("/songs/align-lyrics", heavyLimiter, async (req, res) => {
+  const pending = listSongsNeedingAlignment(getDb(), req.userId!);
+  const batch = pending.slice(0, 4);
+  let aligned = 0;
+  for (const song of batch) {
+    const r = await alignLyrics(join(MUSIC_DIR, song.filename), song.plain);
+    if (r?.synced) {
+      setSongLyrics(getDb(), song.id, {
+        plain: song.plain,
+        synced: r.synced,
+        source: "aligned",
+      });
+      aligned += 1;
+    } else {
+      // Couldn't align — flag it so the batch doesn't retry it forever.
+      markAlignTried(getDb(), song.id);
+    }
+  }
+  return res.json({ aligned, remaining: pending.length - batch.length });
+});
+
 // PATCH /api/songs/order — persist a manual ordering for a set of songs
 // (e.g. the tracks within an artist). Body: { ids: number[] } in desired order.
 songsRouter.patch("/songs/order", (req, res) => {
@@ -1846,6 +1873,38 @@ songsRouter.post("/songs/:id/lyrics/refetch", heavyLimiter, async (req, res) => 
   else markLyricsChecked(getDb(), id);
   const updated = getSong(getDb(), id, req.userId!);
   return res.json({ song: updated.ok ? updated.value : song.value });
+});
+
+// POST /api/songs/:id/lyrics/align — force-align this song's stored plain lyrics
+// to its audio to produce synced timing (owner only). For tracks no provider has
+// synced lyrics for, incl. your own uploads after you type the words in.
+songsRouter.post("/songs/:id/lyrics/align", heavyLimiter, async (req, res) => {
+  const id = Number(req.params.id);
+  const song = getSong(getDb(), id, req.userId!);
+  if (!song.ok) {
+    return res.status(statusForError(song.error.code)).json({ error: song.error });
+  }
+  const cur = getSongLyricsById(getDb(), id);
+  if (!cur?.plain) {
+    return res.status(400).json({
+      error: { code: "validation", message: "No plain lyrics to sync" },
+    });
+  }
+  const r = await alignLyrics(join(MUSIC_DIR, song.value.filename), cur.plain);
+  if (r?.synced) {
+    setSongLyrics(getDb(), id, {
+      plain: cur.plain,
+      synced: r.synced,
+      source: "aligned",
+    });
+  } else {
+    markAlignTried(getDb(), id);
+  }
+  const updated = getSong(getDb(), id, req.userId!);
+  return res.json({
+    song: updated.ok ? updated.value : song.value,
+    aligned: !!r?.synced,
+  });
 });
 
 // PUT /api/songs/:id/lyrics — manually set lyrics (owner only). Body: { plain?,

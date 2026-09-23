@@ -21,6 +21,18 @@ RUN pip install --break-system-packages --no-cache-dir spotdl \
 RUN pip install --break-system-packages --no-cache-dir syncedlyrics \
     && rm -rf /root/.cache
 
+# aeneas: CPU forced-alignment (audio + plain lyrics -> synced LRC timing), so
+# tracks with no synced lyrics anywhere (and your own uploads) can still get the
+# line-by-line highlight. Installed in its own venv to keep its pinned numpy<2
+# away from spotdl/yt-dlp; espeak is its TTS backend for alignment.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3-dev python3-venv espeak espeak-data libespeak-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m venv /opt/aeneas \
+    && /opt/aeneas/bin/pip install --no-cache-dir "numpy<2" setuptools wheel \
+    && /opt/aeneas/bin/pip install --no-cache-dir --no-build-isolation aeneas \
+    && rm -rf /root/.cache
+
 # yt-dlp goes stale within weeks (YouTube keeps changing its player), so it is
 # installed last, in a layer of its own: bumping it doesn't rebuild everything
 # above, and nothing above can pin this layer's cache to a months-old release --

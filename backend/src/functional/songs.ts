@@ -407,6 +407,37 @@ export function listSongsNeedingLyrics(
   }
 }
 
+// Songs with plain lyrics but no synced timing that haven't been through
+// forced-alignment yet — the "sync lyrics to audio" backfill queue.
+export function listSongsNeedingAlignment(
+  db: Database,
+  userId: string
+): { id: number; filename: string; plain: string }[] {
+  try {
+    return db
+      .prepare(
+        `SELECT s.id, s.filename, sl.plain
+           FROM songs s JOIN song_lyrics sl ON sl.song_id = s.id
+          WHERE s.user_id = ? AND s.pending = 0 AND s.align_tried = 0
+            AND (sl.synced IS NULL OR sl.synced = '')
+            AND sl.plain IS NOT NULL AND sl.plain <> ''`
+      )
+      .all(userId) as { id: number; filename: string; plain: string }[];
+  } catch {
+    return [];
+  }
+}
+
+// Marks a song as alignment-attempted (so a failed align isn't retried by the
+// batch). Cleared implicitly once the song gains synced lyrics.
+export function markAlignTried(db: Database, id: number): void {
+  try {
+    db.prepare("UPDATE songs SET align_tried = 1 WHERE id = ?").run(id);
+  } catch {
+    /* best-effort */
+  }
+}
+
 // Records an already-stored audio file (plus any extracted metadata) in the
 // database and returns the song.
 export function recordSong(

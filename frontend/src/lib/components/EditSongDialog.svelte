@@ -25,6 +25,7 @@
     fetchLyrics,
     setLyrics,
     refetchLyrics,
+    alignLyrics,
     type SongMetadata,
   } from "$lib/services/songService";
   import {
@@ -90,6 +91,35 @@
       /* leave the field empty on failure */
     }
   });
+  async function syncToAudio() {
+    // Commit any typed lyrics first so alignment has text to work with.
+    if (lyricsText !== lyricsLoaded) {
+      try {
+        const u = await setLyrics(song.id, { plain: lyricsText.trim() || null });
+        onArtChanged?.(u);
+        lyricsLoaded = lyricsText;
+      } catch (e) {
+        lyricsError = e instanceof Error ? e.message : "Failed to save lyrics";
+        return;
+      }
+    }
+    lyricsBusy = true;
+    lyricsError = null;
+    try {
+      const { song: updated, aligned } = await alignLyrics(song.id);
+      onArtChanged?.(updated);
+      if (aligned) {
+        lyricsHasSynced = true;
+        lyricsError = null;
+      } else {
+        lyricsError = "Couldn't sync these lyrics to the audio.";
+      }
+    } catch (e) {
+      lyricsError = e instanceof Error ? e.message : "Sync failed";
+    } finally {
+      lyricsBusy = false;
+    }
+  }
   async function reFetchLyrics() {
     lyricsBusy = true;
     lyricsError = null;
@@ -445,16 +475,29 @@
       <div class="lyrics-block">
         <div class="lyrics-head">
           <span class="source-label">Lyrics</span>
-          {#if song.artist}
-            <button
-              type="button"
-              class="link-toggle"
-              onclick={reFetchLyrics}
-              disabled={lyricsBusy}
-            >
-              {lyricsBusy ? "Fetching…" : "Fetch from LRCLIB"}
-            </button>
-          {/if}
+          <span class="lyrics-actions">
+            {#if lyricsText.trim() && !lyricsHasSynced}
+              <button
+                type="button"
+                class="link-toggle"
+                onclick={syncToAudio}
+                disabled={lyricsBusy}
+                title="Generate line timing by aligning these lyrics to the audio"
+              >
+                {lyricsBusy ? "Syncing…" : "Sync to audio"}
+              </button>
+            {/if}
+            {#if song.artist}
+              <button
+                type="button"
+                class="link-toggle"
+                onclick={reFetchLyrics}
+                disabled={lyricsBusy}
+              >
+                {lyricsBusy ? "Fetching…" : "Fetch from LRCLIB"}
+              </button>
+            {/if}
+          </span>
         </div>
         <textarea
           class="lyrics-input"
@@ -743,7 +786,15 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 0.5rem;
     margin-bottom: 0.5rem;
+  }
+  .lyrics-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
   .lyrics-input {
     display: block;

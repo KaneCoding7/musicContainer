@@ -1,7 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Icon from "$lib/components/Icon.svelte";
-  import { analyzeLoudness, fetchLyricsBatch } from "$lib/services/songService";
+  import {
+    analyzeLoudness,
+    fetchLyricsBatch,
+    alignLyricsBatch,
+  } from "$lib/services/songService";
   import { apiBase } from "$lib/services/apiBase";
   import {
     getSubsonicCredential,
@@ -111,6 +115,38 @@
       };
     } finally {
       fetchingLyrics = false;
+    }
+  }
+
+  // Force-align plain-only lyrics to their audio (generate synced timing).
+  let aligning = $state(false);
+  let alignMsg = $state<{ ok: boolean; text: string } | null>(null);
+
+  async function runAlignLyrics() {
+    aligning = true;
+    alignMsg = null;
+    try {
+      let remaining = Infinity;
+      let total = 0;
+      let guard = 0;
+      while (remaining > 0 && guard++ < 2000) {
+        const r = await alignLyricsBatch();
+        total += r.aligned;
+        remaining = r.remaining;
+        alignMsg = { ok: true, text: `Syncing to audio… ${remaining} left` };
+      }
+      await songVm.load();
+      alignMsg = {
+        ok: true,
+        text: `Done — synced ${total} track${total === 1 ? "" : "s"} to audio`,
+      };
+    } catch (e) {
+      alignMsg = {
+        ok: false,
+        text: e instanceof Error ? e.message : "Sync failed",
+      };
+    } finally {
+      aligning = false;
     }
   }
 
@@ -379,6 +415,18 @@
     </button>
   </div>
   {#if lyricsMsg}<p class="msg" class:err={!lyricsMsg.ok}>{lyricsMsg.text}</p>{/if}
+  <div class="row">
+    <div class="info">
+      <span class="t">Sync lyrics to audio</span>
+      <span class="sub">
+        Generate line timing for plain-lyric tracks (incl. your uploads)
+      </span>
+    </div>
+    <button class="ghost" onclick={runAlignLyrics} disabled={aligning}>
+      {aligning ? "Syncing…" : "Sync"}
+    </button>
+  </div>
+  {#if alignMsg}<p class="msg" class:err={!alignMsg.ok}>{alignMsg.text}</p>{/if}
 
   <p class="section">Profile</p>
   <form onsubmit={saveName}>

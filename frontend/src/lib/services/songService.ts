@@ -298,6 +298,34 @@ export async function fetchLyricsBatch(): Promise<{
   return (await res.json()) as { fetched: number; remaining: number };
 }
 
+// Force-aligns one batch of plain-only tracks to their audio (generates synced
+// timing). Returns how many aligned this call and how many remain (call until 0).
+export async function alignLyricsBatch(): Promise<{
+  aligned: number;
+  remaining: number;
+}> {
+  const res = await fetch(`${apiBase()}/api/songs/align-lyrics`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  return (await res.json()) as { aligned: number; remaining: number };
+}
+
+// Force-aligns a single song's plain lyrics to its audio; returns the updated
+// song and whether alignment succeeded.
+export async function alignLyrics(
+  songId: number
+): Promise<{ song: Song; aligned: boolean }> {
+  const res = await fetch(`${apiBase()}/api/songs/${songId}/lyrics/align`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+  const d = await res.json();
+  return { song: d.song as Song, aligned: !!d.aligned };
+}
+
 // Persists a manual ordering (sort_order) for the given song ids, in order.
 export async function reorderSongs(ids: number[]): Promise<void> {
   const res = await fetch(`${apiBase()}/api/songs/order`, {

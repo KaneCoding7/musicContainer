@@ -365,6 +365,14 @@ export function migrate(database: Database.Database): void {
   if (!columns.includes("lyrics_checked_at")) {
     database.exec("ALTER TABLE songs ADD COLUMN lyrics_checked_at TEXT");
   }
+  // Set once forced-alignment has been attempted on a plain-only song, so the
+  // batch "sync lyrics to audio" job skips ones that couldn't be aligned instead
+  // of retrying them forever.
+  if (!columns.includes("align_tried")) {
+    database.exec(
+      "ALTER TABLE songs ADD COLUMN align_tried INTEGER NOT NULL DEFAULT 0"
+    );
+  }
   const plColumns = (
     database.prepare("PRAGMA table_info(playlists)").all() as { name: string }[]
   ).map((c) => c.name);
