@@ -705,12 +705,21 @@
   const activeLyric = $derived(
     lyricLines.length ? activeLineIndex(lyricLines, currentTime) : -1
   );
-  // Keep the active synced line in view (query it from the list container so we
-  // don't have to bind every line's element).
+  // Keep the active synced line centered. Address the active line by INDEX (not
+  // by querying `.lyric-line.active`, which can race Svelte's class update in the
+  // same flush) and scroll the sheet's own container directly — nested
+  // scrollIntoView({behavior:'smooth'}) is unreliable on iOS Safari, especially
+  // inside a backdrop-filter panel.
   $effect(() => {
     if (!lyricsSheet || activeLyric < 0 || !lyricsLinesEl) return;
-    const el = lyricsLinesEl.querySelector<HTMLElement>(".lyric-line.active");
-    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const el = lyricsLinesEl.children[activeLyric] as HTMLElement | undefined;
+    const body = lyricsLinesEl.closest<HTMLElement>(".npf-lyrics-body");
+    if (!el || !body) return;
+    const bodyRect = body.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const delta =
+      elRect.top - bodyRect.top - (body.clientHeight - el.offsetHeight) / 2;
+    body.scrollTo({ top: body.scrollTop + delta, behavior: "smooth" });
   });
   function seekToLine(t: number) {
     currentTime = t;
