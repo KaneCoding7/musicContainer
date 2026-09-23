@@ -1834,13 +1834,17 @@
     font-size: 1.6rem;
     font-weight: 700;
     line-height: 1.4;
-    color: color-mix(in srgb, var(--text) 45%, transparent);
+    /* Solid dim colour (no color-mix) so inactive lines read clearly grey and
+       the active line's jump to bright is unmistakable on every device. */
+    color: var(--muted);
+    opacity: 0.7;
     padding: 0.45rem 0.4rem;
     cursor: pointer;
-    transition: color 0.2s ease;
+    transition: color 0.2s ease, opacity 0.2s ease;
   }
   .lyric-line.active {
     color: var(--text);
+    opacity: 1;
   }
   .lyric-plain {
     margin: 0;
