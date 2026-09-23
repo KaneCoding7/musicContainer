@@ -690,7 +690,6 @@
   // --- Lyrics (fetched lazily when the sheet opens; cached per song id) ---
   let lyricsById = $state<Record<number, Lyrics | null>>({});
   let lyricsLinesEl = $state<HTMLElement | null>(null);
-  let lyricsBodyEl = $state<HTMLElement | null>(null);
   $effect(() => {
     if (!expanded || !lyricsSheet || !song || !song.hasLyrics) return;
     const id = song.id;
@@ -709,23 +708,15 @@
   // the highlight lag/freeze) and the mirrored remote position otherwise.
   let lyricTime = $state(0);
   $effect(() => {
-    if (!lyricsSheet || !curLyrics) return;
+    // Only synced lyrics need the position poll; plain lyrics are a static,
+    // hand-scrollable sheet.
+    if (!lyricsSheet || lyricLines.length === 0) return;
     const tick = () => {
       lyricTime = active ? (audio?.currentTime ?? 0) : vm.position;
     };
     tick();
     const id = setInterval(tick, 250);
     return () => clearInterval(id);
-  });
-  // Plain (unsynced) lyrics have no per-line timing, so scroll the sheet
-  // proportionally to how far through the song we are — the words drift down as
-  // it plays even though we can't pinpoint the exact line.
-  $effect(() => {
-    if (!lyricsSheet || !lyricsBodyEl) return;
-    if (lyricLines.length > 0 || !curLyrics?.plain || !duration) return;
-    const progress = Math.min(1, Math.max(0, lyricTime / duration));
-    const max = lyricsBodyEl.scrollHeight - lyricsBodyEl.clientHeight;
-    if (max > 0) lyricsBodyEl.scrollTo({ top: progress * max, behavior: "smooth" });
   });
   const activeLyric = $derived(
     lyricLines.length ? activeLineIndex(lyricLines, lyricTime) : -1
@@ -1391,7 +1382,7 @@
           <Icon name="keyboard_arrow_down" size={28} />
         </button>
       </div>
-      <div class="npf-queue-body npf-lyrics-body" bind:this={lyricsBodyEl}>
+      <div class="npf-queue-body npf-lyrics-body">
         {#if curLyrics === undefined}
           <p class="npf-queue-empty">Loading…</p>
         {:else if lyricLines.length > 0}
