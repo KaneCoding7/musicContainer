@@ -6,12 +6,14 @@ set -uo pipefail
 R=/mnt/media/.restic/restoretest/phase3
 HERE=$(cd "$(dirname "$0")" && pwd)
 DEPLOY=${DEPLOY:-$HERE/../repo/deploy/deploy.sh}
+MON=$(cd "$(dirname "$DEPLOY")" && pwd)/monitoring
 CONF=$R/conf; STATE=$R/state
 A_B=music-backend@sha256:387282bc5658832d7594b965f17080d8aacb00088a4303572019ba44b7d4bbea      # DEV Sep-19 build
 A_F=music-frontend@sha256:8383dd084cb87b89200b0a05136f90adbcec9d2d7708653a7997e238858a9965
 B_B=mrkane7/music-backend@sha256:dd9fbb1da1d327272b5dfaa019c6bbabc849372fcdc3ae929634424ee8f20394   # = PROD (main c35355a)
 B_F=mrkane7/music-frontend@sha256:5bccf1bf04d8749519095127e0178e75274920950c815f4ce366aecaee72a14b
 BRK=musictest/backend-broken@$(docker image inspect -f "{{.Id}}" musictest/backend-broken:t1)   # built from images/broken
+GATE=musictest/backend-gate@$(docker image inspect -f "{{.Id}}" musictest/backend-gate:t1)   # only for promotion-gate fixtures
 REL=musictest/backend-relabel@$(docker image inspect -f "{{.Id}}" musictest/backend-relabel:t1)   # built from images/relabel
 NOPE=mrkane7/music-backend@sha256:0000000000000000000000000000000000000000000000000000000000000000
 PASS=0; FAIL=0; RESULTS=()
@@ -126,7 +128,7 @@ echo "== T1 refusals before any change"
 F0=$(fp mtd mtdev)
 dep mtdev mrkane7/music-backend:latest "$B_F";         check "T1a :latest tag refused (exit 1)"       [ $RC = 1 ]
 dep mtdev "$B_B" mrkane7/music-frontend:dev;           check "T1b mutable :dev tag refused"           [ $RC = 1 ]
-dep mtdevrepo --build latest;                           check "T1c --build latest refused"             [ $RC = 1 ]
+dep mtdevrepo --build latest;                           chk "T1c --build latest refused, reason shown" '[ $RC = 1 ] && echo "$OUT" | grep -q "not an immutable build"'
 dep mtdev "$NOPE" "$B_F";                               check "T1d nonexistent digest refused"        [ $RC = 1 ]
 echo "$OUT" | grep -q 'image not found' && ok "T1d   reason: image not found" || bad "T1d   reason"
 dep mtdevrepo "$BRK" "$B_F";                            check "T1e wrong repository refused"           [ $RC = 1 ]
@@ -181,6 +183,7 @@ echo "$OUT" | grep -q 'downgrade across a migration' && ok "T7   reason: downgra
 echo "== T8 deploy same-schema build (REL) then roll back to B"
 dep mtdev "$REL" "$B_F" --yes;                          chk "T8a deploy REL ok" '[ $RC = 0 ] && [ "$(running mtd-backend)" = "${REL##*@}" ]'
 dep mtdev --rollback;                                   chk "T8b rollback to B ok (exit 0)" '[ $RC = 0 ] && [ "$(running mtd-backend)" = "${B_B##*@}" ]'
+dep mtdev --rollback;                                   chk "T21 rollback of a rollback refused (no flip-flop)" '[ $RC = 1 ] && echo "$OUT" | grep -q "already a rollback"'
 check "T8  schema unchanged throughout"                  [ "$(schema mtdev)" = "$S_B" ]
 
 echo "== T9 failed health check -> automatic code rollback"
@@ -203,8 +206,29 @@ dep mtdev "$REL" "$B_F" --yes;                          chk "T11 concurrent depl
 kill -TERM $P; wait $P; RC=$?
 check "T11 interrupted run exits 5"                     [ $RC = 5 ]
 check "T11 .env restored, containers untouched"         [ "$(fp mtd mtdev)" = "$F2" ]
-check "T11 history: interrupted"                        [ "$(lastres mtdev)" = interrupted ]
+check "T11 history: aborted (nothing changed)"          [ "$(lastres mtdev)" = aborted ]
 
+echo "== T11b SIGHUP (ssh drop) before recreate is handled like an interrupt"
+F2b=$(fp mtd mtdev)
+DEPLOY_TEST_HOOK=after_env DEPLOY_TEST_SLEEP=60 DEPLOY_CONF_DIR=$CONF bash "$DEPLOY" mtdev "$REL" "$B_F" --yes >$R/t11b.log 2>&1 </dev/null & P=$!
+for i in $(seq 1 40); do grep -q 'TEST HOOK after_env' $R/t11b.log && break; sleep 1; done
+kill -HUP $P; wait $P; RC=$?
+chk "T11b HUP -> exit 5, .env restored, containers untouched" '[ $RC = 5 ] && [ "$(fp mtd mtdev)" = "$F2b" ] && [ "$(lastres mtdev)" = aborted ]'
+echo "== T11c real Ctrl-C (SIGINT to the whole process group, incl. tee) before recreate"
+F2c=$(fp mtd mtdev)
+RC=$(python3 -I - "$DEPLOY" "$CONF" "$REL" "$B_F" "$R/t11c.log" <<'EOF'
+import subprocess,os,signal,sys,time
+dep,conf,b,f,logf=sys.argv[1:6]
+env=dict(os.environ,DEPLOY_CONF_DIR=conf,DEPLOY_TEST_HOOK="after_env",DEPLOY_TEST_SLEEP="60")
+with open(logf,"w") as lf:
+    p=subprocess.Popen(["bash",dep,"mtdev",b,f,"--yes"],stdin=subprocess.DEVNULL,stdout=lf,stderr=lf,env=env,start_new_session=True)
+for _ in range(60):
+    if "TEST HOOK after_env" in open(logf).read(): break
+    time.sleep(1)
+os.killpg(p.pid,signal.SIGINT); print(p.wait())
+EOF
+)
+chk "T11c Ctrl-C -> exit 5, .env restored, containers untouched, recorded" '[ "$RC" = 5 ] && [ "$(fp mtd mtdev)" = "$F2c" ] && [ "$(lastres mtdev)" = aborted ] && grep -q "INTERRUPTED" $R/t11c.log'
 echo "== T12 interrupted AFTER recreate, then --rollback"
 DEPLOY_TEST_HOOK=after_up DEPLOY_TEST_SLEEP=60 DEPLOY_CONF_DIR=$CONF bash "$DEPLOY" mtdev "$REL" "$B_F" --yes >$R/t12.log 2>&1 </dev/null & P=$!
 for i in $(seq 1 90); do grep -q 'TEST HOOK after_up' $R/t12.log && break; sleep 1; done
@@ -225,22 +249,34 @@ for h in H:
     t=datetime.datetime.strptime(h["ts"],"%Y%m%dT%H%M%SZ")-datetime.timedelta(hours=48); h["ts"]=t.strftime("%Y%m%dT%H%M%SZ")
 open(p,"w").write("".join(json.dumps(h,sort_keys=True)+"\n" for h in H))
 EOF
-dep mtprod --promote;                                    check "T13d prod without --yes and no TTY refused (confirmation)" [ $RC = 1 ]
+dep mtprod --promote;                                    chk "T13d prod without --yes and no TTY refused (confirmation)" '[ $RC = 1 ] && echo "$OUT" | grep -q "confirmation required"'
 check "T13  mtprod untouched by refusals"                [ "$(fp mtp mtprod)" = "$F3" ]
 python3 -I - $STATE/mtdev.jsonl "$B_B" "$A_F" <<'EOF'
 import json,sys   # TEST ONLY: an old BASELINE-only record (B backend + A frontend) must not be promotable
 p,b,f=sys.argv[1:4]; open(p,"a").write(json.dumps({"ts":"20200101T000000Z","env":"mtdev","mode":"baseline","result":"success","from":{"backend":b,"frontend":f},"to":{"backend":b,"frontend":f},"schema_before":"x","schema_after":"x","backup":""},sort_keys=True)+"\n")
 EOF
 dep mtprod "$B_B" "$A_F" --yes;                         chk "T13f baseline-only record is not promotable (refused as untested, not on schema)" '[ $RC = 1 ] && echo "$OUT" | grep -q "baselines don" && ! echo "$OUT" | grep -q "not one the build ran against"'
+sed -i "s#^MT_BACKEND_IMAGE=.*#MT_BACKEND_IMAGE=$REL#" $R/stacks/mtdev/.env
+dep mtprod --promote --yes;                              chk "T22 promote refused when DEV .env != what DEV runs" '[ $RC = 1 ] && echo "$OUT" | grep -q "not running what its .env says"'
+sed -i "s#^MT_BACKEND_IMAGE=.*#MT_BACKEND_IMAGE=$B_B#" $R/stacks/mtdev/.env
 dep mtprod --promote --yes;                              chk "T13e promote after soak succeeds (A->B on prod copy)" '[ $RC = 0 ] && [ "$(running mtp-backend)" = "${B_B##*@}" ]'
 
 echo "== T13g promote refused when target DB schema was never seen with that build"
-python3 -I - $STATE/mtdev.jsonl "$REL" "$A_F" <<'EOF'
-import json,sys   # TEST ONLY: the ONLY mtdev success for pair (REL, A_F) ran on unrelated schemas
+python3 -I - $STATE/mtdev.jsonl "$GATE" "$A_F" <<'EOF'
+import json,sys   # TEST ONLY: the ONLY mtdev success for pair (GATE, A_F) ran on unrelated schemas
 import datetime; ts=(datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(hours=30)).strftime("%Y%m%dT%H%M%SZ")
 p,b,f=sys.argv[1:4]; open(p,"a").write(json.dumps({"ts":ts,"env":"mtdev","mode":"deploy","result":"success","from":{"backend":b,"frontend":f},"to":{"backend":b,"frontend":f},"schema_before":"aaaa","schema_after":"bbbb","backup":""},sort_keys=True)+"\n")
 EOF
-dep mtprod "$REL" "$A_F" --yes;                         chk "T13g schema-mismatch promotion refused" '[ $RC = 1 ] && echo "$OUT" | grep -q "not one the build ran against"'
+dep mtprod "$GATE" "$A_F" --yes;                        chk "T13g schema-mismatch promotion refused" '[ $RC = 1 ] && echo "$OUT" | grep -q "not one the build ran against"'
+echo "== T13h soak counts only how long DEV KEPT running the build"
+python3 -I - $STATE/mtdev.jsonl "$BRK" "$A_F" "$(schema mtprod)" <<'EOF'
+import json,sys,datetime   # TEST ONLY: (BRK,A_F) deployed on mtdev 48h ago, rolled away 47h ago -> ran 1h
+p,b,f,sc=sys.argv[1:5]; now=datetime.datetime.now(datetime.timezone.utc); T=lambda h:(now-datetime.timedelta(hours=h)).strftime("%Y%m%dT%H%M%SZ")
+rec=lambda **k: json.dumps(k,sort_keys=True)+"\n"
+open(p,"a").write(rec(ts=T(48),env="mtdev",mode="deploy",result="success",**{"from":{"backend":"x@sha256:"+"0"*64,"frontend":f},"to":{"backend":b,"frontend":f}},schema_before=sc,schema_after=sc,backup="")
+                 +rec(ts=T(47),env="mtdev",mode="rollback",result="success",**{"from":{"backend":b,"frontend":f},"to":{"backend":"x@sha256:"+"0"*64,"frontend":f}},schema_before=sc,schema_after=sc,backup=""))
+EOF
+dep mtprod "$BRK" "$A_F" --yes;                         chk "T13h build DEV left after 1h is refused despite 48h age" '[ $RC = 1 ] && echo "$OUT" | grep -q "for only 1h continuously"'
 echo "== T14 alert path survives an unreachable Alertmanager"
 sed -i 's#^ALERT_URL=.*#ALERT_URL=http://127.0.0.1:1#' $CONF/mtdev.conf
 dep mtdev "$BRK" "$B_F" --yes;                          chk "T14 still rolls back with dead alert URL (exit 2)" '[ $RC = 2 ] && echo "$OUT" | grep -q '"'"'could not post alert'"'"''
@@ -255,10 +291,51 @@ check "T13g/T16 mtprod still on B after the refused promotion" [ "$(running mtp-
 echo "== T17 config hardening: group-writable config refused"
 mkconf mtperm mtprod mtp; chmod 664 $CONF/mtperm.conf
 dep mtperm --status;                                    chk "T17 writable config refused" '[ $RC = 1 ] && echo "$OUT" | grep -q "must be owned by root"'
+echo "== T18 DB closed cleanly (no -wal file): check must not exit silently"
+docker stop -t 20 mtd-backend >/dev/null; ls $R/data/mtdev/app.db-wal >/dev/null 2>&1 && echo "        (wal still present)"
+dep mtdev --check;                                      chk "T18 --check with no WAL reports a result (exit 0, CHECK PASSED)" '[ $RC = 0 ] && echo "$OUT" | grep -q "CHECK PASSED"'
+docker start mtd-backend >/dev/null; waith mtd-backend
+echo "== T19 DATA_DIR must be the directory the backend mounts at /data"
+mkconf mtdevmount mtdev mtd "DATA_DIR=$R/master-dev"
+dep mtdevmount "$REL" "$B_F" --yes;                     chk "T19 mismatched DATA_DIR refused (wrong DB would be backed up)" '[ $RC = 1 ] && echo "$OUT" | grep -q "is not what backend mounts"'
+echo "== T20 failure before any restart aborts cleanly (no rollback, no restart)"
+F6=$(fp mtd mtdev); chattr +i $R/stacks/mtdev
+dep mtdev "$REL" "$B_F" --yes;                          chk "T20 aborted before restart (exit 1)" '[ $RC = 1 ] && echo "$OUT" | grep -q "aborted before any restart"'
+chattr -i $R/stacks/mtdev
+chk "T20 containers + .env untouched, history: aborted" '[ "$(fp mtd mtdev)" = "$F6" ] && [ "$(lastres mtdev)" = aborted ]'
+echo "== T23 REQUIRE_REGISTRY=yes refuses local-only images"
+mkconf mtregistry mtdev mtd "REQUIRE_REGISTRY=yes"
+dep mtregistry "$REL" "$B_F" --yes;                     chk "T23 local-only image refused when registry required" '[ $RC = 1 ] && echo "$OUT" | grep -q "not in the registry"'
+echo "== T25 SIGKILL mid-deploy (no trap possible) -> later deploys refuse, --rollback recovers"
+sed -i 's#^ALERT_URL=.*#ALERT_URL=http://127.0.0.1:19093#' $CONF/mtdev.conf
+DEPLOY_TEST_HOOK=after_up DEPLOY_TEST_SLEEP=60 DEPLOY_CONF_DIR=$CONF bash "$DEPLOY" mtdev "$REL" "$B_F" --yes >$R/t25.log 2>&1 </dev/null & P=$!
+for i in $(seq 1 90); do grep -q 'TEST HOOK after_up' $R/t25.log && break; sleep 1; done
+kill -KILL $P; wait $P 2>/dev/null; sleep 1   # the orphaned hook sleep holds no lock (fd 9 closed) and exits by itself
+chk "T25 left on REL with an unfinished record" '[ "$(running mtd-backend)" = "${REL##*@}" ] && [ "$(lastres mtdev)" = started ]'
+dep mtdev "$B_B" "$B_F" --yes;                          chk "T25 normal deploy refused while a run is unfinished" '[ $RC = 1 ] && echo "$OUT" | grep -q "never finished"'
+dep mtdev --rollback;                                   chk "T25 --rollback recovers to B" '[ $RC = 0 ] && [ "$(running mtd-backend)" = "${B_B##*@}" ]'
 echo "== T15 live-data guard: config pointing at a non-app dir is refused"
 mkconf mtdevwrong mtdev mtd; sed -i "s#^DATA_DIR=.*#DATA_DIR=$R/am#" $CONF/mtdevwrong.conf
 dep mtdevwrong "$REL" "$B_F" --yes;                     chk "T15 wrong data dir refused" '[ $RC = 1 ] && echo "$OUT" | grep -q '"'"'does not look like'"'"''
 
+echo "== T24 migration ran but health fails -> NEW code left running (never old code on a migrated DB)"
+mkstack mtmig mtm "$A_B" "$A_F"; mkconf mtmig mtmig mtm "HEALTH_URLS=http://127.0.0.1:1/"; waith mtm-backend; S_M0=$(schema mtmig)
+dep mtmig "$B_B" "$B_F" --yes;                          chk "T24 exit 3 (failed after migration)" '[ $RC = 3 ] && [ "$(lastres mtmig)" = failed_migrated ]'
+chk "T24 schema migrated and NEW backend running again (B), not old A" '[ "$(schema mtmig)" != "$S_M0" ] && [ "$(running mtm-backend)" = "${B_B##*@}" ] && [ "$(docker inspect -f {{.State.Running}} mtm-backend)" = true ]'
+echo "== T26 health watcher mutes only the env being deployed; alerts on a stuck deploy lock"
+W="MUSIC_WATCH_CONTAINERS='mtd-backend musictest-gone-prod' MUSIC_WATCH_STATE=$R/watch MUSIC_DEPLOY_STATE=$R/watchlocks MUSIC_ALERT_BIN=$MON/music-alert MUSIC_ALERT_URL=http://127.0.0.1:19093"
+rm -rf --one-file-system -- "$R/watch" "$R/watchlocks"; install -d -m 700 $R/watchlocks; touch $R/watchlocks/dev.lock $R/watchlocks/prod.lock
+( flock 9; sleep 30 ) 9>$R/watchlocks/dev.lock & H1=$!; sleep 1
+OUT=$(bash -c "$W bash $MON/music-health-watch" 2>&1)
+chk "T26a dev lock mutes dev container only (prod container still checked)" 'echo "$OUT" | grep -q "mtd-backend: deploy of dev in progress" && echo "$OUT" | grep -qE "musictest-gone-prod is missing/none|container.: .musictest-gone-prod"'
+kill $H1 2>/dev/null; wait $H1 2>/dev/null
+touch -d "-45 minutes" $R/watchlocks/prod.lock; ( flock 9; sleep 30 ) 9>>$R/watchlocks/prod.lock & H2=$!; sleep 1; touch -d "-45 minutes" $R/watchlocks/prod.lock
+: > $R/alerts-received.jsonl; OUT=$(bash -c "$W bash $MON/music-health-watch" 2>&1); sleep 4
+chk "T26b stale prod lock -> MusicDeployStuck alert and prod container NOT muted" 'grep -q MusicDeployStuck $R/alerts-received.jsonl && echo "$OUT" | grep -q "musictest-gone-prod"'
+kill $H2 2>/dev/null; wait $H2 2>/dev/null
+echo "== T27 PROMOTE_FROM must be a plain env name"
+mkconf mtbadsrc mtprod mtp "PROMOTE_FROM=../etc"
+dep mtbadsrc --status;                                  chk "T27 path-like PROMOTE_FROM refused" '[ $RC = 1 ] && echo "$OUT" | grep -q "bad PROMOTE_FROM"'
 check "SAFETY live DEV/PROD containers + stack files unchanged by the whole suite" [ "$(livefp)" = "$LIVE0" ]
 echo; echo "================ $PASS passed, $FAIL failed"
 printf '%s\n' "${RESULTS[@]}" > $R/test-results.txt

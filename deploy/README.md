@@ -41,8 +41,12 @@ sudo music-deploy prod --promote                          # exactly what DEV run
 8. Every failure posts a `MusicDeployFailed` alert to Alertmanager (→ ntfy) and writes a log under
    `/var/lib/music-deploy/logs/`.
 
-Interrupted (Ctrl-C / SIGTERM): before the recreate, `.env` is restored and nothing else changed; after it,
-the run is recorded `interrupted` and `--rollback` returns to the version that ran before.
+Interrupted (Ctrl-C / SIGTERM / SIGHUP from a dropped SSH session): before the recreate, `.env` is restored and the run
+is recorded `aborted` (nothing changed); after it, the run is recorded `interrupted` and `--rollback` returns to the version
+that ran before. If the process is killed outright (SIGKILL/OOM/reboot) the run stays `started`: normal deploys then refuse
+until `--rollback` (which is allowed) puts it right. A failure before any container restarts is recorded `aborted` (exit 1).
+After a failure the new backend is **stopped before the schema is read**, so a still-running migration can't be missed;
+if it migrated, the new version is started again and left for a human (exit 3). `--rollback` never undoes a rollback.
 
 ## Files
 * `deploy.sh`: the script (install as `/usr/local/bin/music-deploy`)
@@ -50,7 +54,9 @@ the run is recorded `interrupted` and `--rollback` returns to the version that r
 * `compose.dev.yaml`: the image-based DEV stack (Phase 4).
 * `pin-images.sh`: give pinned PROD digests a permanent `pinned-*` Docker Hub tag (dry run by default; never overwrites).
 
-PROD only accepts a build that was **deployed through `music-deploy` on DEV** (baselines don't count), ran healthy
-there for `SOAK_HOURS`, and whose DEV runs include PROD's current DB schema (so a promotion can never be a downgrade
-across a migration). The tool must run as root, and its config files must be root-owned and not group/world-writable.
+PROD only accepts a build that was **deployed through `music-deploy` on DEV** (baselines don't count), that DEV then
+**kept running continuously** for `SOAK_HOURS` (time until DEV moved off it, by deploy or rollback, or until now), that
+never failed a later attempt there, and whose DEV runs include PROD's current DB schema (so a promotion can never be a
+downgrade across a migration). `--promote` also requires DEV to be healthy right now and running exactly what its `.env`
+says. PROD only runs images that exist in the registry (`REQUIRE_REGISTRY=yes`), never local-only builds. The tool must run as root, and its config files must be root-owned and not group/world-writable.
 * Tests: `~/music-phase3/tests/run-tests.sh` (disposable stacks; never touches live data).

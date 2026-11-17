@@ -16,4 +16,8 @@ for r in "$B" "$F"; do
 done
 [ "$APPLY" = --apply ] || { echo "DRY RUN: nothing written. Re-run with --apply (after docker login) to create the tags."; exit 0; }
 for r in "$B" "$F"; do docker buildx imagetools create -t "${r%@*}:$TAG" "$r"; done
-for r in "$B" "$F"; do [ "$(docker buildx imagetools inspect "${r%@*}:$TAG" --format '{{json .Manifest}}' | python3 -I -c 'import json,sys;print(json.load(sys.stdin)["digest"])')" = "${r#*@}" ] && echo "verified ${r%@*}:$TAG = ${r#*@}"; done
+for r in "$B" "$F"; do
+  got=$(docker buildx imagetools inspect "${r%@*}:$TAG" --format '{{json .Manifest}}' | python3 -I -c 'import json,sys;print(json.load(sys.stdin)["digest"])')
+  [ "$got" = "${r#*@}" ] || { echo "MISMATCH: ${r%@*}:$TAG = $got, expected ${r#*@}"; exit 1; }
+  echo "verified ${r%@*}:$TAG = ${r#*@}"
+done

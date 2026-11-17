@@ -5,9 +5,10 @@ name: Publish images
 # Every run publishes ONE immutable build tag, shared by backend + frontend:
 #     build-<run_id>-<sha7>      unique per run; the workflow fails rather than overwrite it
 # plus convenience tags:
-#   - push to main / dispatch -> :latest (moving) and :sha-<sha7> (only if that tag does not exist
+#   - push to main / dispatch on main -> :latest (moving) and :sha-<sha7> (only if that tag does not exist
 #                                yet, so it always points at the FIRST build of a commit)
 #   - weekly cron             -> :latest only (a fresh rebuild never re-points an existing :sha-*)
+#   - dispatch on another branch -> the build tag ONLY (never :latest / :sha-*)
 #   - pull request            -> BUILD ONLY (validates the Dockerfiles, amd64); nothing is pushed,
 #                                so unreviewed code never reaches Docker Hub
 # Deployments never use moving tags: deploy.sh resolves build-*/sha-* to a sha256 digest and pins
@@ -37,7 +38,8 @@ on:
 # A newer push/PR update cancels an in-flight build for the same ref.
 concurrency:
   group: publish-${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel a publishing run mid-push (a half-published build / split :latest); PR builds may be replaced.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   publish:
@@ -96,7 +98,14 @@ jobs:
           case "$GITHUB_EVENT_NAME" in
             pull_request) ;;   # build-only: the build tag is computed for the summary but never pushed
             schedule)     tags="$tags"$'\n'"$IMAGE:latest" ;;
-            *)            tags="$tags"$'\n'"$IMAGE:latest"
+            *)            if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+                            # manual run from another branch: unique build tag only, never :latest/:sha-*
+                            echo "::notice::$GITHUB_REF is not main; publishing only $IMAGE:$build"
+                            echo "Tags:"; echo "$tags"
+                            { echo 'tags<<EOF'; echo "$tags"; echo 'EOF'; echo "build=$build"; echo "sha=$sha"; } >> "$GITHUB_OUTPUT"
+                            exit 0
+                          fi
+                          tags="$tags"$'\n'"$IMAGE:latest"
                           if exists "sha-$short"; then
                             echo "::notice::$IMAGE:sha-$short already exists (first build of this commit); not re-pointing it"
                           else

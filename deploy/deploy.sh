@@ -40,9 +40,14 @@ CONF="$CONF_DIR/$ENV_NAME.conf"
 BACKEND_REPO=${BACKEND_REPO:-}; FRONTEND_REPO=${FRONTEND_REPO:-}
 HEALTH_URLS=${HEALTH_URLS:-}; PUBLIC_URLS=${PUBLIC_URLS:-}
 PROMOTE_FROM=${PROMOTE_FROM:-}; SOAK_HOURS=${SOAK_HOURS:-24}
+if [ -n "$PROMOTE_FROM" ]; then
+  case $PROMOTE_FROM in *[!a-z0-9-]*) echo "bad PROMOTE_FROM"; exit 1;; esac
+  SRC_CONF="$CONF_DIR/$PROMOTE_FROM.conf"
+  [ -r "$SRC_CONF" ] && [ "$(stat -c %u "$SRC_CONF")" = 0 ] && [ -z "$(find "$SRC_CONF" -perm /022)" ] || { echo "refusing: $SRC_CONF missing, not root-owned, or writable"; exit 1; }
+fi
 HEALTH_TIMEOUT=${HEALTH_TIMEOUT:-240}; DISK_MIN_GB=${DISK_MIN_GB:-5}
 QUIET_SECONDS=${QUIET_SECONDS:-15}; QUIET_WAIT=${QUIET_WAIT:-120}
-ALERT_URL=${ALERT_URL:-}; CONFIRM=${CONFIRM:-no}
+ALERT_URL=${ALERT_URL:-}; CONFIRM=${CONFIRM:-no}; REQUIRE_REGISTRY=${REQUIRE_REGISTRY:-no}
 COUNT_TABLES=${COUNT_TABLES:-"user account songs playlists playlist_songs"}
 
 MODE=deploy; BUILD=""; REF_B=""; REF_F=""; DRY=0; YES=0; NO_PUBLIC=0; ALLOW_WRITES=0
@@ -60,8 +65,10 @@ install -d -m 700 "$STATE_DIR" "$STATE_DIR/logs"
 HIST="$STATE_DIR/$ENV_NAME.jsonl"; touch "$HIST"; chmod 600 "$HIST"
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 LOG="$STATE_DIR/logs/$TS-$ENV_NAME.log"
-exec > >(tee -a "$LOG") 2>&1
-log()  { echo "[$(date -u +%H:%M:%S)] [$ENV_NAME] $*"; }
+exec > >(trap '' INT TERM HUP; exec tee -ia "$LOG") 2>&1
+trap '' PIPE
+# log/die go to stderr so a refusal inside $(...) is still shown (stderr is tee'd too)
+log()  { echo "[$(date -u +%H:%M:%S)] [$ENV_NAME] $*" >&2; }
 die()  { log "REFUSED: $*"; exit 1; }
 PY="python3 -I"
 RUNNER="${SUDO_USER:-$(id -un)}"
@@ -70,6 +77,9 @@ RUNNER="${SUDO_USER:-$(id -un)}"
 dc() { (exec 9>&-; cd "$STACK_DIR" && docker compose -p "$COMPOSE_PROJECT" --project-directory "$STACK_DIR" -f "$STACK_DIR/compose.yaml" "$@"); }
 env_get() { grep -E "^$1=" "$STACK_DIR/.env" | tail -1 | cut -d= -f2-; }
 running_digest() { docker inspect -f '{{.Image}}' "$1" 2>/dev/null || echo none; }
+runs_ref() { # runs_ref <container> <repo@sha256:..> : true if the container was created from exactly that ref
+  local cfg; cfg=$(docker inspect -f '{{.Config.Image}}' "$1" 2>/dev/null) || return 1
+  [ "${cfg#docker.io/}" = "$2" ] || [ "$(running_digest "$1")" = "${2##*@}" ]; }
 
 alert() { # alert <severity> <summary>; best effort, never fails the script
   logger -t music-deploy "[$ENV_NAME] $2" 2>/dev/null || true
@@ -155,8 +165,9 @@ check_ref() { # check_ref <ref> <expected-repo-or-empty>
   local r=$1 repo=$2
   is_digest_ref "$r" || die "'$r' is not an immutable digest reference (repo@sha256:<64 hex>); tags such as :latest are refused"
   [ -z "$repo" ] || [ "${r%@*}" = "$repo" ] || die "'$r' is not from the configured repository $repo"
-  if docker image inspect "$r" >/dev/null 2>&1; then log "image present locally: ${r:0:40}…"; return 0; fi
-  docker buildx imagetools inspect "$r" >/dev/null 2>&1 && { log "image exists in registry: ${r:0:40}…"; return 0; }
+  if docker buildx imagetools inspect "$r" >/dev/null 2>&1; then log "image exists in registry: ${r:0:40}…"; return 0; fi
+  [ "$REQUIRE_REGISTRY" = yes ] && die "image is not in the registry (REQUIRE_REGISTRY=yes; local-only images are refused here): $r"
+  if docker image inspect "$r" >/dev/null 2>&1; then log "image present locally (not in registry): ${r:0:40}…"; return 0; fi
   die "image not found locally or in the registry: $r"
 }
 resolve_build() { # resolve_build <tag> <repo> -> repo@sha256
@@ -179,7 +190,9 @@ active_ops() { # refuse during imports; wait for the DB to go quiet
   fi
   local waited=0 age
   while :; do
-    age=$(( $(date +%s) - $(stat -c %Y "$DATA_DIR/app.db" "$DATA_DIR/app.db-wal" 2>/dev/null | sort -n | tail -1) ))
+    local newest=0 f m
+    for f in "$DATA_DIR/app.db" "$DATA_DIR/app.db-wal"; do [ -e "$f" ] && m=$(stat -c %Y "$f") && [ "$m" -gt "$newest" ] && newest=$m; done
+    age=$(( $(date +%s) - newest ))
     [ "$age" -ge "$QUIET_SECONDS" ] && { log "database quiet for ${age}s"; return 0; }
     [ "$ALLOW_WRITES" = 1 ] && { log "database written ${age}s ago; continuing (--allow-active-writes)"; return 0; }
     [ "$waited" -ge "$QUIET_WAIT" ] && die "database still being written (last ${age}s ago) after ${QUIET_WAIT}s; someone is using the app. Retry later or pass --allow-active-writes"
@@ -194,12 +207,20 @@ preflight() {
   grep -qE "^$BACKEND_VAR=" "$STACK_DIR/.env" && grep -qE "^$FRONTEND_VAR=" "$STACK_DIR/.env" || die "$BACKEND_VAR/$FRONTEND_VAR not in .env (stack not converted to pinned images)"
   is_digest_ref "$(env_get "$BACKEND_VAR")" && is_digest_ref "$(env_get "$FRONTEND_VAR")" || die ".env image refs are not digests"
   dc config -q >/dev/null || die "compose config does not resolve"
+  local mount; mount=$(dc config --format json 2>/dev/null | $PY -c 'import json,sys
+d=json.load(sys.stdin)["services"][sys.argv[1]]
+print(next((v["source"] for v in d.get("volumes",[]) if v.get("target")=="/data"),""))' "$BACKEND_SERVICE") || mount=""
+  [ "$(realpath -m "$mount")" = "$(realpath -m "$DATA_DIR")" ] || die "DATA_DIR ($DATA_DIR) is not what $BACKEND_SERVICE mounts at /data (${mount:-nothing}); refusing to back up or verify the wrong database"
+  local c lbl; for c in "$BACKEND_CONTAINER" "$FRONTEND_CONTAINER"; do
+    lbl=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$c" 2>/dev/null) || continue
+    [ "$lbl" = "$COMPOSE_PROJECT" ] || die "container $c belongs to compose project '$lbl', not '$COMPOSE_PROJECT'"
+  done
   local free
   [ -d "$BACKUP_DIR" ] || install -d -m 700 "$BACKUP_DIR" 2>/dev/null || die "cannot create backup dir $BACKUP_DIR"
   free=$(df -P -BG "$BACKUP_DIR" | awk 'NR==2{gsub("G","",$4);print $4}')
   [ "${free:-0}" -ge "$DISK_MIN_GB" ] || die "only ${free}G free at $BACKUP_DIR (need ${DISK_MIN_GB}G)"
   local last; last=$(hist_query '([h for h in H if h.get("env")=="'"$ENV_NAME"'"] or [{}])[-1].get("result","")')
-  [ "$last" = started ] && die "the previous deployment never finished (interrupted?). Inspect with --status, then use --rollback or fix by hand"
+  [ "$last" = started ] && [ "$MODE" != rollback ] && [ "$MODE" != check ] && die "the previous deployment never finished (interrupted?). Inspect with --status, then use --rollback or fix by hand"
   db check >/dev/null || die "live database fails quick_check BEFORE deploy; not touching it"
   log "live database quick_check ok"
 }
@@ -233,7 +254,6 @@ apply_refs() { # apply_refs <b> <f> : set .env, pull if needed, recreate backend
   # NOTE: set -e is suspended inside if-conditions, so every step returns explicitly.
   env_set "$1" "$2" || return 1
   PHASE=env_updated; test_hook after_env
-  dc pull -q "$BACKEND_SERVICE" "$FRONTEND_SERVICE" || return 1
   PHASE=recreating
   dc up -d --pull never --no-deps "$BACKEND_SERVICE" "$FRONTEND_SERVICE" || return 1
   PHASE=verifying; test_hook after_up; return 0
@@ -256,6 +276,7 @@ fi
 
 flock_file="$STATE_DIR/$ENV_NAME.lock"; exec 9>"$flock_file"
 flock -n 9 || die "another deploy for $ENV_NAME is running"
+echo "$$ $TS $MODE $RUNNER" >&9
 
 if [ "$MODE" = baseline ]; then
   # Record the currently RUNNING images + schema as a completed state. Changes nothing else; works
@@ -284,13 +305,32 @@ case $MODE in
     [ -n "$REF_B" ] && [ -n "$REF_F" ] || usage;;
   promote)
     [ -n "$PROMOTE_FROM" ] || die "this env has no PROMOTE_FROM configured"
-    REF_B=$(DEPLOY_CONF_DIR="$CONF_DIR" bash -c '. "$0"; grep -E "^$BACKEND_VAR=" "$STACK_DIR/.env" | cut -d= -f2-' "$CONF_DIR/$PROMOTE_FROM.conf")
-    REF_F=$(DEPLOY_CONF_DIR="$CONF_DIR" bash -c '. "$0"; grep -E "^$FRONTEND_VAR=" "$STACK_DIR/.env" | cut -d= -f2-' "$CONF_DIR/$PROMOTE_FROM.conf")
-    log "promoting what $PROMOTE_FROM runs: ${REF_B##*@} / ${REF_F##*@}";;
+    REF_B=$(bash -c '. "$0"; grep -E "^$BACKEND_VAR=" "$STACK_DIR/.env" | cut -d= -f2-' "$SRC_CONF")
+    REF_F=$(bash -c '. "$0"; grep -E "^$FRONTEND_VAR=" "$STACK_DIR/.env" | cut -d= -f2-' "$SRC_CONF")
+    SRC_BC=$(bash -c '. "$0"; echo "$BACKEND_CONTAINER"' "$SRC_CONF")
+    SRC_FC=$(bash -c '. "$0"; echo "$FRONTEND_CONTAINER"' "$SRC_CONF")
+    runs_ref "$SRC_BC" "$REF_B" && runs_ref "$SRC_FC" "$REF_F" || die "$PROMOTE_FROM is not running what its .env says; refusing to promote"
+    for c in "$SRC_BC" "$SRC_FC"; do
+      case "$(docker inspect -f '{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$c" 2>/dev/null)" in
+        running/healthy|running/none) ;; *) die "$c on $PROMOTE_FROM is not healthy right now; refusing to promote";; esac
+    done
+    log "promoting what $PROMOTE_FROM runs (healthy now): ${REF_B##*@} / ${REF_F##*@}";;
   rollback)
     # undo the most recent completed change (a success, or an interrupted run that may have half-applied)
-    prev=$(hist_query '([h for h in H if h.get("env")=="'"$ENV_NAME"'" and h.get("result") in ("success","interrupted")] or [None])[-1]')
+    prev=$($PY - "$HIST" "$ENV_NAME" <<'EOF3'
+import json,sys
+H=[json.loads(l) for l in open(sys.argv[1]) if l.strip()]; env=sys.argv[2]
+final={}
+for h in H:
+    if h.get("env")==env: final[h["ts"]]=h          # last record per run = its final state
+runs=sorted(final.values(),key=lambda h:h["ts"])
+real=[h for h in runs if h.get("result") in ("success","interrupted","started")]
+print(json.dumps(real[-1]) if real else "null")
+EOF3
+)
     [ -n "$prev" ] && [ "$prev" != null ] || die "no completed deployment in history to roll back from"
+    [ "$($PY -c 'import json,sys;print(json.loads(sys.argv[1]).get("mode",""))' "$prev")" = rollback ] && die "the last change was already a rollback; to go further back, deploy an explicit digest"
+    [ "$($PY -c 'import json,sys;print(json.loads(sys.argv[1]).get("mode",""))' "$prev")" = baseline ] && die "only a baseline is recorded; there is no earlier version to roll back to"
     REF_B=$($PY -c 'import json,sys;print(json.loads(sys.argv[1])["from"]["backend"])' "$prev")
     REF_F=$($PY -c 'import json,sys;print(json.loads(sys.argv[1])["from"]["frontend"])' "$prev")
     PREV_SCHEMA=$($PY -c 'import json,sys;print(json.loads(sys.argv[1])["schema_before"])' "$prev")
@@ -304,7 +344,7 @@ case $MODE in
     log "rolling back code to ${REF_B##*@} / ${REF_F##*@} (schema unchanged since then)";;
 esac
 
-[ "$REF_B" = "$CUR_B" ] && [ "$REF_F" = "$CUR_F" ] && [ "$(running_digest "$BACKEND_CONTAINER")" = "${REF_B##*@}" ] && { log "already running the requested version; nothing to do"; exit 0; }
+[ "$REF_B" = "$CUR_B" ] && [ "$REF_F" = "$CUR_F" ] && runs_ref "$BACKEND_CONTAINER" "$REF_B" && runs_ref "$FRONTEND_CONTAINER" "$REF_F" && { log "already running the requested version; nothing to do"; exit 0; }
 check_ref "$REF_B" "$BACKEND_REPO"; check_ref "$REF_F" "$FRONTEND_REPO"
 
 # Downgrade guard: a digest that previously ran on a different schema must not run over this one.
@@ -333,28 +373,42 @@ if [ -n "$PROMOTE_FROM" ] && [ "$MODE" != rollback ]; then
   age=$($PY - "$SRC_HIST" "$REF_B" "$REF_F" "$PROMOTE_FROM" "$SCHEMA_NOW" <<'EOF'
 import json,sys,datetime
 H=[json.loads(l) for l in open(sys.argv[1]) if l.strip()]; b,f,src,here=sys.argv[2:6]
-ok=[h for h in H if h.get("env")==src and h.get("result")=="success" and h.get("mode")!="baseline" and h["to"]["backend"]==b and h["to"]["frontend"]==f]
-bad=[h for h in H if h.get("env")==src and h.get("result")!="success" and h.get("to",{}).get("backend")==b]
-if not ok or (bad and bad[-1]["ts"]>ok[-1]["ts"]): print(-1); sys.exit()
+final={}
+for h in H:
+    if h.get("env")==src: final[h["ts"]]=h                    # final state of each run on the source env
+runs=sorted(final.values(),key=lambda h:h["ts"])
+P=lambda t: datetime.datetime.strptime(t,"%Y%m%dT%H%M%SZ").replace(tzinfo=datetime.timezone.utc)
+ok=[h for h in runs if h.get("result")=="success" and h.get("mode")!="baseline" and h["to"]["backend"]==b and h["to"]["frontend"]==f]
+if not ok: print(-1); sys.exit()
 seen={x for h in ok for x in (h.get("schema_before"),h.get("schema_after")) if x}   # every schema this build ran against there
 if here not in seen: print(-2); sys.exit()
-t=datetime.datetime.strptime(ok[-1]["ts"],"%Y%m%dT%H%M%SZ").replace(tzinfo=datetime.timezone.utc)
-print(int((datetime.datetime.now(datetime.timezone.utc)-t).total_seconds()//3600))
+last=ok[-1]
+# a later attempt to deploy this build that did not succeed = it is not trusted any more
+if any(h["ts"]>last["ts"] and h.get("to",{}).get("backend")==b and h.get("to",{}).get("frontend")==f and h.get("result")!="success" for h in runs): print(-1); sys.exit()
+# soak = how long the source env KEPT running it: until the next run that moved it off this build
+# (any non-aborted run whose "from" is this build, incl. rollbacks and unfinished runs), else until now
+moved=[h for h in runs if h["ts"]>last["ts"] and h.get("from",{}).get("backend")==b and h.get("result")!="aborted"]
+end=P(moved[0]["ts"]) if moved else datetime.datetime.now(datetime.timezone.utc)
+print(int((end-P(last["ts"])).total_seconds()//3600))
 EOF
 )
   [ "$age" != -2 ] || die "this env's database schema ($SCHEMA_NOW) is not one the build ran against on $PROMOTE_FROM; promoting it could be a downgrade across a migration"
   [ "$age" -ge 0 ] || die "this exact build was never deployed successfully on $PROMOTE_FROM via music-deploy (baselines don't count), or failed there later. Deploy and test it on $PROMOTE_FROM first"
-  [ "$age" -ge "$SOAK_HOURS" ] || die "build has run on $PROMOTE_FROM for only ${age}h (need ${SOAK_HOURS}h)"
+  [ "$age" -ge "$SOAK_HOURS" ] || die "build ran on $PROMOTE_FROM for only ${age}h continuously before being replaced or so far (need ${SOAK_HOURS}h)"
   log "promotion gate ok: healthy on $PROMOTE_FROM for ${age}h"
 fi
 
-active_ops
 log "plan: backend ${CUR_B##*@} -> ${REF_B##*@}"
 log "      frontend ${CUR_F##*@} -> ${REF_F##*@}"
-[ "$DRY" = 1 ] && { log "dry run: nothing changed"; exit 0; }
+[ "$DRY" = 1 ] && { active_ops; log "dry run: nothing changed"; exit 0; }
 if [ "$CONFIRM" = yes ] && [ "$YES" != 1 ]; then
+  [ -t 0 ] || die "confirmation required: run in a terminal, or pass --yes"
   read -r -p "Deploy to $ENV_NAME? type the env name to confirm: " a; [ "$a" = "$ENV_NAME" ] || die "not confirmed"
 fi
+active_ops   # after the prompt: imports/activity are checked right before the backup + restart
+
+# Download first (changes nothing running), so the backup below is taken right before the restart.
+for r in "$REF_B" "$REF_F"; do docker image inspect "$r" >/dev/null 2>&1 || docker pull -q "$r" >/dev/null || die "could not pull $r; nothing changed"; done
 
 # ---- point of no return: back up first
 FILES_BEFORE=$(find "$DATA_DIR/music" -type f | wc -l)
@@ -364,34 +418,46 @@ COUNTS_BEFORE=$($PY -c 'import json,sys;print(json.dumps(json.loads(sys.argv[1])
 log "pre-deploy backup ok: $BK ($BKJ)"
 REC=$($PY -c 'import json,sys;print(json.dumps({"ts":sys.argv[1],"env":sys.argv[2],"mode":sys.argv[3],"by":sys.argv[4],"from":{"backend":sys.argv[5],"frontend":sys.argv[6]},"to":{"backend":sys.argv[7],"frontend":sys.argv[8]},"backup":sys.argv[9],"schema_before":sys.argv[10]}))' \
   "$TS" "$ENV_NAME" "$MODE" "$RUNNER" "$CUR_B" "$CUR_F" "$REF_B" "$REF_F" "$BK" "$SCHEMA_NOW")
+FINISHED=0
 finish() { # finish <result> [note]
+  FINISHED=1
   hist_add "$($PY -c 'import json,sys;d=json.loads(sys.argv[1]);d.update(result=sys.argv[2],note=sys.argv[3],schema_after=sys.argv[4],finished=sys.argv[5]);print(json.dumps(d))' "$REC" "$1" "${2:-}" "$(db schema 2>/dev/null || echo ?)" "$(date -u +%Y%m%dT%H%M%SZ)")"
 }
 hist_add "$($PY -c 'import json,sys;d=json.loads(sys.argv[1]);d["result"]="started";print(json.dumps(d))' "$REC")"
 
 PHASE=start
 on_interrupt() {
-  trap - INT TERM
+  trap - INT TERM HUP
   [ -n "${HOOK_PID:-}" ] && kill "$HOOK_PID" 2>/dev/null
   log "INTERRUPTED during phase $PHASE"
   if [ "$PHASE" = env_updated ]; then
-    env_set "$CUR_B" "$CUR_F" && log ".env restored; containers were not touched" && finish interrupted "before recreate; .env restored" && exit 5
+    env_set "$CUR_B" "$CUR_F" && log ".env restored; containers were not touched" && finish aborted "interrupted before recreate; .env restored" && exit 5
   fi
   finish interrupted "during $PHASE; containers may be on the new version"
   alert warning "deploy interrupted during $PHASE"
   log "run '$0 $ENV_NAME --status' and then '--rollback' (or redeploy)"; exit 5
 }
-trap on_interrupt INT TERM
+trap on_interrupt INT TERM HUP
+on_exit() { local rc=$?; [ "$FINISHED" = 1 ] && return; finish error "script exited unexpectedly (rc=$rc) in phase ${PHASE:-?}"; alert critical "deploy script exited unexpectedly in phase ${PHASE:-?}"; }
+trap on_exit EXIT
 
 if apply_refs "$REF_B" "$REF_F" && wait_healthy && verify_data "$COUNTS_BEFORE" "$FILES_BEFORE"; then
   finish success; log "DEPLOY OK: $ENV_NAME now runs ${REF_B##*@}"; exit 0
 fi
 
 # ---- failure handling
-trap - INT TERM
+trap - INT TERM HUP
+if [ "$PHASE" = start ] || [ "$PHASE" = env_updated ]; then
+  [ "$PHASE" = env_updated ] && env_set "$CUR_B" "$CUR_F"
+  finish aborted "failed before any container was restarted; .env unchanged"
+  alert warning "deploy aborted before restart (nothing changed)"
+  die "deploy aborted before any restart; nothing was changed"
+fi
+dc stop -t 30 "$BACKEND_SERVICE" >/dev/null 2>&1 || log "warning: could not stop $BACKEND_SERVICE before reading the schema"
 SCHEMA_AFTER=$(db schema 2>/dev/null || echo ?)
 if [ "$SCHEMA_AFTER" != "$SCHEMA_NOW" ]; then
-  finish failed_migrated "schema $SCHEMA_NOW -> $SCHEMA_AFTER; left running for a human"
+  dc start "$BACKEND_SERVICE" >/dev/null 2>&1 || true   # keep NEW code on the migrated DB, as it was
+  finish failed_migrated "schema $SCHEMA_NOW -> $SCHEMA_AFTER; new version left running for a human"
   alert critical "deploy failed AFTER a schema change; NOT rolled back"
   log "DEPLOY FAILED after the database schema changed. Not rolling back automatically."
   log "Pre-deploy backup: $BK . Manual recovery: runbook 9.5 (never overwrite without preserving the current DB)."
@@ -403,7 +469,7 @@ if env_set "$CUR_B" "$CUR_F" && dc up -d --pull never --no-deps "$BACKEND_SERVIC
   alert warning "deploy failed; rolled back to previous version"
   log "ROLLED BACK: $ENV_NAME runs ${CUR_B##*@} again"; exit 2
 fi
-if [ "$(running_digest "$BACKEND_CONTAINER")" = "${CUR_B##*@}" ]; then
+if runs_ref "$BACKEND_CONTAINER" "$CUR_B"; then
   finish rollback_unhealthy "previous version restored but checks still fail (cause likely outside this deploy)"
   alert critical "deploy failed; previous version restored but the environment still fails health checks"
   log "ROLLBACK APPLIED (previous version is running) BUT CHECKS STILL FAIL. The problem is probably not this deploy"

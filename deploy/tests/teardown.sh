@@ -8,7 +8,7 @@ for p in $(docker compose ls -a --format json 2>/dev/null | python3 -I -c 'impor
 done
 for c in $(docker ps -aq --filter name='^mt[dp]-' --filter name='^musictest-'); do docker rm -f "$c" >/dev/null; done
 mountpoint -q $R/backups-full 2>/dev/null && umount $R/backups-full
-for d in stacks data state backups backups-full conf am t11.log t12.log alerts-received.jsonl test-results.txt; do
+for d in stacks data state backups backups-full conf am watch watchlocks t11.log t11b.log t11c.log t12.log t25.log alerts-received.jsonl test-results.txt; do
   t="$R/$d"; [ -e "$t" ] || continue
   case "$(realpath "$t")" in "$R"/*) rm -rf --one-file-system -- "$t";; *) echo "REFUSED $t";; esac
 done
