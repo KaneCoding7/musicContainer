@@ -1,0 +1,6 @@
+[Unit]
+Description=Check music app containers and alert if unhealthy twice in a row
+After=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/music-health-watch

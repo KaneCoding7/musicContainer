@@ -1,0 +1,7 @@
+[Unit]
+Description=Alert (Alertmanager -> ntfy) that %i failed
+
+[Service]
+Type=oneshot
+# critical for backups, warning for everything else (yt-dlp maintenance, deploy helpers)
+ExecStart=/bin/sh -c 'case "%i" in restic-backup*) s=critical;; *) s=warning;; esac; exec /usr/local/bin/music-alert MusicMaintenanceFailed "$s" "systemd job failed on mediaserver: %i" "Check: journalctl -u %i -n 50" unit=%i'

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# music-health-watch - every 5 min (timer). Alerts when a music container is missing/stopped/unhealthy
+# on TWO consecutive runs (so a deploy's ~30s restart never pages). Skips while deploy.sh holds a lock.
+set -uo pipefail
+CONTAINERS=${MUSIC_WATCH_CONTAINERS:-"music-backend music-frontend music-backend-prod music-frontend-prod cloudflared-marcus"}
+STATE=${MUSIC_WATCH_STATE:-/var/lib/music-deploy/health-watch}; LOCKS=${MUSIC_DEPLOY_STATE:-/var/lib/music-deploy}
+ALERT=${MUSIC_ALERT_BIN:-/usr/local/bin/music-alert}
+install -d -m 700 "$STATE"
+for l in "$LOCKS"/*.lock; do [ -e "$l" ] || continue; exec 8<"$l"; flock -n 8 || { echo "deploy in progress ($l); skipping"; exit 0; }; exec 8<&-; done
+for c in $CONTAINERS; do
+  s=$(docker inspect -f '{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$c" 2>/dev/null) || s=missing/none
+  case $s in running/healthy|running/none|running/starting) rm -f "$STATE/$c.bad"; continue;; esac
+  if [ -f "$STATE/$c.bad" ]; then
+    case $c in *-prod|cloudflared-marcus) sev=critical;; *) sev=warning;; esac
+    MUSIC_ALERT_TTL="15 minutes" "$ALERT" MusicContainerUnhealthy "$sev" "music container $c is $s" "Seen on 2 consecutive checks. Check: docker ps -a; docker logs --tail 50 $c" container="$c"
+  else echo "$c is $s (first sighting; will alert if still bad next run)"; touch "$STATE/$c.bad"; fi
+done

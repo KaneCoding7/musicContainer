@@ -1,9 +1,17 @@
 name: Publish images
 
 # Builds the backend + frontend images and pushes them to Docker Hub.
-#   - push to main  -> tag :latest  (the images others pull to run the app)
-#   - pull request  -> tag :dev     (a rolling preview build to test before merge)
-#   - weekly cron   -> tag :latest  (rebuild so a published image never rots)
+#
+# Every run publishes ONE immutable build tag, shared by backend + frontend:
+#     build-<run_id>-<sha7>      unique per run; the workflow fails rather than overwrite it
+# plus convenience tags:
+#   - push to main / dispatch -> :latest (moving) and :sha-<sha7> (only if that tag does not exist
+#                                yet, so it always points at the FIRST build of a commit)
+#   - weekly cron             -> :latest only (a fresh rebuild never re-points an existing :sha-*)
+#   - pull request            -> :dev (moving)
+# Deployments never use moving tags: deploy.sh resolves build-*/sha-* to a sha256 digest and pins
+# that digest in the stack's .env. DEV tests a build first; PROD only accepts a digest that ran
+# healthy on DEV (see deploy/README.md).
 #
 # The weekly rebuild exists for yt-dlp: it goes stale within weeks and a stale
 # yt-dlp 403s on every "import from link", so :latest has to be rebuilt even
@@ -67,22 +75,35 @@ jobs:
 
       # Compute tags in shell rather than docker/metadata-action so the build
       # doesn't depend on the GitHub metadata API (which can 503 during GitHub
-      # incidents and fail the whole publish). main -> :latest + :sha-<short>;
-      # pull request -> :dev.
-      - name: Compute tags
+      # incidents and fail the whole publish). Immutable tags are checked against
+      # the registry first: an existing build-* tag fails the job (never overwrite),
+      # an existing sha-* tag is simply not pushed again.
+      - name: Compute tags (immutable build tag + guarded convenience tags)
         id: meta
+        env:
+          IMAGE: ${{ matrix.image }}
         run: |
-          short="$(echo "${GITHUB_SHA}" | cut -c1-7)"
-          {
-            echo 'tags<<EOF'
-            if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
-              echo "${{ matrix.image }}:dev"
-            else
-              echo "${{ matrix.image }}:latest"
-              echo "${{ matrix.image }}:sha-${short}"
-            fi
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          sha="${{ github.event.pull_request.head.sha || github.sha }}"
+          short="$(echo "$sha" | cut -c1-7)"
+          build="build-${GITHUB_RUN_ID}-${short}"
+          exists() { docker buildx imagetools inspect "$IMAGE:$1" >/dev/null 2>&1; }
+          if exists "$build"; then
+            echo "::error::$IMAGE:$build already exists; refusing to overwrite an immutable tag"; exit 1
+          fi
+          tags="$IMAGE:$build"
+          case "$GITHUB_EVENT_NAME" in
+            pull_request) tags="$tags"$'\n'"$IMAGE:dev" ;;
+            schedule)     tags="$tags"$'\n'"$IMAGE:latest" ;;
+            *)            tags="$tags"$'\n'"$IMAGE:latest"
+                          if exists "sha-$short"; then
+                            echo "::notice::$IMAGE:sha-$short already exists (first build of this commit); not re-pointing it"
+                          else
+                            tags="$tags"$'\n'"$IMAGE:sha-$short"
+                          fi ;;
+          esac
+          echo "Tags:"; echo "$tags"
+          { echo 'tags<<EOF'; echo "$tags"; echo 'EOF'; echo "build=$build"; echo "sha=$sha"; } >> "$GITHUB_OUTPUT"
 
       # Resolve the newest yt-dlp and bake that exact version into the backend
       # image. Pinning the resolved version (rather than letting the Dockerfile
@@ -103,10 +124,29 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build and push ${{ matrix.service }}
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.build }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           build-args: ${{ matrix.service == 'backend' && format('YTDLP_VERSION={0}', steps.ytdlp.outputs.version) || '' }}
+
+      # The digest is what deploy.sh pins. Print it where it is easy to copy.
+      - name: Build summary
+        env:
+          IMAGE: ${{ matrix.image }}
+          BUILD: ${{ steps.meta.outputs.build }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo "### $IMAGE"
+            echo "- build tag: \`$BUILD\`"
+            echo "- digest: \`$IMAGE@$DIGEST\`"
+            echo "- deploy to DEV: \`sudo music-deploy dev --build $BUILD\`"
+          } >> "$GITHUB_STEP_SUMMARY"
