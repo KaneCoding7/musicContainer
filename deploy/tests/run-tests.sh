@@ -11,8 +11,8 @@ A_B=music-backend@sha256:387282bc5658832d7594b965f17080d8aacb00088a4303572019ba4
 A_F=music-frontend@sha256:8383dd084cb87b89200b0a05136f90adbcec9d2d7708653a7997e238858a9965
 B_B=mrkane7/music-backend@sha256:dd9fbb1da1d327272b5dfaa019c6bbabc849372fcdc3ae929634424ee8f20394   # = PROD (main c35355a)
 B_F=mrkane7/music-frontend@sha256:5bccf1bf04d8749519095127e0178e75274920950c815f4ce366aecaee72a14b
-BRK=musictest/backend-broken@sha256:5673f18f704bab7ab23bd85ad4c1a5925cc9b93993513bd556002963ae8f742c
-REL=musictest/backend-relabel@sha256:4742eeb7f03217af184e137de5a3ba655824b5d9543b149019720d9186ea1c5e
+BRK=musictest/backend-broken@$(docker image inspect -f "{{.Id}}" musictest/backend-broken:t1)   # built from images/broken
+REL=musictest/backend-relabel@$(docker image inspect -f "{{.Id}}" musictest/backend-relabel:t1)   # built from images/relabel
 NOPE=mrkane7/music-backend@sha256:0000000000000000000000000000000000000000000000000000000000000000
 PASS=0; FAIL=0; RESULTS=()
 ok()   { PASS=$((PASS+1)); RESULTS+=("PASS  $*"); echo "  PASS  $*"; }
@@ -59,7 +59,7 @@ EOF
 }
 mkconf() { # mkconf <env> <stack> <prefix> [extra lines]
   install -d -m 700 $CONF
-  cat > $CONF/$1.conf <<EOF
+  umask 022; cat > $CONF/$1.conf <<EOF
 STACK_DIR=$R/stacks/$2
 COMPOSE_PROJECT=musictest-$2
 DATA_DIR=$R/data/$2
@@ -227,12 +227,34 @@ open(p,"w").write("".join(json.dumps(h,sort_keys=True)+"\n" for h in H))
 EOF
 dep mtprod --promote;                                    check "T13d prod without --yes and no TTY refused (confirmation)" [ $RC = 1 ]
 check "T13  mtprod untouched by refusals"                [ "$(fp mtp mtprod)" = "$F3" ]
+python3 -I - $STATE/mtdev.jsonl "$B_B" "$A_F" <<'EOF'
+import json,sys   # TEST ONLY: an old BASELINE-only record (B backend + A frontend) must not be promotable
+p,b,f=sys.argv[1:4]; open(p,"a").write(json.dumps({"ts":"20200101T000000Z","env":"mtdev","mode":"baseline","result":"success","from":{"backend":b,"frontend":f},"to":{"backend":b,"frontend":f},"schema_before":"x","schema_after":"x","backup":""},sort_keys=True)+"\n")
+EOF
+dep mtprod "$B_B" "$A_F" --yes;                         chk "T13f baseline-only record is not promotable (refused as untested, not on schema)" '[ $RC = 1 ] && echo "$OUT" | grep -q "baselines don" && ! echo "$OUT" | grep -q "not one the build ran against"'
 dep mtprod --promote --yes;                              chk "T13e promote after soak succeeds (A->B on prod copy)" '[ $RC = 0 ] && [ "$(running mtp-backend)" = "${B_B##*@}" ]'
 
+echo "== T13g promote refused when target DB schema was never seen with that build"
+python3 -I - $STATE/mtdev.jsonl "$REL" "$A_F" <<'EOF'
+import json,sys   # TEST ONLY: the ONLY mtdev success for pair (REL, A_F) ran on unrelated schemas
+import datetime; ts=(datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(hours=30)).strftime("%Y%m%dT%H%M%SZ")
+p,b,f=sys.argv[1:4]; open(p,"a").write(json.dumps({"ts":ts,"env":"mtdev","mode":"deploy","result":"success","from":{"backend":b,"frontend":f},"to":{"backend":b,"frontend":f},"schema_before":"aaaa","schema_after":"bbbb","backup":""},sort_keys=True)+"\n")
+EOF
+dep mtprod "$REL" "$A_F" --yes;                         chk "T13g schema-mismatch promotion refused" '[ $RC = 1 ] && echo "$OUT" | grep -q "not one the build ran against"'
 echo "== T14 alert path survives an unreachable Alertmanager"
 sed -i 's#^ALERT_URL=.*#ALERT_URL=http://127.0.0.1:1#' $CONF/mtdev.conf
 dep mtdev "$BRK" "$B_F" --yes;                          chk "T14 still rolls back with dead alert URL (exit 2)" '[ $RC = 2 ] && echo "$OUT" | grep -q '"'"'could not post alert'"'"''
 
+echo "== T16 baseline: records running state once, changes nothing"
+F5=$(fp mtp mtprod); mkconf mtbase mtprod mtp
+dep mtbase --baseline;                                  chk "T16a baseline recorded (exit 0)" '[ $RC = 0 ] && [ "$(lastres mtbase)" = success ]'
+chk "T16b baseline = running digest" 'grep -q "${B_B##*@}" $STATE/mtbase.jsonl'
+dep mtbase --baseline;                                  check "T16c second baseline refused" [ $RC = 1 ]
+check "T16d nothing changed" [ "$(fp mtp mtprod)" = "$F5" ]
+check "T13g/T16 mtprod still on B after the refused promotion" [ "$(running mtp-backend)" = "${B_B##*@}" ]
+echo "== T17 config hardening: group-writable config refused"
+mkconf mtperm mtprod mtp; chmod 664 $CONF/mtperm.conf
+dep mtperm --status;                                    chk "T17 writable config refused" '[ $RC = 1 ] && echo "$OUT" | grep -q "must be owned by root"'
 echo "== T15 live-data guard: config pointing at a non-app dir is refused"
 mkconf mtdevwrong mtdev mtd; sed -i "s#^DATA_DIR=.*#DATA_DIR=$R/am#" $CONF/mtdevwrong.conf
 dep mtdevwrong "$REL" "$B_F" --yes;                     chk "T15 wrong data dir refused" '[ $RC = 1 ] && echo "$OUT" | grep -q '"'"'does not look like'"'"''

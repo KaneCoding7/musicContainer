@@ -6,6 +6,7 @@
 #   deploy.sh prod  --promote                     deploy exactly what DEV runs (soak-gated)
 #   deploy.sh <env> --rollback                    previous code version (refused across a migration)
 #   deploy.sh <env> --status | --check            show state | run preflight only
+#   deploy.sh <env> --baseline                    record what is running now as the starting state (no change)
 #   flags: --dry-run  --yes  --no-public  --allow-active-writes
 #
 # Data rules (by design, not configurable):
@@ -28,6 +29,9 @@ case $ENV_NAME in *[!a-z0-9-]*|"") echo "bad env name"; exit 1;; esac
 CONF_DIR=${DEPLOY_CONF_DIR:-/etc/music-deploy}
 CONF="$CONF_DIR/$ENV_NAME.conf"
 [ -r "$CONF" ] || { echo "no config $CONF"; exit 1; }
+# The config is sourced as root: it must be root-owned and not writable by group/others.
+[ "$(id -u)" = 0 ] || { echo "run with sudo (needs docker and the root-owned stack .env)"; exit 1; }
+[ "$(stat -c %u "$CONF")" = 0 ] && [ -z "$(find "$CONF" -perm /022)" ] || { echo "refusing: $CONF must be owned by root and not group/world-writable"; exit 1; }
 # shellcheck source=/dev/null
 . "$CONF"
 : "${STACK_DIR:?}" "${COMPOSE_PROJECT:?}" "${DATA_DIR:?}" "${BACKEND_SERVICE:?}" "${FRONTEND_SERVICE:?}"
@@ -45,7 +49,7 @@ MODE=deploy; BUILD=""; REF_B=""; REF_F=""; DRY=0; YES=0; NO_PUBLIC=0; ALLOW_WRIT
 while [ $# -gt 0 ]; do
   case $1 in
     --build) BUILD=${2:?}; shift;;
-    --promote) MODE=promote;; --rollback) MODE=rollback;; --status) MODE=status;; --check) MODE=check;;
+    --promote) MODE=promote;; --rollback) MODE=rollback;; --status) MODE=status;; --check) MODE=check;; --baseline) MODE=baseline;;
     --dry-run) DRY=1;; --yes) YES=1;; --no-public) NO_PUBLIC=1;; --allow-active-writes) ALLOW_WRITES=1;;
     -*) echo "unknown flag $1"; exit 1;;
     *) if [ -z "$REF_B" ]; then REF_B=$1; elif [ -z "$REF_F" ]; then REF_F=$1; else usage; fi;;
@@ -253,6 +257,20 @@ fi
 flock_file="$STATE_DIR/$ENV_NAME.lock"; exec 9>"$flock_file"
 flock -n 9 || die "another deploy for $ENV_NAME is running"
 
+if [ "$MODE" = baseline ]; then
+  # Record the currently RUNNING images + schema as a completed state. Changes nothing else; works
+  # even before a stack is converted to pinned images (reads the containers, not .env).
+  [ -s "$HIST" ] && grep -q "\"env\": \"$ENV_NAME\"" "$HIST" && die "history for $ENV_NAME already exists; baseline is only for the first record"
+  [ -f "$DATA_DIR/app.db" ] || die "no database at $DATA_DIR/app.db"
+  db check >/dev/null || die "live database fails quick_check"
+  ref_of() { local id; id=$(docker inspect -f '{{.Image}}' "$1" 2>/dev/null) || return 1; docker image inspect -f '{{index .RepoDigests 0}}' "$id" 2>/dev/null; }
+  RB=$(ref_of "$BACKEND_CONTAINER") && RF=$(ref_of "$FRONTEND_CONTAINER") || die "containers not found"
+  is_digest_ref "${RB#docker.io/}" && is_digest_ref "${RF#docker.io/}" || die "running images have no digest reference ($RB / $RF)"
+  RB=${RB#docker.io/}; RF=${RF#docker.io/}; SC=$(db schema)
+  hist_add "$($PY -c 'import json,sys;print(json.dumps({"ts":sys.argv[1],"env":sys.argv[2],"mode":"baseline","by":sys.argv[3],"from":{"backend":sys.argv[4],"frontend":sys.argv[5]},"to":{"backend":sys.argv[4],"frontend":sys.argv[5]},"backup":"","schema_before":sys.argv[6],"schema_after":sys.argv[6],"result":"success","note":"baseline: recorded running state, nothing changed","finished":sys.argv[1]}))' "$TS" "$ENV_NAME" "$RUNNER" "$RB" "$RF" "$SC")"
+  log "baseline recorded: backend $RB"; log "                   frontend $RF"; log "                   schema $SC (nothing changed)"; exit 0
+fi
+
 preflight
 [ "$MODE" = check ] && { active_ops; log "CHECK PASSED (nothing changed)"; exit 0; }
 
@@ -310,17 +328,22 @@ fi
 # Promotion gate: an env with PROMOTE_FROM only accepts builds that ran healthy there for SOAK_HOURS.
 if [ -n "$PROMOTE_FROM" ] && [ "$MODE" != rollback ]; then
   SRC_HIST="$STATE_DIR/$PROMOTE_FROM.jsonl"; [ -f "$SRC_HIST" ] || die "no $PROMOTE_FROM history: build has not been tested on $PROMOTE_FROM"
-  age=$($PY - "$SRC_HIST" "$REF_B" "$REF_F" "$PROMOTE_FROM" <<'EOF'
+  # Only real deployments count (a --baseline record proves nothing was tested), and this env's DB must be
+  # on a schema the build actually ran against on the source env (before or after its migration there).
+  age=$($PY - "$SRC_HIST" "$REF_B" "$REF_F" "$PROMOTE_FROM" "$SCHEMA_NOW" <<'EOF'
 import json,sys,datetime
-H=[json.loads(l) for l in open(sys.argv[1]) if l.strip()]; b,f,src=sys.argv[2:5]
-ok=[h for h in H if h.get("env")==src and h.get("result")=="success" and h["to"]["backend"]==b and h["to"]["frontend"]==f]
+H=[json.loads(l) for l in open(sys.argv[1]) if l.strip()]; b,f,src,here=sys.argv[2:6]
+ok=[h for h in H if h.get("env")==src and h.get("result")=="success" and h.get("mode")!="baseline" and h["to"]["backend"]==b and h["to"]["frontend"]==f]
 bad=[h for h in H if h.get("env")==src and h.get("result")!="success" and h.get("to",{}).get("backend")==b]
 if not ok or (bad and bad[-1]["ts"]>ok[-1]["ts"]): print(-1); sys.exit()
+seen={x for h in ok for x in (h.get("schema_before"),h.get("schema_after")) if x}   # every schema this build ran against there
+if here not in seen: print(-2); sys.exit()
 t=datetime.datetime.strptime(ok[-1]["ts"],"%Y%m%dT%H%M%SZ").replace(tzinfo=datetime.timezone.utc)
 print(int((datetime.datetime.now(datetime.timezone.utc)-t).total_seconds()//3600))
 EOF
 )
-  [ "$age" -ge 0 ] || die "this exact build was never deployed successfully on $PROMOTE_FROM (or failed there later). Deploy and test it on $PROMOTE_FROM first"
+  [ "$age" != -2 ] || die "this env's database schema ($SCHEMA_NOW) is not one the build ran against on $PROMOTE_FROM; promoting it could be a downgrade across a migration"
+  [ "$age" -ge 0 ] || die "this exact build was never deployed successfully on $PROMOTE_FROM via music-deploy (baselines don't count), or failed there later. Deploy and test it on $PROMOTE_FROM first"
   [ "$age" -ge "$SOAK_HOURS" ] || die "build has run on $PROMOTE_FROM for only ${age}h (need ${SOAK_HOURS}h)"
   log "promotion gate ok: healthy on $PROMOTE_FROM for ${age}h"
 fi

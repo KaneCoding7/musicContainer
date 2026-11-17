@@ -8,7 +8,8 @@ name: Publish images
 #   - push to main / dispatch -> :latest (moving) and :sha-<sha7> (only if that tag does not exist
 #                                yet, so it always points at the FIRST build of a commit)
 #   - weekly cron             -> :latest only (a fresh rebuild never re-points an existing :sha-*)
-#   - pull request            -> :dev (moving)
+#   - pull request            -> BUILD ONLY (validates the Dockerfiles, amd64); nothing is pushed,
+#                                so unreviewed code never reaches Docker Hub
 # Deployments never use moving tags: deploy.sh resolves build-*/sha-* to a sha256 digest and pins
 # that digest in the stack's .env. DEV tests a build first; PROD only accepts a digest that ran
 # healthy on DEV (see deploy/README.md).
@@ -41,8 +42,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    # Skip publishing for PRs opened from forks: they don't have access to the
-    # Docker Hub secrets, so the push would fail. Same-repo PRs still publish :dev.
+    # Fork PRs are skipped entirely (no secrets); same-repo PRs build without pushing.
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
@@ -68,6 +68,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -93,7 +94,7 @@ jobs:
           fi
           tags="$IMAGE:$build"
           case "$GITHUB_EVENT_NAME" in
-            pull_request) tags="$tags"$'\n'"$IMAGE:dev" ;;
+            pull_request) ;;   # build-only: the build tag is computed for the summary but never pushed
             schedule)     tags="$tags"$'\n'"$IMAGE:latest" ;;
             *)            tags="$tags"$'\n'"$IMAGE:latest"
                           if exists "sha-$short"; then
@@ -128,8 +129,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
-          platforms: linux/amd64,linux/arm64
-          push: true
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}
@@ -144,6 +145,9 @@ jobs:
           BUILD: ${{ steps.meta.outputs.build }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            echo "### $IMAGE: PR build OK (not published)" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
           {
             echo "### $IMAGE"
             echo "- build tag: \`$BUILD\`"

@@ -18,6 +18,7 @@ sudo music-deploy prod --promote                          # exactly what DEV run
 | `music-deploy prod --promote` | deploy DEV's current digests to PROD (refused unless healthy on DEV ≥ `SOAK_HOURS`) |
 | `music-deploy <env> --rollback` | go back to the previous code version (refused if the last deploy migrated the DB) |
 | `music-deploy <env> --status` / `--check` | show versions/history / run all preflight checks, change nothing |
+| `music-deploy <env> --baseline` | once per env: record the running images + schema as the starting state (changes nothing) |
 | `--dry-run` `--yes` `--no-public` `--allow-active-writes` | plan only / skip prompt / skip public URL checks / don't wait for DB quiet |
 
 ## What a deploy does, in order
@@ -44,7 +45,12 @@ Interrupted (Ctrl-C / SIGTERM): before the recreate, `.env` is restored and noth
 the run is recorded `interrupted` and `--rollback` returns to the version that ran before.
 
 ## Files
-* `deploy.sh`: the script (install as `/usr/local/bin/music-deploy`; it is unrelated to the legacy `scripts/deploy.sh` nightly rebuild, which is NOT used)
+* `deploy.sh`: the script (install as `/usr/local/bin/music-deploy`)
 * `conf/dev.conf`, `conf/prod.conf`: install to `/etc/music-deploy/`.
 * `compose.dev.yaml`: the image-based DEV stack (Phase 4).
+* `pin-images.sh`: give pinned PROD digests a permanent `pinned-*` Docker Hub tag (dry run by default; never overwrites).
+
+PROD only accepts a build that was **deployed through `music-deploy` on DEV** (baselines don't count), ran healthy
+there for `SOAK_HOURS`, and whose DEV runs include PROD's current DB schema (so a promotion can never be a downgrade
+across a migration). The tool must run as root, and its config files must be root-owned and not group/world-writable.
 * Tests: `~/music-phase3/tests/run-tests.sh` (disposable stacks; never touches live data).
