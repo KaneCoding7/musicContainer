@@ -1,0 +1,11 @@
+{
+	admin off
+	auto_https off
+}
+:8080 {
+	reverse_proxy backend:3001
+	log {
+		output file /logs/access.log
+		format json
+	}
+}

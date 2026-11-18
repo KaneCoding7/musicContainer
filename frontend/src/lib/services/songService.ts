@@ -416,16 +416,14 @@ export async function removeArt(songId: number): Promise<Song> {
 
 // Returns the album-art URL for a song (only meaningful when song.hasArt).
 export function artUrl(songId: number): string {
-  return `${withToken(`${apiBase()}/api/songs/${songId}/art`)}&v=${artVersion(songId)}`;
+  return withToken(`${apiBase()}/api/songs/${songId}/art?v=${artVersion(songId)}`);
 }
 
 // Returns a resized square-thumbnail URL for a song's art. `size` is the target
 // edge in px; the server snaps it up to the nearest cached variant. Use this in
 // list/grid/mini-player views so the browser isn't downscaling the full image.
 export function thumbUrl(songId: number, size: number): string {
-  return `${withToken(
-    `${apiBase()}/api/songs/${songId}/art?size=${size}`
-  )}&v=${artVersion(songId)}`;
+  return withToken(`${apiBase()}/api/songs/${songId}/art?size=${size}&v=${artVersion(songId)}`);
 }
 
 // --- Custom artist avatar images ---
@@ -438,7 +436,7 @@ function artistImageEndpoint(artist: string): string {
 
 // URL for an artist's custom image. `version` busts the cache after a change.
 export function artistImageUrl(artist: string, version = 0): string {
-  return `${withToken(artistImageEndpoint(artist))}&v=${version}`;
+  return withToken(`${artistImageEndpoint(artist)}&v=${version}`);
 }
 
 // Artist names the current user has set a custom image for.

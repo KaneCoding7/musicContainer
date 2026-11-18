@@ -3,7 +3,8 @@ import { toNodeHandler } from "better-auth/node";
 import cors from "cors";
 import express from "express";
 import { auth, DEV_AUTH_SECRET } from "./auth.js";
-import { requireAuth } from "./auth-middleware.js";
+import { authSecret, requireAuth } from "./auth-middleware.js";
+import { issueMediaToken } from "./media-token.js";
 import { ART_DIR, getDb, MUSIC_DIR } from "./db/init.js";
 import { sweepStaleSuggestions } from "./functional/songs.js";
 import { allowAllOrigins, configuredOrigins, isPrivateOrigin } from "./origins.js";
@@ -80,6 +81,36 @@ if (INVITE_ONLY) {
   });
 }
 
+// Never emit the session token in a response header. Better Auth's bearer plugin
+// adds "set-auth-token" to auth responses, and reverse proxies that log response
+// headers (Caddy's JSON log does) would record a live session token. The client
+// reads the token from the sign-in JSON body, so the header is dropped here.
+const HIDDEN_RESPONSE_HEADERS = new Set(["set-auth-token"]);
+app.use("/api/auth", (_req, res, next) => {
+  const setHeader = res.setHeader.bind(res);
+  res.setHeader = ((name: string, value: number | string | readonly string[]) =>
+    HIDDEN_RESPONSE_HEADERS.has(String(name).toLowerCase()) ? res : setHeader(name, value)) as typeof res.setHeader;
+  const writeHead = res.writeHead.bind(res) as (...a: unknown[]) => typeof res;
+  res.writeHead = ((status: number, ...rest: unknown[]) => {
+    for (const h of HIDDEN_RESPONSE_HEADERS) res.removeHeader(h);
+    const args = rest.map((a) => {
+      if (Array.isArray(a)) {
+        // flat [k, v, k, v] or nested [[k, v]] header arrays
+        if (a.length && Array.isArray(a[0])) return (a as [string, unknown][]).filter(([k]) => !HIDDEN_RESPONSE_HEADERS.has(String(k).toLowerCase()));
+        const out: unknown[] = [];
+        for (let i = 0; i < a.length; i += 2) if (!HIDDEN_RESPONSE_HEADERS.has(String(a[i]).toLowerCase())) out.push(a[i], a[i + 1]);
+        return out;
+      }
+      if (a && typeof a === "object") {
+        return Object.fromEntries(Object.entries(a as Record<string, unknown>).filter(([k]) => !HIDDEN_RESPONSE_HEADERS.has(k.toLowerCase())));
+      }
+      return a;
+    });
+    return writeHead(status, ...args);
+  }) as typeof res.writeHead;
+  next();
+});
+
 // Better Auth routes must be mounted BEFORE express.json() so the handler can
 // read the raw request body.
 app.all("/api/auth/*", toNodeHandler(auth));
@@ -109,6 +140,13 @@ app.use("/api", publicRouter);
 // Has its own credential scheme (username + generated Subsonic password), so
 // it's mounted outside Better Auth.
 app.use("/rest", subsonicRouter);
+
+// Scoped media token for <audio>/<img>/download URLs (never the session token).
+// Requires the session in the Authorization header.
+app.get("/api/media-token", requireAuth, (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json(issueMediaToken(authSecret(), req.userId!, req.sessionId!));
+});
 
 // Feature routes (require authentication; data is scoped per user).
 app.use("/api", requireAuth, songsRouter);
