@@ -96,23 +96,23 @@ export class SyncController {
     if (!token) return;
     this.closed = false;
     const base = apiBase().replace(/^http/, "ws");
+    // The session token is sent as the FIRST message, never in the URL (URLs are
+    // written to proxy/tunnel access logs). Nothing else is sent until auth_ok.
     try {
-      this.ws = new WebSocket(
-        `${base}/api/sync?token=${encodeURIComponent(token)}`
-      );
+      this.ws = new WebSocket(`${base}/api/sync`);
     } catch {
       this.scheduleReconnect();
       return;
     }
     this.ws.onopen = () => {
-      this.connected = true;
-      this.send({ type: "hello", deviceId: this.deviceId, name: deviceName() });
-      // If we're already playing, claim the session by pushing our state.
-      if (this.vm.currentSong) this.sendState();
+      this.send({ type: "auth", token });
     };
     this.ws.onmessage = (e) => this.onMessage(e);
-    this.ws.onclose = () => {
+    this.ws.onclose = (e: CloseEvent) => {
       this.connected = false;
+      // 4401 = session invalid/revoked: don't hammer the server with retries;
+      // a fresh sign-in calls connect() again. Other closes reconnect as before.
+      if (e?.code === 4401) return;
       if (!this.closed) this.scheduleReconnect();
     };
     this.ws.onerror = () => {
@@ -167,6 +167,15 @@ export class SyncController {
     } catch {
       return;
     }
+
+    if (msg.type === "auth_ok") {
+      this.connected = true;
+      this.send({ type: "hello", deviceId: this.deviceId, name: deviceName() });
+      // If we're already playing, claim the session by pushing our state.
+      if (this.vm.currentSong) this.sendState();
+      return;
+    }
+    if (msg.type === "auth_error") return; // the server closes with 4401 next
 
     if (msg.type === "session") {
       const wasActive = this.isActive;

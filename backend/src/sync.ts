@@ -95,60 +95,172 @@ function broadcast(userId: string): void {
   }
 }
 
-// Validate a bearer token (sent in the WS URL query) and return the user id.
+// Validate a session bearer token and return the user id (null if invalid/expired).
+// Throws on transient errors (DB busy, ...) so callers can tell "invalid" from "try later".
 async function authUser(token: string | null): Promise<string | null> {
   if (!token) return null;
-  try {
-    const headers = new Headers();
-    headers.set("authorization", `Bearer ${token}`);
-    const session = await auth.api.getSession({ headers });
-    return session?.user?.id ?? null;
-  } catch {
-    return null;
-  }
+  const headers = new Headers();
+  headers.set("authorization", `Bearer ${token}`);
+  const session = await auth.api.getSession({ headers });
+  return session?.user?.id ?? null;
 }
 
-export function attachSync(server: Server): void {
-  const wss = new WebSocketServer({ noServer: true });
+// Close codes the client understands (4000-4999 are application-defined).
+export const SYNC_CLOSE = {
+  AUTH_REQUIRED: 4401, // first message wasn't a valid auth message, or the session was revoked/expired
+  AUTH_TIMEOUT: 4408, // no auth message within authTimeoutMs
+  BUSY: 4503, // transient server error / too many pending connections: client retries
+} as const;
 
-  server.on(
-    "upgrade",
-    async (req: IncomingMessage, socket: Duplex, head: Buffer) => {
-      const url = new URL(req.url ?? "", "http://localhost");
-      if (url.pathname !== "/api/sync") {
-        socket.destroy();
-        return;
-      }
-      const userId = await authUser(url.searchParams.get("token"));
-      if (!userId) {
-        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-        socket.destroy();
-        return;
-      }
-      wss.handleUpgrade(req, socket, head, (ws) => {
-        wss.emit("connection", ws, req, userId);
-      });
+export interface SyncOptions {
+  // Resolve a session token to a user id; null = invalid/expired; THROW = transient error.
+  authenticate?: (token: string) => Promise<string | null>; // injectable for tests
+  authTimeoutMs?: number;
+  revalidateMs?: number;
+  maxPending?: number; // unauthenticated sockets, global
+  maxPendingPerIp?: number;
+}
+
+const PRE_AUTH_MAX_BYTES = 8 * 1024; // an auth frame is tiny
+const POST_AUTH_MAX_BYTES = 16 * 1024 * 1024; // state snapshots carry the whole queue
+
+type SyncMsg = {
+  type?: string;
+  token?: unknown;
+  deviceId?: string;
+  name?: string;
+  state?: { currentIndex?: number | null } | null;
+  command?: unknown;
+};
+
+// Protocol (v2): the session token is NEVER put in the WebSocket URL (URLs end up
+// in reverse-proxy / tunnel access logs). The client opens /api/sync with no query
+// string and its FIRST frame must be {"type":"auth","token":"<session token>"}.
+// Until the server answers {"type":"auth_ok"}, nothing is sent to the client and
+// no other message is acted on. The session is re-validated periodically, so a
+// signed-out or expired session is disconnected (close code 4401).
+export function attachSync(server: Server, opts: SyncOptions = {}): WebSocketServer {
+  const authenticate = opts.authenticate ?? authUser;
+  const authTimeoutMs = opts.authTimeoutMs ?? 5_000;
+  const revalidateMs = opts.revalidateMs ?? 5 * 60_000;
+  const maxPending = opts.maxPending ?? 200;
+  const maxPendingPerIp = opts.maxPendingPerIp ?? 20;
+  const wss = new WebSocketServer({ noServer: true, maxPayload: POST_AUTH_MAX_BYTES });
+  let pending = 0;
+  const pendingByIp = new Map<string, number>();
+
+  server.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    const url = new URL(req.url ?? "", "http://localhost");
+    if (url.pathname !== "/api/sync") {
+      socket.destroy();
+      return;
     }
-  );
+    // Credentials (or anything else) in the URL are refused outright, so a token
+    // can never be logged by an upstream proxy for this endpoint.
+    if (url.search) {
+      socket.write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+  });
 
-  wss.on("connection", (ws: WebSocket, _req: IncomingMessage, userId: string) => {
+  wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
+    // Cap unauthenticated sockets (global + per client IP) so they can't be hoarded.
+    const ip = String(req.headers["cf-connecting-ip"] ?? req.headers["x-forwarded-for"] ?? req.socket.remoteAddress ?? "?").split(",")[0].trim();
+    if (pending >= maxPending || (pendingByIp.get(ip) ?? 0) >= maxPendingPerIp) {
+      ws.close(SYNC_CLOSE.BUSY, "too many pending connections");
+      return;
+    }
+    pending++;
+    pendingByIp.set(ip, (pendingByIp.get(ip) ?? 0) + 1);
+    let counted = true;
+    const release = () => {
+      if (!counted) return;
+      counted = false;
+      pending--;
+      const n = (pendingByIp.get(ip) ?? 1) - 1;
+      if (n <= 0) pendingByIp.delete(ip);
+      else pendingByIp.set(ip, n);
+    };
+    let userId: string | null = null;
+    let token: string | null = null;
+    let authPending = false;
     let deviceId: string | null = null;
-    const s = getSession(userId);
+    let s: Session | null = null;
+    let revalidate: ReturnType<typeof setInterval> | null = null;
 
-    ws.on("message", (raw) => {
-      let msg: {
-        type?: string;
-        deviceId?: string;
-        name?: string;
-        state?: { currentIndex?: number | null } | null;
-        command?: unknown;
-      };
+    const authTimer = setTimeout(() => {
+      if (!userId) ws.close(SYNC_CLOSE.AUTH_TIMEOUT, "authentication timeout");
+    }, authTimeoutMs);
+
+    // "error" = transient failure (retry later), distinct from an invalid token (null).
+    const safeAuth = async (t: string): Promise<string | null | "error"> => {
+      try {
+        return await authenticate(t);
+      } catch {
+        return "error";
+      }
+    };
+
+    ws.on("message", async (raw) => {
+      if (!userId) {
+        const size = Array.isArray(raw) ? raw.reduce((n, b) => n + b.length, 0) : (raw as Buffer).byteLength;
+        if (size > PRE_AUTH_MAX_BYTES) {
+          ws.close(SYNC_CLOSE.AUTH_REQUIRED, "authentication required");
+          return;
+        }
+      }
+      let msg: SyncMsg;
       try {
         msg = JSON.parse(raw.toString());
       } catch {
+        if (!userId) ws.close(SYNC_CLOSE.AUTH_REQUIRED, "authentication required");
         return;
       }
 
+      if (!userId) {
+        if (authPending) return; // the single auth attempt is being checked; drop anything else
+        if (msg?.type !== "auth" || typeof msg.token !== "string" || !msg.token || msg.token.length > 4096) {
+          ws.close(SYNC_CLOSE.AUTH_REQUIRED, "authentication required");
+          return;
+        }
+        authPending = true;
+        const uid = await safeAuth(msg.token);
+        if (ws.readyState !== WebSocket.OPEN) return;
+        if (uid === "error") {
+          ws.close(SYNC_CLOSE.BUSY, "try again"); // transient: the client reconnects
+          return;
+        }
+        if (!uid) {
+          ws.send(JSON.stringify({ type: "auth_error" }));
+          ws.close(SYNC_CLOSE.AUTH_REQUIRED, "invalid or expired session");
+          return;
+        }
+        clearTimeout(authTimer);
+        release();
+        userId = uid;
+        token = msg.token;
+        s = getSession(uid);
+        ws.send(JSON.stringify({ type: "auth_ok" }));
+        revalidate = setInterval(async () => {
+          const still = token ? await safeAuth(token) : null;
+          if (still === "error") return; // transient: keep the connection, check again next time
+          if (still !== userId && ws.readyState === WebSocket.OPEN) {
+            ws.close(SYNC_CLOSE.AUTH_REQUIRED, "session expired");
+          }
+        }, revalidateMs);
+        revalidate.unref?.();
+        return;
+      }
+
+      if (msg?.type === "auth") return; // already authenticated
+      const uidNow: string = userId;
+      const sess: Session = s as Session;
+      handle(uidNow, sess, msg);
+    });
+
+    const handle = (userId: string, s: Session, msg: SyncMsg): void => {
       switch (msg.type) {
         case "hello": {
           deviceId = String(msg.deviceId ?? "");
@@ -225,10 +337,13 @@ export function attachSync(server: Server): void {
           break;
         }
       }
-    });
+    };
 
     const cleanup = () => {
-      if (!deviceId) return;
+      release();
+      clearTimeout(authTimer);
+      if (revalidate) clearInterval(revalidate);
+      if (!deviceId || !s || !userId) return;
       // iOS reopens the socket constantly; a reconnect registers a new socket
       // under the same deviceId. Only tear down if WE are still the registered
       // socket — otherwise an old socket's close would wipe the live device and
@@ -246,4 +361,6 @@ export function attachSync(server: Server): void {
     ws.on("close", cleanup);
     ws.on("error", cleanup);
   });
+
+  return wss;
 }

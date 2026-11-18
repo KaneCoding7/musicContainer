@@ -48,8 +48,15 @@
   }
 
   async function handleLogout() {
+    sync.disconnect(); // never keep a live-sync socket of the signed-out user
     await authVm.logout();
     location.reload();
+  }
+
+  // After a sign-in/registration without a reload: load data AND start live sync.
+  function onAuthed() {
+    loadLibrary();
+    sync.connect();
   }
 
   type View =
@@ -332,7 +339,7 @@
 {#if authVm.loading}
   <div class="boot">Loading…</div>
 {:else if !authVm.isAuthed}
-  <AuthScreen vm={authVm} onAuthed={loadLibrary} />
+  <AuthScreen vm={authVm} {onAuthed} />
 {:else}
   <div class="layout">
     <header class="topbar">
