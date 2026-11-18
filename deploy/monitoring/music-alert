@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# music-alert <alertname> <severity> <summary> [description] [label=value ...]
+# Posts ONE alert to the existing Alertmanager (-> alert-ntfy -> phone). It auto-resolves at endsAt
+# (default 6h) unless re-posted, so a fixed problem goes quiet on its own. Never fails the caller.
+set -uo pipefail
+AM=${MUSIC_ALERT_URL:-http://127.0.0.1:9093}; TTL=${MUSIC_ALERT_TTL:-6 hours}
+[ $# -ge 3 ] || { echo "usage: music-alert <alertname> <severity> <summary> [description] [k=v ...]"; exit 0; }
+name=$1 sev=$2 sum=$3 desc=${4:-}; shift 3; [ $# -gt 0 ] && shift
+python3 -I - "$AM" "$name" "$sev" "$sum" "$desc" "$TTL" "$@" <<'PY'
+import json,sys,subprocess,urllib.request
+am,name,sev,summ,desc,ttl,*kv=sys.argv[1:]
+ends=subprocess.run(["date","-u","-d","+"+ttl,"+%Y-%m-%dT%H:%M:%SZ"],capture_output=True,text=True).stdout.strip()
+now=subprocess.run(["date","-u","+%Y-%m-%dT%H:%M:%SZ"],capture_output=True,text=True).stdout.strip()
+labels={"alertname":name,"severity":sev,"host":"mediaserver"}; labels.update(dict(x.split("=",1) for x in kv if "=" in x))
+body=json.dumps([{"labels":labels,"annotations":{"summary":summ,"description":desc},"startsAt":now,"endsAt":ends}]).encode()
+try:
+    urllib.request.urlopen(urllib.request.Request(am+"/api/v2/alerts",body,{"Content-Type":"application/json"}),timeout=10)
+    print("alert posted:",name,labels)
+except Exception as e: print("music-alert: could not reach Alertmanager:",e)
+PY
+logger -t music-alert "$name [$sev] $sum" 2>/dev/null || true
+exit 0

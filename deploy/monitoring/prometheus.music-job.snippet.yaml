@@ -1,0 +1,18 @@
+# ADD under scrape_configs: in ~/ServerAnalytics-/infra/prometheus.yml
+  - job_name: music-sites
+    metrics_path: /probe
+    params: {module: [http_2xx_music]}
+    scrape_interval: 60s
+    scrape_timeout: 15s
+    static_configs:
+      - targets: ['https://playlist.mrkane.dev/', 'https://playlist-api.mrkane.dev/api/health']
+        labels: {env: prod}
+      - targets: ['https://beats.mrkane.dev/', 'https://beats-api.mrkane.dev/api/health']
+        labels: {env: dev}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

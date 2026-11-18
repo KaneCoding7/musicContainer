@@ -1,0 +1,10 @@
+# ADD under services: in ~/ServerAnalytics-/infra/docker-compose.yml (same network as prometheus)
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.29.1@sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13
+    container_name: blackbox-exporter
+    restart: unless-stopped
+    mem_limit: 64m
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    volumes:
+      - ./blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    networks: [serveranalytics-net]

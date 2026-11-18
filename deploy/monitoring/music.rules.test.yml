@@ -1,0 +1,31 @@
+# promtool test rules music.rules.test.yml
+rule_files: [music.rules.yml]
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="music-sites",env="prod",instance="https://playlist.mrkane.dev/"}'
+        values: '1 1 0 0 0 0 0 1 1'
+      - series: 'probe_success{job="music-sites",env="dev",instance="https://beats.mrkane.dev/"}'
+        values: '0x15'
+      - series: 'probe_ssl_earliest_cert_expiry{job="music-sites",env="dev",instance="https://beats.mrkane.dev/"}'
+        values: '864000x90'   # 10 days after epoch 0 -> "expires in < 14d" from t=0
+    alert_rule_test:
+      - {eval_time: 3m, alertname: MusicProdSiteDown, exp_alerts: []}              # down 1m: not yet
+      - eval_time: 5m                                                             # down 3m: fires
+        alertname: MusicProdSiteDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: music-sites, env: prod, instance: 'https://playlist.mrkane.dev/'}
+            exp_annotations: {summary: 'playlist (PROD) unreachable: https://playlist.mrkane.dev/', description: 'Blackbox probe failing for 3m. Check: docker ps (music-*-prod, cloudflared-marcus), music-deploy prod --status.'}
+      - {eval_time: 8m, alertname: MusicProdSiteDown, exp_alerts: []}              # recovered
+      - {eval_time: 9m, alertname: MusicDevSiteDown, exp_alerts: []}               # dev: only 9m
+      - eval_time: 11m
+        alertname: MusicDevSiteDown
+        exp_alerts:
+          - exp_labels: {severity: warning, job: music-sites, env: dev, instance: 'https://beats.mrkane.dev/'}
+            exp_annotations: {summary: 'beats (DEV) unreachable: https://beats.mrkane.dev/', description: 'Blackbox probe failing for 10m. Check: docker ps (music-backend/frontend), caddy, music-deploy dev --status.'}
+      - eval_time: 61m
+        alertname: MusicSiteCertExpiringSoon
+        exp_alerts:
+          - exp_labels: {severity: warning, job: music-sites, env: dev, instance: 'https://beats.mrkane.dev/'}
+            exp_annotations: {summary: 'TLS certificate for https://beats.mrkane.dev/ expires in < 14 days', description: 'beats certs come from Caddy (check caddy logs); playlist certs come from Cloudflare.'}

@@ -1,0 +1,53 @@
+# DEV stack (beats.mrkane.dev) - image-based, digest-pinned. PROPOSED for Phase 4; not live.
+# Same container names, network (project "music" -> music_default, where Caddy finds them),
+# data mount and .env as the current build-from-source stack. Differences: images come from
+# DEV_*_IMAGE digests (set by deploy.sh), ports bind loopback only, healthchecks added.
+services:
+  backend:
+    image: ${DEV_BACKEND_IMAGE:?DEV_BACKEND_IMAGE must be set in .env (mrkane7/music-backend@sha256:...)}
+    container_name: music-backend
+    pull_policy: missing
+    mem_limit: 512m
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3001"
+    env_file: .env
+    environment:
+      - PORT=3001
+      - DATA_DIR=/data
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET in .env}
+      - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:3001}
+      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-http://localhost:3000}
+      - INVITE_ONLY=${INVITE_ONLY:-false}
+      - LASTFM_API_KEY=${LASTFM_API_KEY:-}
+      - LASTFM_SECRET=${LASTFM_SECRET:-}
+    volumes:
+      - /mnt/media/appdata/music:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:3001/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+      start_interval: 5s
+  frontend:
+    image: ${DEV_FRONTEND_IMAGE:?DEV_FRONTEND_IMAGE must be set in .env (mrkane7/music-frontend@sha256:...)}
+    container_name: music-frontend
+    pull_policy: missing
+    mem_limit: 256m
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file: .env
+    environment:
+      - PORT=3000
+      - PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL:-http://localhost:3001}
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 5s

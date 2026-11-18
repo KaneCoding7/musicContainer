@@ -4,13 +4,11 @@ Two goals:
 
 1. **Develop & preview** changes safely, without touching the live library or
    interrupting anyone.
-2. **Hold the live rebuild until midnight**, so merging during the day doesn't
-   restart the server while people are listening.
+2. **Deploy deliberately**: a merge publishes an immutable build; it reaches DEV
+   (beats) only when you deploy it, and PROD (playlist) only when you promote it.
 
-> **Which branch is "live"?** The default branch — the one everyone uses and the
-> live server tracks — is **`main`**. The deploy tooling below auto-detects
-> whatever branch the live checkout is on, so renaming/changing it later needs
-> no edits here.
+> **Nothing runs from a git checkout.** Both servers run pinned image digests;
+> merging to `main` never changes a running server by itself.
 
 ---
 
@@ -55,9 +53,8 @@ The flow that keeps `main` safe:
 2. You preview that branch:  `./scripts/preview.sh <the-branch-name>`  →
    http://localhost:3100. The live server (`:3000`) and `main` are unaffected
    because nothing has merged yet.
-3. Happy with it? Merge the PR into `main`. The live server picks it up at the
-   next **midnight** rebuild (or `FORCE=1 ./scripts/deploy.sh` for an immediate
-   push).
+3. Happy with it? Merge the PR into `main`. CI publishes an immutable
+   `build-<run_id>-<sha7>`; deploy it to DEV, then promote it (section 2).
 
 So nothing I do reaches `main` — or anyone's playback — until you merge.
 
@@ -67,63 +64,18 @@ So nothing I do reaches `main` — or anyone's playback — until you merge.
 
 ---
 
-## 2. Deploy only at midnight (not on every merge)
+## 2. Deploy: DEV first, then promote to PROD
 
-Today, merging rebuilds the live server right away — which interrupts playback.
-Instead, let the live branch collect work all day and rebuild the server
-**once, at midnight**, via a systemd timer. Merges during the day change
-nothing on the server until then.
-
-### Install it (once, on the live host)
-
-From the cloned repo on the live server, run the installer. It writes the
-systemd units pointed at this repo (no manual path editing), pins the branch the
-checkout is currently on, and enables the timer:
+There is no automatic deploy. On the host:
 
 ```bash
-sudo ./scripts/install-nightly-deploy.sh
-# deploying a different branch? sudo DEPLOY_BRANCH=some-branch ./scripts/install-nightly-deploy.sh
+sudo music-deploy dev --build build-<run_id>-<sha7>   # from the CI job summary
+# use beats.mrkane.dev; after >= 24 h healthy on DEV:
+sudo music-deploy prod --promote                      # exactly what DEV runs
+sudo music-deploy prod --status                       # what's running + history
 ```
 
-Check it:
-
-```bash
-systemctl list-timers music-deploy.timer    # see the next midnight run
-journalctl -u music-deploy.service -f        # watch a run's output
-```
-
-What the nightly run does (`scripts/deploy.sh`):
-
-- fetches the live branch (the one the checkout is on, unless `DEPLOY_BRANCH` is set),
-- if there are **no** new commits, does nothing (no needless rebuild),
-- otherwise updates the working tree and runs `docker compose up -d --build`,
-- prunes old images.
-
-> **One thing you must do:** disable whatever rebuilds the server on merge today,
-> so the timer is the only thing that deploys. There is no auto-deploy in this
-> repo (CI only runs tests/builds), so this is whatever you or a teammate runs by
-> hand or wired up on the host.
-
-Need to ship a hotfix immediately (any time of day)?
-
-```bash
-./scripts/deploy.sh           # rebuild now if there are new commits
-FORCE=1 ./scripts/deploy.sh   # rebuild now no matter what
-```
-
-No `cron`/`systemd` on the host? Same effect with a crontab line (uses host
-local time; adjust the path to your clone):
-
-```cron
-0 0 * * *  cd /opt/musicContainer && ./scripts/deploy.sh >> /var/log/music-deploy.log 2>&1
-```
-
----
-
-## TL;DR
-
-- Preview a branch:  `./scripts/preview.sh`  → http://localhost:3100
-- Install once on the host:  `sudo ./scripts/install-nightly-deploy.sh`
-- Live server then rebuilds at **local midnight**, only if there's new work.
-- Merge whenever you want during the day — nobody's music skips.
-- Emergency push:  `FORCE=1 ./scripts/deploy.sh` on the host.
+Every deploy backs up the database first, refuses during imports, verifies
+health and data afterwards, and rolls code back automatically if it fails
+(unless a migration ran: then it stops and a human decides; it never restores a
+database). Full details: [`deploy/README.md`](./deploy/README.md).

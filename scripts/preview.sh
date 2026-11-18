@@ -10,7 +10,7 @@
 #   docker compose -p music-preview -f docker-compose.preview.yml down
 #
 # NOTE: run this from a dev clone or your laptop — NOT the live server's deploy
-# folder — so checking out a branch can't disturb what the nightly deploy ships.
+# folder — so checking out a branch can't disturb the live servers.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
