@@ -17,6 +17,8 @@ import {
   updateSongMeta,
   updateSongsMeta,
   uploadSong,
+  uploadVideo,
+  isVideoFile,
   type SongMetadata,
   type YouTubeResult,
 } from "$lib/services/songService";
@@ -1104,10 +1106,18 @@ export class SongViewModel {
     const failed: string[] = [];
     for (const file of files) {
       try {
-        const song = await uploadSong(file);
+        // Videos go through the server's audio extraction; audio files upload as-is.
+        const song = isVideoFile(file)
+          ? await uploadVideo(file)
+          : await uploadSong(file);
         this.staged = [...this.staged, song];
-      } catch {
-        failed.push(file.name);
+      } catch (e) {
+        // Show the server's reason for videos (no audio track, corrupt, too big…).
+        failed.push(
+          isVideoFile(file) && e instanceof Error
+            ? `${file.name} (${e.message})`
+            : file.name
+        );
       }
       this.uploadDone += 1;
     }

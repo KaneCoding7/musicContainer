@@ -39,6 +39,32 @@ export async function uploadSong(file: File): Promise<Song> {
   return body.song as Song;
 }
 
+// Video containers accepted by "Upload video as song" (mirrors the backend).
+export const VIDEO_FILE_RE = /\.(mov|mp4|m4v|webm|mkv)$/i;
+
+export function isVideoFile(file: File): boolean {
+  return VIDEO_FILE_RE.test(file.name) || file.type.startsWith("video/");
+}
+
+// Uploads a video; the server extracts its whole audio track as an MP3 and
+// stages it as a pending song (same review flow as an audio upload). The video
+// itself is not kept.
+export async function uploadVideo(file: File): Promise<Song> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${apiBase()}/api/upload-video`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: formData,
+  });
+  if (!res.ok) {
+    if (res.status === 413) throw new Error("That video is too large to upload");
+    throw new Error(await errorMessage(res));
+  }
+  const body = await res.json();
+  return body.song as Song;
+}
+
 export interface YouTubeResult {
   id: string;
   title: string;

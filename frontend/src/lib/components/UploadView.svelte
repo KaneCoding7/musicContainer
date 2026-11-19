@@ -1,7 +1,7 @@
 <script lang="ts">
   import EditSongDialog from "$lib/components/EditSongDialog.svelte";
   import Icon from "$lib/components/Icon.svelte";
-  import { thumbUrl, updateSongMeta } from "$lib/services/songService";
+  import { isVideoFile, thumbUrl, updateSongMeta } from "$lib/services/songService";
   import type { YouTubeResult } from "$lib/services/songService";
   import type { SongViewModel } from "$lib/viewmodels/songViewModel.svelte";
 
@@ -154,7 +154,7 @@
   async function handleFiles(list: FileList | null | undefined) {
     if (!list) return;
     const files = [...list].filter(
-      (f) => audioRe.test(f.name) || f.type.startsWith("audio/")
+      (f) => audioRe.test(f.name) || f.type.startsWith("audio/") || isVideoFile(f)
     );
     if (files.length === 0) return;
     reviewMsg = null;
@@ -319,7 +319,7 @@
     class="file-hidden"
     bind:this={fileInput}
     type="file"
-    accept=".mp3,.wav,audio/mpeg,audio/wav"
+    accept=".mp3,.wav,audio/mpeg,audio/wav,.mov,.mp4,.m4v,.webm,.mkv,video/*"
     multiple
     onchange={onChange}
   />
@@ -345,7 +345,7 @@
       <div class="bar"><div class="fill" style="width:{pct}%"></div></div>
     {:else}
       <p class="big">Drag &amp; drop your music here</p>
-      <p class="sub">or click to browse — MP3 or WAV, as many as you like</p>
+      <p class="sub">or click to browse — MP3, WAV, or a video (MOV, MP4) to turn into a song</p>
     {/if}
   </label>
 

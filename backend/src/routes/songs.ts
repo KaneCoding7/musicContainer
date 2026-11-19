@@ -50,6 +50,8 @@ import {
   updateSong,
   updateSongsBulk,
   validateUpload,
+  validateVideoUpload,
+  videoSongTitle,
 } from "../functional/songs.js";
 import { canAccessSong } from "../functional/shares.js";
 import {
@@ -91,6 +93,7 @@ import {
   type SuggestionCandidate,
 } from "../functional/suggestions.js";
 import { parseYouTubeId, ytRelated } from "../youtube.js";
+import { extractAudioFromVideo, freeBytes } from "../video.js";
 
 export const songsRouter = Router();
 
@@ -456,6 +459,158 @@ songsRouter.post("/upload", uploadLimiter, (req, res) => {
     }).catch(() => {});
 
     return res.status(201).json({ song: result.value });
+  });
+});
+
+// --- Upload video as song ---------------------------------------------------
+// The whole video is converted (no trimming), like a YouTube link import.
+// Disk-safety: the video is written to a temp dir on the DATA volume (never the
+// container's root fs, which is the host's small root disk), converted to MP3
+// in the same dir, then the MP3 is renamed (same volume, no copy) into
+// MUSIC_DIR. The video is deleted as soon as ffmpeg finishes and the temp dir is
+// always removed, so the only thing kept is the MP3.
+const VIDEO_MAX_BYTES = (() => {
+  const mb = Number(process.env.VIDEO_UPLOAD_MAX_MB?.trim() || "");
+  return (Number.isFinite(mb) && mb > 0 ? Math.min(mb, 4096) : 1024) * 1024 * 1024;
+})();
+// Refuse uploads that would leave the data volume with less than this free.
+const VIDEO_DISK_RESERVE_BYTES = 2 * 1024 * 1024 * 1024;
+
+// POST /api/upload-video — multipart: "file" (a video) + optional "title".
+// Extracts the audio to MP3 and records it as a pending song, which then goes
+// through the same review/confirm + metadata edit flow as every other upload.
+songsRouter.post("/upload-video", importLimiter, (req, res) => {
+  const declared = Number(req.headers["content-length"] ?? NaN);
+  if (Number.isFinite(declared) && declared > VIDEO_MAX_BYTES + 1024 * 1024) {
+    return res.status(413).json({
+      error: {
+        code: "validation",
+        message: `That video is too large (max ${Math.round(VIDEO_MAX_BYTES / 1024 / 1024)} MB)`,
+      },
+    });
+  }
+  const dataRoot = dirname(MUSIC_DIR);
+  const free = freeBytes(dataRoot);
+  const needed =
+    (Number.isFinite(declared) ? declared : VIDEO_MAX_BYTES) + VIDEO_DISK_RESERVE_BYTES;
+  if (free !== null && free < needed) {
+    return res.status(507).json({
+      error: {
+        code: "internal",
+        message: "Not enough free disk space on the server to process that video",
+      },
+    });
+  }
+
+  let work: string;
+  try {
+    work = mkdtempSync(join(dataRoot, "video-"));
+  } catch {
+    return res.status(500).json({
+      error: { code: "internal", message: "Couldn't prepare the upload" },
+    });
+  }
+  const cleanup = () => rmSync(work, { recursive: true, force: true });
+  // If the client disconnects mid-upload multer may never call back; make sure
+  // the partial video doesn't linger. Once parsing is done, `finally` owns it.
+  let parsed = false;
+  res.on("close", () => {
+    if (!parsed) cleanup();
+  });
+
+  const videoUpload = multer({
+    storage: multer.diskStorage({
+      destination: (_r, _f, cb) => cb(null, work),
+      filename: (_r, file, cb) =>
+        cb(null, `source${extname(file.originalname).toLowerCase()}`),
+    }),
+    limits: { fileSize: VIDEO_MAX_BYTES, files: 1, fields: 4, fieldSize: 4096 },
+    fileFilter: (_r, file, cb) => {
+      const v = validateVideoUpload(file.originalname, file.mimetype);
+      if (v.ok) cb(null, true);
+      else cb(new Error(v.error.message));
+    },
+  }).single("file");
+
+  videoUpload(req, res, async (uploadErr: unknown) => {
+    parsed = true;
+    try {
+      if (uploadErr) {
+        const tooBig =
+          uploadErr instanceof multer.MulterError && uploadErr.code === "LIMIT_FILE_SIZE";
+        const message = tooBig
+          ? `That video is too large (max ${Math.round(VIDEO_MAX_BYTES / 1024 / 1024)} MB)`
+          : uploadErr instanceof Error
+            ? uploadErr.message
+            : "Upload failed";
+        return res
+          .status(tooBig ? 413 : 400)
+          .json({ error: { code: "validation", message } });
+      }
+      if (!req.file) {
+        return res.status(400).json({
+          error: { code: "validation", message: "No video provided (field: file)" },
+        });
+      }
+
+      const videoPath = join(work, req.file.filename);
+      const mp3Path = join(work, "audio.mp3");
+      const extracted = await extractAudioFromVideo(videoPath, mp3Path);
+      // The video is never kept — drop it before anything else touches disk.
+      rmSync(videoPath, { force: true });
+      if (!extracted.ok) {
+        return res
+          .status(422)
+          .json({ error: { code: "validation", message: extracted.message } });
+      }
+
+      const stored = `${randomUUID()}.mp3`;
+      const dest = join(MUSIC_DIR, stored);
+      renameSync(mp3Path, dest); // same volume: a rename, not a copy
+      const meta = await extractMetadata(dest, ART_DIR);
+      if (!meta.duration || meta.duration <= 0) {
+        rmSync(dest, { force: true });
+        return res.status(422).json({
+          error: { code: "validation", message: "That video's audio track is empty" },
+        });
+      }
+
+      const title =
+        typeof req.body?.title === "string" ? (req.body.title as string) : null;
+      const result = recordSong(getDb(), {
+        filename: stored,
+        originalFilename: videoSongTitle(req.file.originalname, title),
+        userId: req.userId!,
+        artist: null,
+        album: null,
+        artFilename: null,
+        duration: meta.duration,
+        pending: true, // awaits review before joining the library
+        sourceUrl: null, // no video link, so no frame-artwork picker
+      });
+      if (!result.ok) {
+        rmSync(dest, { force: true });
+        return res
+          .status(statusForError(result.error.code))
+          .json({ error: result.error });
+      }
+
+      const songId = result.value.id;
+      measureLoudness(dest)
+        .then((lufs) => {
+          if (lufs !== null) setSongLoudness(getDb(), songId, lufs);
+        })
+        .catch(() => {});
+      return res.status(201).json({ song: result.value });
+    } catch {
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: { code: "internal", message: "Couldn't process that video" },
+        });
+      }
+    } finally {
+      cleanup();
+    }
   });
 });
 

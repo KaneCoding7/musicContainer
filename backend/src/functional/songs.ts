@@ -49,6 +49,50 @@ export function validateUpload(
   return ok(undefined);
 }
 
+// Video containers accepted by "Upload video as song". The audio track is
+// extracted server-side with ffmpeg and the video itself is never stored, so
+// the container only matters for ffmpeg. iPhones record .mov (HEVC/H.264 +
+// AAC); most other phones/cameras use .mp4. Real validation is ffmpeg actually
+// finding an audio stream; this is the cheap first gate.
+const VIDEO_EXTENSIONS = new Set([".mov", ".mp4", ".m4v", ".webm", ".mkv"]);
+
+// Validates a video upload by extension and MIME type. Pure: no I/O. Browsers
+// are inconsistent about video MIME types (some send "" or
+// application/octet-stream for .mov/.mkv), so those are tolerated as long as
+// the extension is a known video container — ffmpeg is the real check.
+export function validateVideoUpload(
+  originalFilename: string,
+  mimeType: string
+): Result<void> {
+  const ext = extname(originalFilename).toLowerCase();
+  if (!VIDEO_EXTENSIONS.has(ext)) {
+    return err(
+      "validation",
+      `Unsupported video type "${ext || "(none)"}". Allowed: ${[...VIDEO_EXTENSIONS].join(", ")}`
+    );
+  }
+  const mime = mimeType.toLowerCase();
+  if (mime && !mime.startsWith("video/") && mime !== "application/octet-stream") {
+    return err(
+      "validation",
+      `Unsupported content type "${mimeType}". Expected a video file.`
+    );
+  }
+  return ok(undefined);
+}
+
+// Song title for an uploaded video: an explicit title if given, else the
+// filename without its extension (e.g. "IMG_1234.MOV" -> "IMG_1234"). Pure.
+export function videoSongTitle(
+  originalFilename: string,
+  title?: string | null
+): string {
+  const t = title?.trim();
+  if (t) return t.slice(0, 300);
+  const base = originalFilename.replace(/\.[^./\\]+$/, "").trim();
+  return base || "Untitled video";
+}
+
 // --- Database-backed operations -------------------------------------------
 
 interface SongRow {
